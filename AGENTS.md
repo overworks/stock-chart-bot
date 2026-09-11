@@ -16,6 +16,7 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립 `core` + 플랫�
 | 타입 검사 | `npm run typecheck` |
 | 테스트 | `npm test` |
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
+| KRX 종목 목록 갱신 | `npm run fetch:symbols` (KIND → `scripts/symbols.json`) |
 | KV 심볼 시드 | `npm run seed:symbols` |
 | 빌드 확인 | `npx wrangler deploy --dry-run --outdir dist` |
 | 운영 배포 | `npm run deploy` |
@@ -32,6 +33,7 @@ src/
 │  ├─ command.ts       #   인자 검증/정규화
 │  ├─ market.ts        #   시세 조회 + 캐시
 │  ├─ chart.ts         #   SVG 생성
+│  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
 │  ├─ render.ts        #   resvg-wasm SVG→PNG (fonts/ 번들 폰트 사용)
 │  └─ run.ts           #   오케스트레이션 (어댑터가 호출)
 └─ platforms/
@@ -48,6 +50,8 @@ src/
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.
 - `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
+- 종목 별칭: `scripts/symbols.manual.json`(수동, 우선)과 KIND 목록을 합쳐 `scripts/symbols.json`을 만든다. `symbols.json`은 직접 편집하지 않는다.
+- 종목 목록은 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON으로 저장한다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
 - 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.
 - 사용자 노출 메시지는 한국어. 2 spaces. 주석은 최소화.
 

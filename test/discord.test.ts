@@ -1,6 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 import keypair from "./keypair.json" with { type: "json" };
 
 const ENV = env as unknown as Env;
@@ -10,7 +11,10 @@ beforeAll(async () => {
   privateKey = await crypto.subtle.importKey("jwk", keypair.jwk, { name: "Ed25519" }, false, ["sign"]);
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetSymbolCache();
+});
 
 async function signed(body: unknown, opts: { badSig?: boolean } = {}) {
   const raw = JSON.stringify(body);
@@ -78,9 +82,14 @@ describe("discord adapter", () => {
   });
 
   it("autocompletes symbols from KV by prefix", async () => {
-    await ENV.SYMBOLS.put("삼성전자", "005930.KS");
-    await ENV.SYMBOLS.put("삼성전자우", "005935.KS");
-    await ENV.SYMBOLS.put("카카오", "035720.KS");
+    await ENV.SYMBOLS.put(
+      SYMBOLS_KEY,
+      JSON.stringify([
+        { key: "삼성전자", value: "005930.KS" },
+        { key: "삼성전자우", value: "005935.KS" },
+        { key: "카카오", value: "035720.KS" },
+      ]),
+    );
     const req = await signed({
       type: 4,
       data: { name: "chart", options: [{ name: "ticker", value: "삼성", focused: true }] },
@@ -88,11 +97,11 @@ describe("discord adapter", () => {
     const res = await worker.fetch(req, ENV, createExecutionContext());
     const body = (await res.json()) as any;
     expect(body.type).toBe(8);
-    expect(body.data.choices.map((c: any) => c.name).sort()).toEqual(["삼성전자", "삼성전자우"]);
+    expect(body.data.choices.map((c: any) => c.value)).toEqual(["005930.KS", "005935.KS"]);
   });
 
   it("defers /chart, resolves the alias, renders a PNG and patches the original message", async () => {
-    await ENV.SYMBOLS.put("삼성전자", "005930.KS");
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const req = await signed({
@@ -113,7 +122,7 @@ describe("discord adapter", () => {
     expect(patch.init?.method).toBe("PATCH");
     const form = patch.init?.body as FormData;
     const payload = JSON.parse(form.get("payload_json") as string);
-    expect(payload.content).toBe("**삼성전자** 1m");
+    expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m");
     const file = form.get("files[0]") as File;
     expect(file.name).toBe("chart.png");
     const bytes = new Uint8Array(await file.arrayBuffer());

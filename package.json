@@ -11,9 +11,10 @@
     "postinstall": "npm run setup:wasm",
     "register": "tsx scripts/register-commands.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "seed:symbols": "wrangler kv bulk put scripts/symbols.json --binding SYMBOLS --remote",
+    "seed:symbols": "wrangler kv key put symbols:v1 --path scripts/symbols.json --binding SYMBOLS --remote",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "fetch:symbols": "tsx scripts/fetch-krx-symbols.ts"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",

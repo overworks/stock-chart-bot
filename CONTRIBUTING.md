@@ -31,7 +31,8 @@ npm run dev          # 로컬 워커 (http://localhost:8787/discord)
 npm run typecheck    # 타입 검사 (필수)
 npm test             # vitest (workerd 런타임에서 실행)
 npm run smoke -- "AAPL:1d,005930.KS:1m"   # Yahoo 조회 → PNG 로컬 확인 (dist/smoke/)
-npm run seed:symbols # scripts/symbols.json 을 KV SYMBOLS 에 적재
+npm run fetch:symbols # KIND 상장법인 목록 + symbols.manual.json → scripts/symbols.json
+npm run seed:symbols  # scripts/symbols.json 을 KV SYMBOLS 에 적재
 npm run deploy       # 운영 배포
 npm run register     # Discord 슬래시 커맨드 등록
 ```
@@ -71,6 +72,16 @@ PR 전에 다음은 반드시 통과해야 한다.
 Kakao/LINE 등 일부 플랫폼은 업로드가 아니라 공개 URL만 허용한다. 따라서
 core는 가능하면 PNG 바이트가 아니라 R2에 적재한 뒤 URL을 반환하는 방향을 지향한다.
 Discord 어댑터는 현재 attachment 업로드를 사용한다.
+
+### 종목 검색
+
+종목 목록 전체(약 2,600개)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
+워커는 이를 한 번 읽어 10분간 메모리에 캐시한다. 자동완성은 이 메모리에서 정확 일치 →
+접두 → 부분 문자열 순으로 찾는다(대소문자·공백 무시). KV `list`는 무료 플랜 한도가
+하루 1,000회라 사용하지 않는다. 결과가 부족하면서 입력이 ASCII이면
+Yahoo search API(`/v1/finance/search`)로 폴백한다. Yahoo search는 한글 질의를 거부하므로
+한글 종목명은 KV 시드(KRX 전 종목 + 수동 별칭)로만 커버한다. 실행 시에도 KV에 없는
+ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재시도한다.
 
 ### 렌더링
 

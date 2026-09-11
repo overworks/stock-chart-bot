@@ -1,7 +1,8 @@
 import { parseChartArgs } from "./command";
 import { buildSvg } from "./chart";
-import { getPrices, resolveSymbol } from "./market";
+import { getPrices, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
+import { isAsciiQuery, resolveSymbol, searchYahoo } from "./symbols";
 import type { OutgoingMessage } from "./types";
 
 export interface CoreEnv {
@@ -13,14 +14,26 @@ export async function runChart(
   env: CoreEnv,
 ): Promise<OutgoingMessage> {
   const req = parseChartArgs(args);
-  const symbol = await resolveSymbol(req.ticker, env.SYMBOLS);
-  const { bars, label, timeZone } = await getPrices(symbol, req);
+  let symbol = await resolveSymbol(req.ticker, env.SYMBOLS);
 
-  const svg = buildSvg(bars, `${req.ticker} (${label})`, timeZone);
+  let series: PriceSeries;
+  try {
+    series = await getPrices(symbol, req);
+  } catch (err) {
+    if (!(err instanceof SymbolNotFoundError) || !isAsciiQuery(req.ticker)) throw err;
+    const hit = (await searchYahoo(req.ticker))[0];
+    if (!hit) throw err;
+    symbol = hit.value;
+    series = await getPrices(symbol, req);
+  }
+
+  const { bars, label, timeZone } = series;
+  const title = symbol === req.ticker ? req.ticker : `${req.ticker} (${symbol})`;
+  const svg = buildSvg(bars, `${title} · ${label}`, timeZone);
   const png = await svgToPng(svg);
 
   return {
-    text: `**${req.ticker}** ${label}`,
+    text: `**${title}** ${label}`,
     image: { png, filename: "chart.png" },
   };
 }

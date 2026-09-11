@@ -13,18 +13,12 @@ const YAHOO_RANGE: Record<string, { range: string; interval: string }> = {
   max: { range: "max", interval: "1mo" },
 };
 
+export class SymbolNotFoundError extends Error {}
+
 export interface PriceSeries {
   bars: ChartBar[];
   label: string;
   timeZone: string;
-}
-
-export async function resolveSymbol(
-  ticker: string,
-  symbols: KVNamespace,
-): Promise<string> {
-  const mapped = await symbols.get(ticker);
-  return mapped ?? ticker;
 }
 
 export async function getPrices(
@@ -42,7 +36,7 @@ export async function getPrices(
 
   const json = (await res.json()) as any;
   const result = json?.chart?.result?.[0];
-  if (!result) throw new Error(`'${symbol}' 시세를 찾지 못했습니다.`);
+  if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
 
   const timestamps: number[] = result.timestamp ?? [];
   const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
@@ -50,7 +44,7 @@ export async function getPrices(
     .map((t, i) => ({ t, c: closes[i] }))
     .filter((b): b is ChartBar => typeof b.c === "number");
 
-  if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
+  if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
   const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";
   return { bars, label, timeZone };
 }

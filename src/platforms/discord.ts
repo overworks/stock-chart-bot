@@ -1,5 +1,6 @@
 import { verifyKey } from "discord-interactions";
 import { runChart } from "../core/run";
+import { searchSymbols } from "../core/symbols";
 
 const API = "https://discord.com/api/v10";
 
@@ -31,7 +32,7 @@ export async function handleDiscord(
   if (interaction.type === 4) {
     const focused = (interaction.data.options ?? []).find((o: any) => o.focused);
     const query = String(focused?.value ?? "");
-    const choices = await autocompleteSymbols(query, env);
+    const choices = await searchSymbols(query, env.SYMBOLS);
     return json({ type: 8, data: { choices } });
   }
 
@@ -77,14 +78,6 @@ async function serveChart(
       body: JSON.stringify({ content: `⚠️ ${(err as Error).message}` }),
     });
   }
-}
-
-async function autocompleteSymbols(
-  query: string,
-  env: Env,
-): Promise<{ name: string; value: string }[]> {
-  const list = await env.SYMBOLS.list({ prefix: query, limit: 25 });
-  return list.keys.map((k) => ({ name: k.name, value: k.name }));
 }
 
 function json(payload: unknown): Response {
