@@ -28,7 +28,7 @@ const commands = [
       {
         type: 3,
         name: "range",
-        description: "기간 (미입력 시 1y)",
+        description: "기간 (미입력 시 1d)",
         required: false,
         choices: RANGE_CHOICES.map((r) => ({ name: r, value: r })),
       },

@@ -17,6 +17,7 @@ const QUOTE_TYPES = new Set(["EQUITY", "ETF", "INDEX", "MUTUALFUND", "CRYPTOCURR
 interface Loaded {
   entries: SymbolEntry[];
   byKey: Map<string, string>;
+  byValue: Map<string, string>;
   at: number;
 }
 
@@ -66,9 +67,18 @@ export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache;
   const entries = (await kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json")) ?? [];
   const byKey = new Map<string, string>();
-  for (const e of entries) byKey.set(norm(e.key), e.value);
-  cache = { entries, byKey, at: Date.now() };
+  const byValue = new Map<string, string>();
+  for (const e of entries) {
+    byKey.set(norm(e.key), e.value);
+    if (!byValue.has(e.value)) byValue.set(e.value, e.key);
+  }
+  cache = { entries, byKey, byValue, at: Date.now() };
   return cache;
+}
+
+export async function symbolName(symbol: string, kv: KVNamespace): Promise<string | undefined> {
+  const { byValue } = await loadSymbols(kv);
+  return byValue.get(symbol);
 }
 
 export async function resolveSymbol(ticker: string, kv: KVNamespace): Promise<string> {

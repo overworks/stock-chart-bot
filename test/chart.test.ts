@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSvg, COLOR, FONT_FAMILY, fmtPrice, summarizeChange } from "../src/core/chart";
+import { buildSvg, COLOR, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
 import type { ChartBar } from "../src/core/types";
 
 const DAY = 86_400;
@@ -95,7 +95,35 @@ describe("buildSvg candle + volume", () => {
   });
 });
 
+describe("moving averages", () => {
+  it("computes a simple moving average with leading gaps", () => {
+    const bars = [1, 2, 3, 4, 5].map((c, i) => ({ t: i, c }));
+    expect(movingAverage(bars, 3)).toEqual([undefined, undefined, 2, 3, 4]);
+  });
+
+  it("draws MA20/MA60 only when enough bars exist", () => {
+    expect(buildSvg(daily(10), "s")).not.toContain("MA20");
+    const mid = buildSvg(daily(30), "s");
+    expect(mid).toContain(">MA20<");
+    expect(mid).not.toContain("MA60");
+    const long = buildSvg(daily(80), "s", { style: "candle" });
+    expect(long).toContain(">MA20<");
+    expect(long).toContain(">MA60<");
+    expect((long.match(/stroke="#f59e0b"/g) ?? []).length).toBe(1);
+  });
+
+  it("skips moving averages on intraday charts", () => {
+    const bars = Array.from({ length: 80 }, (_, i) => ({ t: 1_700_000_000 + i * 300, c: 10 + (i % 7) }));
+    expect(buildSvg(bars, "i")).not.toContain("MA20");
+  });
+});
+
 describe("summarizeChange", () => {
+  it("uses the reference price instead of the first bar when given", () => {
+    const s = summarizeChange([{ t: 1, c: 100 }, { t: 2, c: 99 }], "USD", 110);
+    expect(s.text).toBe("99.00 USD ▼ -11.00 (-10.00%)");
+  });
+
   it("formats KRW without decimals and with thousands separators", () => {
     const s = summarizeChange([{ t: 1, c: 269_000 }, { t: 2, c: 258_500 }], "KRW");
     expect(s.direction).toBe("down");

@@ -8,10 +8,15 @@ export const COLOR = {
   flat: "#6b7280",
 } as const;
 
+export const MA_PERIODS = [20, 60] as const;
+const MA_COLOR: Record<number, string> = { 20: "#f59e0b", 60: "#8b5cf6" };
+
 export interface ChartOptions {
   timeZone?: string;
   currency?: string;
   style?: ChartStyle;
+  /** 등락 계산 기준가. 없으면 첫 봉 종가. 1d 차트에서는 전일 종가를 넘긴다. */
+  reference?: number;
 }
 
 export interface ChangeSummary {
@@ -30,8 +35,8 @@ const PAD = { l: 72, r: 24, t: 80, b: 44 };
 const VOL_H = 80;
 const VOL_GAP = 12;
 
-export function summarizeChange(bars: ChartBar[], currency = ""): ChangeSummary {
-  const first = bars[0].c;
+export function summarizeChange(bars: ChartBar[], currency = "", reference?: number): ChangeSummary {
+  const first = reference ?? bars[0].c;
   const last = bars[bars.length - 1].c;
   const diff = last - first;
   const pct = first === 0 ? 0 : (diff / first) * 100;
@@ -43,10 +48,10 @@ export function summarizeChange(bars: ChartBar[], currency = ""): ChangeSummary 
 }
 
 export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {}): string {
-  const { timeZone = "UTC", currency = "", style = "line" } = opts;
+  const { timeZone = "UTC", currency = "", style = "line", reference } = opts;
   const candle = style === "candle";
   const hasVolume = bars.some((b) => (b.v ?? 0) > 0);
-  const change = summarizeChange(bars, currency);
+  const change = summarizeChange(bars, currency, reference);
 
   const lows = candle ? bars.map((b) => b.l ?? b.c) : bars.map((b) => b.c);
   const highs = candle ? bars.map((b) => b.h ?? b.c) : bars.map((b) => b.c);
@@ -86,6 +91,22 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
         .join("")
     : "";
 
+  const intraday = bars[1].t - bars[0].t < 86_400;
+  const mas = intraday ? [] : MA_PERIODS.filter((p) => bars.length > p).map((p) => ({ p, values: movingAverage(bars, p) }));
+  const maLines = mas
+    .map(({ p, values }) => {
+      const d = values
+        .map((v, i) => (v === undefined ? "" : `${fmt(x(i))},${fmt(y(v))}`))
+        .filter(Boolean)
+        .map((pt, i) => `${i === 0 ? "M" : "L"}${pt}`)
+        .join(" ");
+      return `<path d="${d}" fill="none" stroke="${MA_COLOR[p]}" stroke-width="1.5" stroke-linejoin="round" stroke-opacity="0.9"/>`;
+    })
+    .join("");
+  const maLegend = mas
+    .map(({ p }, i) => `<text x="${PAD.l + i * 62}" y="${PAD.t - 8}" font-size="12" fill="${MA_COLOR[p]}">MA${p}</text>`)
+    .join("");
+
   const maxVol = hasVolume ? Math.max(...bars.map((b) => b.v ?? 0)) || 1 : 1;
   const volW = Math.max(1, Math.min(12, slot * 0.7));
   const volumes = hasVolume
@@ -117,7 +138,6 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     })
     .join("");
 
-  const intraday = bars[1].t - bars[0].t < 86_400;
   const fmtDate = dateFormatter(timeZone, intraday);
   const xLabels = [0, Math.floor((bars.length - 1) / 2), bars.length - 1]
     .map((i) => {
@@ -143,6 +163,8 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
+  ${maLines}
+  ${maLegend}
   ${volumes}
   ${xLabels}
 </svg>`;
@@ -157,6 +179,17 @@ const ZERO_DECIMAL = new Set(["KRW", "JPY", "IDR", "VND", "HUF", "CLP"]);
 export function fmtPrice(n: number, currency = ""): string {
   const digits = ZERO_DECIMAL.has(currency) ? 0 : Math.abs(n) >= 10_000 ? 0 : 2;
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+}
+
+export function movingAverage(bars: ChartBar[], period: number): (number | undefined)[] {
+  const out: (number | undefined)[] = new Array(bars.length).fill(undefined);
+  let sum = 0;
+  for (let i = 0; i < bars.length; i++) {
+    sum += bars[i].c;
+    if (i >= period) sum -= bars[i - period].c;
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
 }
 
 function fmtVolume(v: number): string {

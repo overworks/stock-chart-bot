@@ -43,7 +43,7 @@ export function parseChartArgs(
     ticker,
     range: (RANGE_CHOICES as readonly string[]).includes(range ?? "")
       ? range
-      : "1y",
+      : "1d",
     style,
   };
 }

@@ -11,7 +11,7 @@ const ok = {
   chart: {
     result: [
       {
-        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW" },
+        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW", shortName: "SamsungElec", chartPreviousClose: 9.5 },
         timestamp: [1, 2, 3, 4],
         indicators: { quote: [{ close: [10, null, 12, 13], open: [9, 10, 11, null], high: [11, 11, 13, 14], low: [8, 9, 11, 12], volume: [100, 0, 300, 400] }] },
       },
@@ -37,6 +37,8 @@ describe("getPrices", () => {
     expect(series.label).toBe("1m");
     expect(series.timeZone).toBe("Asia/Seoul");
     expect(series.currency).toBe("KRW");
+    expect(series.name).toBe("SamsungElec");
+    expect(series.previousClose).toBe(9.5);
   });
 
   it.each([

@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { parseChartArgs } from "../src/core/command";
 
 describe("parseChartArgs", () => {
-  it("defaults range to 1y", () => {
-    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1y", style: "line" });
+  it("defaults range to 1d", () => {
+    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1d", style: "line" });
   });
 
   it("trims ticker and keeps a valid range", () => {
     expect(parseChartArgs({ ticker: " 삼성전자 ", range: "1m" })).toEqual({ ticker: "삼성전자", range: "1m", style: "line" });
   });
 
-  it("falls back to 1y for an unknown range", () => {
-    expect(parseChartArgs({ ticker: "AAPL", range: "2w" }).range).toBe("1y");
+  it("falls back to 1d for an unknown range", () => {
+    expect(parseChartArgs({ ticker: "AAPL", range: "2w" }).range).toBe("1d");
   });
 
   it("accepts candle style and falls back to line for unknown styles", () => {

@@ -2,7 +2,7 @@ import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
 import { getPrices, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
-import { isAsciiQuery, resolveSymbol, searchYahoo } from "./symbols";
+import { isAsciiQuery, resolveSymbol, searchYahoo, symbolName } from "./symbols";
 import type { OutgoingMessage } from "./types";
 
 export interface CoreEnv {
@@ -27,11 +27,13 @@ export async function runChart(
     series = await getPrices(symbol, req);
   }
 
-  const { bars, label, timeZone, currency } = series;
-  const title = symbol === req.ticker ? req.ticker : `${req.ticker} (${symbol})`;
-  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style });
+  const { bars, label, timeZone, currency, previousClose } = series;
+  const name = (await symbolName(symbol, env.SYMBOLS)) ?? series.name;
+  const title = name && name !== symbol ? `${name} (${symbol})` : symbol;
+  const reference = req.range === "1d" && !req.from ? previousClose : undefined;
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference });
   const png = await svgToPng(svg);
-  const change = summarizeChange(bars, currency);
+  const change = summarizeChange(bars, currency, reference);
 
   return {
     text: `**${title}** ${label} · ${change.text}`,

@@ -47,19 +47,53 @@ describe("runChart", () => {
     expect(msg.image?.png.length).toBeGreaterThan(1000);
   });
 
+  it("titles by name from Yahoo meta when the symbol is not in KV, and uses previous close for 1d", async () => {
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([]));
+    stub(() => ({
+      chart: {
+        result: [
+          {
+            meta: { exchangeTimezoneName: "America/New_York", currency: "USD", shortName: "Apple Inc.", chartPreviousClose: 100 },
+            timestamp: [1, 2, 3],
+            indicators: { quote: [{ close: [101, 102, 103] }] },
+          },
+        ],
+      },
+    }));
+    const msg = await runChart({ ticker: "AAPL" }, ENV);
+    expect(msg.text).toBe("**Apple Inc. (AAPL)** 1d · 103.00 USD ▲ +3.00 (+3.00%)");
+  });
+
+  it("uses the first bar as reference outside 1d even if previous close exists", async () => {
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "애플", value: "AAPL" }]));
+    stub(() => ({
+      chart: {
+        result: [
+          {
+            meta: { currency: "USD", chartPreviousClose: 50 },
+            timestamp: [1, 2, 3],
+            indicators: { quote: [{ close: [100, 102, 104] }] },
+          },
+        ],
+      },
+    }));
+    const msg = await runChart({ ticker: "AAPL", range: "1m" }, ENV);
+    expect(msg.text).toBe("**애플 (AAPL)** 1m · 104.00 USD ▲ +4.00 (+4.00%)");
+  });
+
   it("falls back to Yahoo search when an ASCII ticker is unknown", async () => {
     const urls = stub((u) => {
       if (u.pathname.endsWith("/chart/hynix")) return notFound;
       if (u.pathname.endsWith("/finance/search")) return { quotes: [{ symbol: "000660.KS", shortname: "SK hynix", quoteType: "EQUITY" }] };
       return series;
     });
-    const msg = await runChart({ ticker: "hynix" }, ENV);
+    const msg = await runChart({ ticker: "hynix", range: "1y" }, ENV);
     expect(urls.map((u) => u.pathname)).toEqual([
       "/v8/finance/chart/hynix",
       "/v1/finance/search",
       "/v8/finance/chart/000660.KS",
     ]);
-    expect(msg.text).toBe("**hynix (000660.KS)** 1y · 109 KRW ▲ +9 (+9.00%)");
+    expect(msg.text).toBe("**000660.KS** 1y · 109 KRW ▲ +9 (+9.00%)");
   });
 
   it("surfaces the original error when search finds nothing", async () => {

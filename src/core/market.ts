@@ -20,6 +20,8 @@ export interface PriceSeries {
   label: string;
   timeZone: string;
   currency: string;
+  name?: string;
+  previousClose?: number;
 }
 
 export async function getPrices(
@@ -55,7 +57,10 @@ export async function getPrices(
   if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
   const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";
   const currency: string = result.meta?.currency ?? "";
-  return { bars, label, timeZone, currency };
+  const name: string | undefined = result.meta?.shortName ?? result.meta?.longName ?? undefined;
+  const prev = result.meta?.chartPreviousClose ?? result.meta?.previousClose;
+  const previousClose = typeof prev === "number" && Number.isFinite(prev) ? prev : undefined;
+  return { bars, label, timeZone, currency, name, previousClose };
 }
 
 function buildUrl(symbol: string, req: ChartRequest) {
@@ -68,8 +73,8 @@ function buildUrl(symbol: string, req: ChartRequest) {
       label: `${req.from} ~ ${req.to}`,
     };
   }
-  const label = req.range ?? "1y";
-  const { range, interval } = YAHOO_RANGE[label] ?? YAHOO_RANGE["1y"];
+  const label = req.range ?? "1d";
+  const { range, interval } = YAHOO_RANGE[label] ?? YAHOO_RANGE["1d"];
   return {
     url: `${YAHOO}/${sym}?range=${range}&interval=${interval}`,
     label,
