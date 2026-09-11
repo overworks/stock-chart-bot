@@ -1,10 +1,12 @@
 import type { ChartBar } from "./types";
 
+export const FONT_FAMILY = "NanumSquare";
+
 const W = 900;
 const H = 500;
 const PAD = { l: 72, r: 24, t: 56, b: 44 };
 
-export function buildSvg(bars: ChartBar[], title: string): string {
+export function buildSvg(bars: ChartBar[], title: string, timeZone = "UTC"): string {
   const closes = bars.map((b) => b.c);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
@@ -31,6 +33,8 @@ export function buildSvg(bars: ChartBar[], title: string): string {
     })
     .join("");
 
+  const intraday = bars[bars.length - 1].t - bars[0].t < 3 * 86_400;
+  const fmtDate = dateFormatter(timeZone, intraday);
   const xLabels = [0, Math.floor((bars.length - 1) / 2), bars.length - 1]
     .map((i) => {
       const anchor = i === 0 ? "start" : i === bars.length - 1 ? "end" : "middle";
@@ -41,7 +45,7 @@ export function buildSvg(bars: ChartBar[], title: string): string {
     })
     .join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
   <text x="${PAD.l}" y="32" font-size="20" font-weight="700" fill="#111827">${escapeXml(title)}</text>
   ${gridLines}
@@ -59,8 +63,15 @@ function fmtPrice(n: number): string {
   return Math.abs(n) >= 1000 ? n.toFixed(0) : n.toFixed(2);
 }
 
-function fmtDate(epochSec: number): string {
-  return new Date(epochSec * 1000).toISOString().slice(0, 10);
+function dateFormatter(timeZone: string, intraday: boolean): (epochSec: number) => string {
+  const f = new Intl.DateTimeFormat("sv-SE", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    ...(intraday ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+  });
+  return (epochSec) => f.format(new Date(epochSec * 1000));
 }
 
 function escapeXml(s: string): string {

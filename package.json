@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "setup:wasm": "mkdir -p wasm && cp node_modules/@resvg/resvg-wasm/index_bg.wasm wasm/resvg.wasm",
     "postinstall": "npm run setup:wasm",
-    "register": "tsx scripts/register-commands.ts"
+    "register": "tsx scripts/register-commands.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "seed:symbols": "wrangler kv bulk put scripts/symbols.json --binding SYMBOLS --remote"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
@@ -17,6 +19,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260911.1",
+    "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "wrangler": "^4.131.0"

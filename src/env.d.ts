@@ -3,6 +3,11 @@ declare module "*.wasm" {
   export default mod;
 }
 
+declare module "*.ttf" {
+  const data: ArrayBuffer;
+  export default data;
+}
+
 interface Env {
   DISCORD_PUBLIC_KEY: string;
   DISCORD_APPLICATION_ID: string;

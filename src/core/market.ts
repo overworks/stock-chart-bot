@@ -2,20 +2,21 @@ import type { ChartBar, ChartRequest } from "./types";
 
 const YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart";
 
-const INTERVAL: Record<string, string> = {
-  "1d": "5m",
-  "1w": "30m",
-  "1m": "1d",
-  "3m": "1d",
-  "6m": "1d",
-  "1y": "1d",
-  "5y": "1wk",
-  max: "1mo",
+const YAHOO_RANGE: Record<string, { range: string; interval: string }> = {
+  "1d": { range: "1d", interval: "5m" },
+  "1w": { range: "5d", interval: "30m" },
+  "1m": { range: "1mo", interval: "1d" },
+  "3m": { range: "3mo", interval: "1d" },
+  "6m": { range: "6mo", interval: "1d" },
+  "1y": { range: "1y", interval: "1d" },
+  "5y": { range: "5y", interval: "1wk" },
+  max: { range: "max", interval: "1mo" },
 };
 
 export interface PriceSeries {
   bars: ChartBar[];
   label: string;
+  timeZone: string;
 }
 
 export async function resolveSymbol(
@@ -50,7 +51,8 @@ export async function getPrices(
     .filter((b): b is ChartBar => typeof b.c === "number");
 
   if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
-  return { bars, label };
+  const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";
+  return { bars, label, timeZone };
 }
 
 function buildUrl(symbol: string, req: ChartRequest) {
@@ -63,10 +65,10 @@ function buildUrl(symbol: string, req: ChartRequest) {
       label: `${req.from} ~ ${req.to}`,
     };
   }
-  const range = req.range ?? "1y";
-  const interval = INTERVAL[range] ?? "1d";
+  const label = req.range ?? "1y";
+  const { range, interval } = YAHOO_RANGE[label] ?? YAHOO_RANGE["1y"];
   return {
     url: `${YAHOO}/${sym}?range=${range}&interval=${interval}`,
-    label: range,
+    label,
   };
 }

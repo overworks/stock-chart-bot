@@ -5,14 +5,15 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "rules": [
-    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
   ],
   "observability": { "enabled": true },
   "vars": {
-    "DISCORD_APPLICATION_ID": "REPLACE_ME"
+    "DISCORD_APPLICATION_ID": "1545454333120741386"
   },
   "kv_namespaces": [
-    { "binding": "SYMBOLS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "SYMBOLS", "id": "536161eca4ca4abcbdf454cd8f252b36" }
   ],
   "r2_buckets": [
     { "binding": "CHARTS", "bucket_name": "stock-chart-bot-charts" }

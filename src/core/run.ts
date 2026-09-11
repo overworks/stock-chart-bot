@@ -14,9 +14,9 @@ export async function runChart(
 ): Promise<OutgoingMessage> {
   const req = parseChartArgs(args);
   const symbol = await resolveSymbol(req.ticker, env.SYMBOLS);
-  const { bars, label } = await getPrices(symbol, req);
+  const { bars, label, timeZone } = await getPrices(symbol, req);
 
-  const svg = buildSvg(bars, `${req.ticker} (${label})`);
+  const svg = buildSvg(bars, `${req.ticker} (${label})`, timeZone);
   const png = await svgToPng(svg);
 
   return {
