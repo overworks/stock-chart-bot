@@ -13,8 +13,8 @@ mkdirSync(outDir, { recursive: true });
 for (const c of cases) {
   const [sym, range = "1y"] = c.split(":");
   try {
-    const { bars, label, timeZone } = await getPrices(sym, { ticker: sym, range });
-    const svg = buildSvg(bars, `${process.env.TITLE ?? sym} (${label})`, timeZone);
+    const { bars, label, timeZone, currency } = await getPrices(sym, { ticker: sym, range });
+    const svg = buildSvg(bars, `${process.env.TITLE ?? sym} · ${label}`, { timeZone, currency });
     const png = new Resvg(svg, {
       fitTo: { mode: "width", value: 900 },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },

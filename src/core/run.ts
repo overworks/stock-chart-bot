@@ -1,5 +1,5 @@
 import { parseChartArgs } from "./command";
-import { buildSvg } from "./chart";
+import { buildSvg, summarizeChange } from "./chart";
 import { getPrices, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, searchYahoo } from "./symbols";
@@ -27,13 +27,15 @@ export async function runChart(
     series = await getPrices(symbol, req);
   }
 
-  const { bars, label, timeZone } = series;
+  const { bars, label, timeZone, currency } = series;
   const title = symbol === req.ticker ? req.ticker : `${req.ticker} (${symbol})`;
-  const svg = buildSvg(bars, `${title} · ${label}`, timeZone);
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency });
   const png = await svgToPng(svg);
+  const change = summarizeChange(bars, currency);
 
   return {
-    text: `**${title}** ${label}`,
+    text: `**${title}** ${label} · ${change.text}`,
     image: { png, filename: "chart.png" },
+    color: change.color,
   };
 }

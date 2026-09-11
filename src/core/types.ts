@@ -15,6 +15,7 @@ export interface ChartBar {
 export interface OutgoingMessage {
   text: string;
   image?: { png: Uint8Array; filename: string };
+  color?: string;
 }
 
 export interface IncomingCommand {

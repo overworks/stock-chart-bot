@@ -11,7 +11,7 @@ const ok = {
   chart: {
     result: [
       {
-        meta: { exchangeTimezoneName: "Asia/Seoul" },
+        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW" },
         timestamp: [1, 2, 3, 4],
         indicators: { quote: [{ close: [10, null, 12, 13] }] },
       },
@@ -32,6 +32,7 @@ describe("getPrices", () => {
     expect(series.bars).toEqual([{ t: 1, c: 10 }, { t: 3, c: 12 }, { t: 4, c: 13 }]);
     expect(series.label).toBe("1m");
     expect(series.timeZone).toBe("Asia/Seoul");
+    expect(series.currency).toBe("KRW");
   });
 
   it.each([

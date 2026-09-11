@@ -9,7 +9,7 @@ const series = {
   chart: {
     result: [
       {
-        meta: { exchangeTimezoneName: "Asia/Seoul" },
+        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW" },
         timestamp: Array.from({ length: 10 }, (_, i) => 1_700_000_000 + i * 86_400),
         indicators: { quote: [{ close: Array.from({ length: 10 }, (_, i) => 100 + i) }] },
       },
@@ -42,7 +42,8 @@ describe("runChart", () => {
     const urls = stub(() => series);
     const msg = await runChart({ ticker: "삼성전자", range: "1m" }, ENV);
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/005930.KS"]);
-    expect(msg.text).toBe("**삼성전자 (005930.KS)** 1m");
+    expect(msg.text).toBe("**삼성전자 (005930.KS)** 1m · 109 KRW ▲ +9 (+9.00%)");
+    expect(msg.color).toBe("#dc2626");
     expect(msg.image?.png.length).toBeGreaterThan(1000);
   });
 
@@ -58,7 +59,7 @@ describe("runChart", () => {
       "/v1/finance/search",
       "/v8/finance/chart/000660.KS",
     ]);
-    expect(msg.text).toBe("**hynix (000660.KS)** 1y");
+    expect(msg.text).toBe("**hynix (000660.KS)** 1y · 109 KRW ▲ +9 (+9.00%)");
   });
 
   it("surfaces the original error when search finds nothing", async () => {

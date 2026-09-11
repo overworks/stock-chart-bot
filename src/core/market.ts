@@ -19,6 +19,7 @@ export interface PriceSeries {
   bars: ChartBar[];
   label: string;
   timeZone: string;
+  currency: string;
 }
 
 export async function getPrices(
@@ -46,7 +47,8 @@ export async function getPrices(
 
   if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
   const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";
-  return { bars, label, timeZone };
+  const currency: string = result.meta?.currency ?? "";
+  return { bars, label, timeZone, currency };
 }
 
 function buildUrl(symbol: string, req: ChartRequest) {

@@ -61,7 +61,12 @@ async function serveChart(
       "payload_json",
       JSON.stringify({
         content: result.text,
-        embeds: [{ image: { url: "attachment://chart.png" } }],
+        embeds: [
+          {
+            image: { url: "attachment://chart.png" },
+            ...(result.color ? { color: parseInt(result.color.slice(1), 16) } : {}),
+          },
+        ],
       }),
     );
     if (result.image) {

@@ -37,7 +37,7 @@ const yahooBody = {
   chart: {
     result: [
       {
-        meta: { exchangeTimezoneName: "Asia/Seoul" },
+        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW" },
         timestamp: Array.from({ length: 20 }, (_, i) => 1_700_000_000 + i * 86_400),
         indicators: { quote: [{ close: Array.from({ length: 20 }, (_, i) => 70_000 + i * 100) }] },
       },
@@ -122,7 +122,8 @@ describe("discord adapter", () => {
     expect(patch.init?.method).toBe("PATCH");
     const form = patch.init?.body as FormData;
     const payload = JSON.parse(form.get("payload_json") as string);
-    expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m");
+    expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m · 71,900 KRW ▲ +1,900 (+2.71%)");
+    expect(payload.embeds[0].color).toBe(0xdc2626);
     const file = form.get("files[0]") as File;
     expect(file.name).toBe("chart.png");
     const bytes = new Uint8Array(await file.arrayBuffer());
