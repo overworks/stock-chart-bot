@@ -56,6 +56,45 @@ describe("buildSvg", () => {
   });
 });
 
+describe("buildSvg candle + volume", () => {
+  const ohlc = (n: number): ChartBar[] =>
+    Array.from({ length: n }, (_, i) => ({
+      t: 1_700_000_000 + i * DAY,
+      o: 100 + i,
+      c: i % 2 === 0 ? 102 + i : 99 + i,
+      h: 104 + i,
+      l: 97 + i,
+      v: 1000 * (i + 1),
+    }));
+
+  it("draws one wick and body per bar, colored by open/close", () => {
+    const svg = buildSvg(ohlc(6), "c", { style: "candle" });
+    expect((svg.match(/<rect /g) ?? []).length).toBe(1 + 6 + 6);
+    const wicks = (svg.match(/<line [^>]*stroke="#(dc2626|2563eb|6b7280)"/g) ?? []).length;
+    expect(wicks).toBe(6);
+    expect(svg).toContain(`fill="${COLOR.up}"`);
+    expect(svg).toContain(`fill="${COLOR.down}"`);
+    expect(svg).not.toContain("<path d=\"M");
+  });
+
+  it("scales the price axis to high/low in candle mode", () => {
+    const svg = buildSvg(ohlc(3), "c", { style: "candle", currency: "KRW" });
+    expect(svg).toContain(">106<");
+    expect(svg).toContain(">97<");
+  });
+
+  it("adds a volume panel only when volume data exists", () => {
+    expect(buildSvg(ohlc(4), "v")).toContain(">4K<");
+    expect(buildSvg(daily(4), "v")).not.toContain("fill-opacity=\"0.45\"");
+  });
+
+  it("falls back to close when open/high/low are missing", () => {
+    const svg = buildSvg(daily(5), "c", { style: "candle" });
+    expect(svg).not.toContain("NaN");
+    expect((svg.match(/<rect /g) ?? []).length).toBe(1 + 5);
+  });
+});
+
 describe("summarizeChange", () => {
   it("formats KRW without decimals and with thousands separators", () => {
     const s = summarizeChange([{ t: 1, c: 269_000 }, { t: 2, c: 258_500 }], "KRW");

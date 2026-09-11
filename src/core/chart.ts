@@ -1,4 +1,4 @@
-import type { ChartBar } from "./types";
+import type { ChartBar, ChartStyle } from "./types";
 
 export const FONT_FAMILY = "NanumSquare";
 
@@ -11,6 +11,7 @@ export const COLOR = {
 export interface ChartOptions {
   timeZone?: string;
   currency?: string;
+  style?: ChartStyle;
 }
 
 export interface ChangeSummary {
@@ -24,8 +25,10 @@ export interface ChangeSummary {
 }
 
 const W = 900;
-const H = 500;
+const H = 560;
 const PAD = { l: 72, r: 24, t: 80, b: 44 };
+const VOL_H = 80;
+const VOL_GAP = 12;
 
 export function summarizeChange(bars: ChartBar[], currency = ""): ChangeSummary {
   const first = bars[0].c;
@@ -40,20 +43,66 @@ export function summarizeChange(bars: ChartBar[], currency = ""): ChangeSummary 
 }
 
 export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {}): string {
-  const { timeZone = "UTC", currency = "" } = opts;
-  const closes = bars.map((b) => b.c);
-  const min = Math.min(...closes);
-  const max = Math.max(...closes);
-  const span = max - min || 1;
+  const { timeZone = "UTC", currency = "", style = "line" } = opts;
+  const candle = style === "candle";
+  const hasVolume = bars.some((b) => (b.v ?? 0) > 0);
   const change = summarizeChange(bars, currency);
 
+  const lows = candle ? bars.map((b) => b.l ?? b.c) : bars.map((b) => b.c);
+  const highs = candle ? bars.map((b) => b.h ?? b.c) : bars.map((b) => b.c);
+  const min = Math.min(...lows);
+  const max = Math.max(...highs);
+  const span = max - min || 1;
+
   const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
-  const x = (i: number) => PAD.l + (i / (bars.length - 1)) * plotW;
+  const volH = hasVolume ? VOL_H : 0;
+  const plotH = H - PAD.t - PAD.b - (hasVolume ? volH + VOL_GAP : 0);
+  const volTop = PAD.t + plotH + VOL_GAP;
+  const slot = plotW / Math.max(bars.length, 1);
+  const x = candle
+    ? (i: number) => PAD.l + (i + 0.5) * slot
+    : (i: number) => PAD.l + (i / (bars.length - 1)) * plotW;
   const y = (c: number) => PAD.t + (1 - (c - min) / span) * plotH;
 
   const line = bars.map((b, i) => `${i === 0 ? "M" : "L"}${fmt(x(i))},${fmt(y(b.c))}`).join(" ");
   const area = `${line} L${fmt(x(bars.length - 1))},${PAD.t + plotH} L${fmt(x(0))},${PAD.t + plotH} Z`;
+
+  const bodyW = Math.max(1, Math.min(12, slot * 0.7));
+  const candles = candle
+    ? bars
+        .map((b, i) => {
+          const o = b.o ?? b.c;
+          const h = b.h ?? Math.max(o, b.c);
+          const l = b.l ?? Math.min(o, b.c);
+          const color = b.c > o ? COLOR.up : b.c < o ? COLOR.down : COLOR.flat;
+          const top = y(Math.max(o, b.c));
+          const bottom = y(Math.min(o, b.c));
+          const cx = x(i);
+          return (
+            `<line x1="${fmt(cx)}" y1="${fmt(y(h))}" x2="${fmt(cx)}" y2="${fmt(y(l))}" stroke="${color}" stroke-width="1"/>` +
+            `<rect x="${fmt(cx - bodyW / 2)}" y="${fmt(top)}" width="${fmt(bodyW)}" height="${fmt(Math.max(1, bottom - top))}" fill="${color}"/>`
+          );
+        })
+        .join("")
+    : "";
+
+  const maxVol = hasVolume ? Math.max(...bars.map((b) => b.v ?? 0)) || 1 : 1;
+  const volW = Math.max(1, Math.min(12, slot * 0.7));
+  const volumes = hasVolume
+    ? bars
+        .map((b, i) => {
+          const v = b.v ?? 0;
+          if (v <= 0) return "";
+          const prev = i > 0 ? bars[i - 1].c : (b.o ?? b.c);
+          const color = b.c > prev ? COLOR.up : b.c < prev ? COLOR.down : COLOR.flat;
+          const hgt = (v / maxVol) * volH;
+          const cx = x(i);
+          return `<rect x="${fmt(cx - volW / 2)}" y="${fmt(volTop + volH - hgt)}" width="${fmt(volW)}" height="${fmt(hgt)}" fill="${color}" fill-opacity="0.45"/>`;
+        })
+        .join("") +
+      `<line x1="${PAD.l}" y1="${fmt(volTop + volH)}" x2="${W - PAD.r}" y2="${fmt(volTop + volH)}" stroke="#e5e7eb" stroke-width="1"/>` +
+      `<text x="${PAD.l - 10}" y="${fmt(volTop + 12)}" text-anchor="end" font-size="11" fill="#9ca3af">${fmtVolume(maxVol)}</text>`
+    : "";
 
   const gridLines = [0, 0.25, 0.5, 0.75, 1]
     .map((r) => {
@@ -92,8 +141,9 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   <text x="${W - PAD.r}" y="34" text-anchor="end" font-size="26" font-weight="700" fill="${change.color}">${escapeXml(fmtPrice(change.last, currency))}</text>
   <text x="${W - PAD.r}" y="58" text-anchor="end" font-size="14" fill="#6b7280">${escapeXml(currency)}</text>
   ${gridLines}
-  <path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
-  <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
+  <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
+  ${volumes}
   ${xLabels}
 </svg>`;
 }
@@ -107,6 +157,13 @@ const ZERO_DECIMAL = new Set(["KRW", "JPY", "IDR", "VND", "HUF", "CLP"]);
 export function fmtPrice(n: number, currency = ""): string {
   const digits = ZERO_DECIMAL.has(currency) ? 0 : Math.abs(n) >= 10_000 ? 0 : 2;
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+}
+
+function fmtVolume(v: number): string {
+  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  return String(Math.round(v));
 }
 
 function dateFormatter(timeZone: string, intraday: boolean): (epochSec: number) => string {

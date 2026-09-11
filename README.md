@@ -6,13 +6,14 @@ Discord 슬래시 커맨드로 종목 주가 차트를 그려 주는 봇. Cloudf
 ## 사용법
 
 ```
-/chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>]
-/chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD>
+/chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>]
+/chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>]
 ```
 
 - `range`를 생략하면 `1y`. `from`/`to`는 둘 다 넣어야 하며 `range`보다 우선한다.
+- `style`을 생략하면 종가 라인. `candle`은 봉차트. 둘 다 하단에 거래량이 붙는다.
 - `1d`, `1w`는 분봉 기반이라 x축에 거래소 현지 시각이 표시된다.
-- 응답은 종가 라인 차트 PNG 한 장이다.
+- 헤더에 마지막 종가와 조회 구간의 등락(금액·%)이 표시되고, 상승은 빨강·하락은 파랑이다.
 
 ### 종목 입력
 
@@ -106,7 +107,7 @@ PR에서는 검사만 돈다. 저장소 Secrets에 다음이 필요하다.
 ```bash
 npm run dev                                 # http://localhost:8787/discord
 npm test                                    # workerd 런타임에서 vitest 실행
-npm run smoke -- "AAPL:1d,005930.KS:1m"     # 차트 PNG를 dist/smoke/ 에 생성
+npm run smoke -- "AAPL:1d,005930.KS:1m:candle"   # 차트 PNG를 dist/smoke/ 에 생성
 ```
 
 ## 종목 목록 갱신

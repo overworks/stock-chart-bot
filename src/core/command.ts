@@ -11,6 +11,8 @@ export const RANGE_CHOICES = [
 
 export type RangeChoice = (typeof RANGE_CHOICES)[number];
 
+export const STYLE_CHOICES = ["line", "candle"] as const;
+
 export function parseChartArgs(
   args: Record<string, string | undefined>,
 ): import("./types").ChartRequest {
@@ -20,6 +22,9 @@ export function parseChartArgs(
   const from = args.from?.trim();
   const to = args.to?.trim();
   const range = args.range?.trim();
+  const style = (STYLE_CHOICES as readonly string[]).includes(args.style?.trim() ?? "")
+    ? (args.style!.trim() as import("./types").ChartStyle)
+    : "line";
 
   if ((from && !to) || (!from && to)) {
     throw new Error("커스텀 기간은 시작일과 종료일을 함께 입력해 주세요.");
@@ -31,7 +36,7 @@ export function parseChartArgs(
     if (Date.parse(from) >= Date.parse(to)) {
       throw new Error("시작일은 종료일보다 앞서야 합니다.");
     }
-    return { ticker, from, to };
+    return { ticker, from, to, style };
   }
 
   return {
@@ -39,5 +44,6 @@ export function parseChartArgs(
     range: (RANGE_CHOICES as readonly string[]).includes(range ?? "")
       ? range
       : "1y",
+    style,
   };
 }

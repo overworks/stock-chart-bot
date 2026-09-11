@@ -29,7 +29,7 @@ export async function runChart(
 
   const { bars, label, timeZone, currency } = series;
   const title = symbol === req.ticker ? req.ticker : `${req.ticker} (${symbol})`;
-  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency });
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style });
   const png = await svgToPng(svg);
   const change = summarizeChange(bars, currency);
 

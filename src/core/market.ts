@@ -40,10 +40,17 @@ export async function getPrices(
   if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
 
   const timestamps: number[] = result.timestamp ?? [];
-  const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-  const bars: ChartBar[] = timestamps
-    .map((t, i) => ({ t, c: closes[i] }))
-    .filter((b): b is ChartBar => typeof b.c === "number");
+  const quote = result.indicators?.quote?.[0] ?? {};
+  const num = (arr: unknown, i: number): number | undefined => {
+    const x = Array.isArray(arr) ? arr[i] : undefined;
+    return typeof x === "number" && Number.isFinite(x) ? x : undefined;
+  };
+  const bars: ChartBar[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const c = num(quote.close, i);
+    if (c === undefined) continue;
+    bars.push({ t: timestamps[i], c, o: num(quote.open, i), h: num(quote.high, i), l: num(quote.low, i), v: num(quote.volume, i) });
+  }
 
   if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
   const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";

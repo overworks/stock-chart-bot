@@ -13,7 +13,7 @@ const ok = {
       {
         meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW" },
         timestamp: [1, 2, 3, 4],
-        indicators: { quote: [{ close: [10, null, 12, 13] }] },
+        indicators: { quote: [{ close: [10, null, 12, 13], open: [9, 10, 11, null], high: [11, 11, 13, 14], low: [8, 9, 11, 12], volume: [100, 0, 300, 400] }] },
       },
     ],
   },
@@ -29,7 +29,11 @@ describe("getPrices", () => {
     expect(url.pathname).toBe("/v8/finance/chart/005930.KS");
     expect(url.searchParams.get("range")).toBe("1mo");
     expect(url.searchParams.get("interval")).toBe("1d");
-    expect(series.bars).toEqual([{ t: 1, c: 10 }, { t: 3, c: 12 }, { t: 4, c: 13 }]);
+    expect(series.bars).toEqual([
+      { t: 1, c: 10, o: 9, h: 11, l: 8, v: 100 },
+      { t: 3, c: 12, o: 11, h: 13, l: 11, v: 300 },
+      { t: 4, c: 13, o: undefined, h: 14, l: 12, v: 400 },
+    ]);
     expect(series.label).toBe("1m");
     expect(series.timeZone).toBe("Asia/Seoul");
     expect(series.currency).toBe("KRW");

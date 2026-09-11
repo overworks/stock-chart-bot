@@ -3,15 +3,20 @@ import { parseChartArgs } from "../src/core/command";
 
 describe("parseChartArgs", () => {
   it("defaults range to 1y", () => {
-    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1y" });
+    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1y", style: "line" });
   });
 
   it("trims ticker and keeps a valid range", () => {
-    expect(parseChartArgs({ ticker: " 삼성전자 ", range: "1m" })).toEqual({ ticker: "삼성전자", range: "1m" });
+    expect(parseChartArgs({ ticker: " 삼성전자 ", range: "1m" })).toEqual({ ticker: "삼성전자", range: "1m", style: "line" });
   });
 
   it("falls back to 1y for an unknown range", () => {
     expect(parseChartArgs({ ticker: "AAPL", range: "2w" }).range).toBe("1y");
+  });
+
+  it("accepts candle style and falls back to line for unknown styles", () => {
+    expect(parseChartArgs({ ticker: "AAPL", style: "candle" }).style).toBe("candle");
+    expect(parseChartArgs({ ticker: "AAPL", style: "bars" }).style).toBe("line");
   });
 
   it("rejects a missing ticker", () => {
@@ -24,6 +29,7 @@ describe("parseChartArgs", () => {
       ticker: "AAPL",
       from: "2024-01-01",
       to: "2024-06-30",
+      style: "line",
     });
   });
 
