@@ -53,6 +53,29 @@ const commands = [
       },
     ],
   },
+  {
+    name: "alias",
+    description: "종목 별칭을 관리합니다",
+    default_member_permissions: "32", // MANAGE_GUILD
+    options: [
+      {
+        type: 1,
+        name: "add",
+        description: "별칭을 추가합니다",
+        options: [
+          { type: 3, name: "alias", description: "별칭 (예: 삼전)", required: true },
+          { type: 3, name: "target", description: "종목명 또는 심볼 (예: 삼성전자, 005930.KS)", required: true, autocomplete: true },
+        ],
+      },
+      {
+        type: 1,
+        name: "remove",
+        description: "별칭을 삭제합니다",
+        options: [{ type: 3, name: "alias", description: "삭제할 별칭", required: true, autocomplete: true }],
+      },
+      { type: 1, name: "list", description: "등록된 별칭을 보여줍니다" },
+    ],
+  },
 ];
 
 const url = guildId

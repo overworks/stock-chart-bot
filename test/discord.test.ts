@@ -1,7 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
+import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 import keypair from "./keypair.json" with { type: "json" };
 
 const ENV = env as unknown as Env;
@@ -149,6 +149,68 @@ describe("discord adapter", () => {
     await waitOnExecutionContext(ctx);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
     expect(JSON.parse(patch.init?.body as string).content).toContain("시세 조회 실패 (500)");
+  });
+
+  it("rejects /alias add from members without manage-guild permission", async () => {
+    const calls = stubOutbound();
+    const req = await signed({
+      type: 2,
+      token: "tok",
+      member: { permissions: String(1 << 11) },
+      data: { name: "alias", options: [{ type: 1, name: "add", options: [{ name: "alias", value: "하닉" }, { name: "target", value: "SK하이닉스" }] }] },
+    });
+    const res = await worker.fetch(req, ENV, createExecutionContext());
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(4);
+    expect(body.data.flags).toBe(64);
+    expect(body.data.content).toContain("권한");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("lets managers add and remove aliases and autocompletes them", async () => {
+    await ENV.SYMBOLS.delete(ALIASES_KEY);
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
+    const calls = stubOutbound();
+    const manager = { permissions: String(1 << 5) };
+
+    let ctx = createExecutionContext();
+    let req = await signed({
+      type: 2,
+      token: "tok",
+      member: manager,
+      data: { name: "alias", options: [{ type: 1, name: "add", options: [{ name: "alias", value: "하닉" }, { name: "target", value: "SK하이닉스" }] }] },
+    });
+    expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
+    await waitOnExecutionContext(ctx);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
+    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
+
+    req = await signed({
+      type: 4,
+      data: { name: "alias", options: [{ type: 1, name: "remove", options: [{ name: "alias", value: "하", focused: true }] }] },
+    });
+    const ac = (await (await worker.fetch(req, ENV, createExecutionContext())).json()) as any;
+    expect(ac.data.choices).toEqual([{ name: "하닉 → SK하이닉스 (000660.KS)", value: "하닉" }]);
+
+    req = await signed({
+      type: 4,
+      data: { name: "alias", options: [{ type: 1, name: "add", options: [{ name: "alias", value: "x" }, { name: "target", value: "sk하", focused: true }] }] },
+    });
+    const ac2 = (await (await worker.fetch(req, ENV, createExecutionContext())).json()) as any;
+    expect(ac2.data.choices.map((c: any) => c.value)).toEqual(["000660.KS"]);
+
+    ctx = createExecutionContext();
+    req = await signed({ type: 2, token: "tok", member: { permissions: "0" }, data: { name: "alias", options: [{ type: 1, name: "list" }] } });
+    expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
+    await waitOnExecutionContext(ctx);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("• 하닉 → SK하이닉스 (000660.KS)");
+
+    ctx = createExecutionContext();
+    req = await signed({ type: 2, token: "tok", member: manager, data: { name: "alias", options: [{ type: 1, name: "remove", options: [{ name: "alias", value: "하닉" }] }] } });
+    await worker.fetch(req, ENV, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toContain("별칭 삭제");
+    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([]);
   });
 
   it("reports validation errors without calling upstream", async () => {

@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 0 * * 1" # 매주 월요일 09:00 KST
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/symbols.manual.json
+      - scripts/fetch-krx-symbols.ts
 
 permissions:
   contents: write
@@ -27,7 +32,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git diff --stat -- scripts/symbols.json
           fi
-      - if: steps.diff.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+      - if: steps.diff.outputs.changed == 'true' || github.event_name != 'schedule'
         run: npm run seed:symbols
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

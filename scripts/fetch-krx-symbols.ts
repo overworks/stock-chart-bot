@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 const KIND = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&marketType=";
 const MARKETS: Record<string, string> = { stockMkt: "KS", kosdaqMkt: "KQ" };
 
-type Entry = { key: string; value: string };
+type Entry = { key: string; value: string; alias?: true };
 
 async function fetchMarket(market: string, suffix: string): Promise<Entry[]> {
   const res = await fetch(KIND + market, { headers: { "User-Agent": "Mozilla/5.0 stock-chart-bot" } });
@@ -25,11 +25,21 @@ async function fetchMarket(market: string, suffix: string): Promise<Entry[]> {
 const manual: Entry[] = JSON.parse(readFileSync("scripts/symbols.manual.json", "utf8"));
 const krx = (await Promise.all(Object.entries(MARKETS).map(([m, s]) => fetchMarket(m, s)))).flat();
 
-// 수동 별칭이 앞에 오며 파일 순서를 유지한다(심볼→이름 역매핑은 첫 항목을 쓴다).
+// 심볼당 정식명은 하나다. KRX에 있으면 KRX 회사명, 없으면 수동 목록의 첫 항목. 나머지는 alias로 표시한다.
+const canonical = new Map(krx.map((e) => [e.value, e.key]));
+const manualOut: Entry[] = manual.map((e) => {
+  const name = canonical.get(e.value);
+  if (name === undefined) {
+    canonical.set(e.value, e.key);
+    return { key: e.key, value: e.value };
+  }
+  return name === e.key ? { key: e.key, value: e.value } : { key: e.key, value: e.value, alias: true };
+});
 const manualKeys = new Set(manual.map((e) => e.key));
 const out = [
-  ...manual,
+  ...manualOut,
   ...krx.filter((e) => !manualKeys.has(e.key)).sort((a, b) => a.key.localeCompare(b.key, "ko")),
 ];
 writeFileSync("scripts/symbols.json", JSON.stringify(out, null, 2) + "\n");
-console.log(`KRX ${krx.length}개 + 수동 ${manual.length}개 → ${out.length}개 → scripts/symbols.json`);
+const aliases = manualOut.filter((e) => e.alias).length;
+console.log(`KRX ${krx.length}개 + 수동 ${manual.length}개(별칭 ${aliases}개) → ${out.length}개 → scripts/symbols.json`);

@@ -92,6 +92,11 @@ Yahoo search API(`/v1/finance/search`)로 폴백한다. Yahoo search는 한글 �
 한글 종목명은 KV 시드(KRX 전 종목 + 수동 별칭)로만 커버한다. 실행 시에도 KV에 없는
 ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재시도한다.
 
+항목은 `{ key, value, alias? }`다. 심볼당 정식명은 하나이고(`alias`가 없는 항목), 별칭은
+검색·`resolveSymbol`에는 쓰이지만 자동완성 표시명과 차트 제목은 `byValue`의 정식명을 쓴다.
+채팅 `/alias`로 추가한 별칭은 KV `aliases:v1`에 따로 저장되어 `loadSymbols`가 시드 목록 뒤에
+합치며, 주간 `symbols:v1` 갱신에 덮이지 않는다. 쓰기는 별칭 하나당 KV put 1회다.
+
 ### 렌더링
 
 차트는 SVG 문자열을 만든 뒤 `@resvg/resvg-wasm`으로 PNG로 변환한다.

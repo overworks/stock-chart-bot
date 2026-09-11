@@ -1,8 +1,8 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { parseText } from "../src/platforms/slack";
-import { resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
+import { parseAliasText, parseText } from "../src/platforms/slack";
+import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 
 const ENV = env as unknown as Env;
 const SECRET = "test-signing-secret";
@@ -19,7 +19,7 @@ async function sign(body: string, ts: string, secret = SECRET): Promise<string> 
 }
 
 async function slash(fields: Record<string, string>, opts: { ts?: string; secret?: string } = {}) {
-  const body = new URLSearchParams({ command: "/chart", response_url: "https://hooks.slack.test/resp", ...fields }).toString();
+  const body = new URLSearchParams({ command: "/chart", response_url: "https://hooks.slack.test/resp", user_id: "U_USER", ...fields }).toString();
   const ts = opts.ts ?? String(Math.floor(Date.now() / 1000));
   return new Request("https://bot.test/slack", {
     method: "POST",
@@ -73,6 +73,43 @@ describe("parseText", () => {
     expect(parseText("max 1m")).toEqual({ ticker: "max", range: "1m" });
     expect(parseText("S&amp;P500 1y")).toEqual({ ticker: "S&P500", range: "1y" });
     expect(parseText("삼성E&amp;A")).toEqual({ ticker: "삼성E&A" });
+  });
+});
+
+describe("parseAliasText", () => {
+  it("parses add/remove/list and joins multi-word targets", () => {
+    expect(parseAliasText("add 삼전 삼성전자")).toEqual({ action: "add", alias: "삼전", target: "삼성전자" });
+    expect(parseAliasText("ADD 하닉 sk 하이닉스")).toEqual({ action: "add", alias: "하닉", target: "sk 하이닉스" });
+    expect(parseAliasText("remove 삼전")).toEqual({ action: "remove", alias: "삼전" });
+    expect(parseAliasText("list")).toEqual({ action: "list" });
+    expect(parseAliasText("add 삼전")).toEqual({});
+    expect(parseAliasText("")).toEqual({});
+  });
+});
+
+describe("slack /alias", () => {
+  it("shows usage, lets anyone list, and blocks non-admins from changes", async () => {
+    await ENV.SYMBOLS.delete(ALIASES_KEY);
+    const usage = (await (await worker.fetch(await slash({ command: "/alias", text: "add" }), ENV, createExecutionContext())).json()) as any;
+    expect(usage.text).toContain("사용법");
+    const list = (await (await worker.fetch(await slash({ command: "/alias", text: "list" }), ENV, createExecutionContext())).json()) as any;
+    expect(list).toEqual({ response_type: "ephemeral", text: "등록된 별칭이 없습니다." });
+    const denied = (await (await worker.fetch(await slash({ command: "/alias", text: "add 하닉 SK하이닉스" }), ENV, createExecutionContext())).json()) as any;
+    expect(denied.text).toContain("권한");
+  });
+
+  it("lets admins add aliases and posts the result in channel", async () => {
+    await ENV.SYMBOLS.delete(ALIASES_KEY);
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(await slash({ command: "/alias", text: "add 하닉 SK하이닉스", user_id: "U_OTHER" }), ENV, ctx);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("");
+    await waitOnExecutionContext(ctx);
+    const hook = calls.find((c) => c.url.startsWith("https://hooks.slack.test/"))!;
+    expect(JSON.parse(hook.init?.body as string)).toEqual({ response_type: "in_channel", text: "✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)" });
+    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
   });
 });
 

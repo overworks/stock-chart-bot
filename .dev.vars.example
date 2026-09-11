@@ -1,3 +1,4 @@
 DISCORD_PUBLIC_KEY=your_discord_application_public_key
 DISCORD_BOT_TOKEN=your_bot_token_for_command_registration
 SLACK_SIGNING_SECRET=your_slack_app_signing_secret
+SLACK_ALIAS_ADMINS=U0123456789,U0987654321

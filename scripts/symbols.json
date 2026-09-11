@@ -5,19 +5,23 @@
   },
   {
     "key": "달러",
-    "value": "KRW=X"
+    "value": "KRW=X",
+    "alias": true
   },
   {
     "key": "미국달러",
-    "value": "KRW=X"
+    "value": "KRW=X",
+    "alias": true
   },
   {
     "key": "원달러",
-    "value": "KRW=X"
+    "value": "KRW=X",
+    "alias": true
   },
   {
     "key": "USDKRW",
-    "value": "KRW=X"
+    "value": "KRW=X",
+    "alias": true
   },
   {
     "key": "엔/원",
@@ -25,19 +29,23 @@
   },
   {
     "key": "엔화",
-    "value": "JPYKRW=X"
+    "value": "JPYKRW=X",
+    "alias": true
   },
   {
     "key": "엔",
-    "value": "JPYKRW=X"
+    "value": "JPYKRW=X",
+    "alias": true
   },
   {
     "key": "일본엔",
-    "value": "JPYKRW=X"
+    "value": "JPYKRW=X",
+    "alias": true
   },
   {
     "key": "JPYKRW",
-    "value": "JPYKRW=X"
+    "value": "JPYKRW=X",
+    "alias": true
   },
   {
     "key": "비트코인",
@@ -49,7 +57,8 @@
   },
   {
     "key": "비트코인원화",
-    "value": "BTC-KRW"
+    "value": "BTC-KRW",
+    "alias": true
   },
   {
     "key": "이더리움",
@@ -61,71 +70,57 @@
   },
   {
     "key": "이더리움원화",
-    "value": "ETH-KRW"
-  },
-  {
-    "key": "삼성전자",
-    "value": "005930.KS"
+    "value": "ETH-KRW",
+    "alias": true
   },
   {
     "key": "삼성전자우",
     "value": "005935.KS"
   },
   {
-    "key": "SK하이닉스",
-    "value": "000660.KS"
+    "key": "삼전",
+    "value": "005930.KS",
+    "alias": true
   },
   {
-    "key": "LG에너지솔루션",
-    "value": "373220.KS"
+    "key": "하닉",
+    "value": "000660.KS",
+    "alias": true
+  },
+  {
+    "key": "삼바",
+    "value": "207940.KS",
+    "alias": true
+  },
+  {
+    "key": "엔솔",
+    "value": "373220.KS",
+    "alias": true
+  },
+  {
+    "key": "LG엔솔",
+    "value": "373220.KS",
+    "alias": true
+  },
+  {
+    "key": "네이버",
+    "value": "035420.KS",
+    "alias": true
   },
   {
     "key": "현대차",
-    "value": "005380.KS"
+    "value": "005380.KS",
+    "alias": true
   },
   {
-    "key": "기아",
-    "value": "000270.KS"
+    "key": "포스코",
+    "value": "005490.KS",
+    "alias": true
   },
   {
-    "key": "NAVER",
-    "value": "035420.KS"
-  },
-  {
-    "key": "카카오",
-    "value": "035720.KS"
-  },
-  {
-    "key": "셀트리온",
-    "value": "068270.KS"
-  },
-  {
-    "key": "POSCO홀딩스",
-    "value": "005490.KS"
-  },
-  {
-    "key": "KB금융",
-    "value": "105560.KS"
-  },
-  {
-    "key": "신한지주",
-    "value": "055550.KS"
-  },
-  {
-    "key": "삼성바이오로직스",
-    "value": "207940.KS"
-  },
-  {
-    "key": "LG화학",
-    "value": "051910.KS"
-  },
-  {
-    "key": "에코프로비엠",
-    "value": "247540.KQ"
-  },
-  {
-    "key": "알테오젠",
-    "value": "196170.KQ"
+    "key": "포스코홀딩스",
+    "value": "005490.KS",
+    "alias": true
   },
   {
     "key": "코스피",
@@ -530,6 +525,10 @@
   {
     "key": "기신정기",
     "value": "092440.KS"
+  },
+  {
+    "key": "기아",
+    "value": "000270.KS"
   },
   {
     "key": "기업은행",
@@ -2860,6 +2859,10 @@
     "value": "028260.KS"
   },
   {
+    "key": "삼성바이오로직스",
+    "value": "207940.KS"
+  },
+  {
     "key": "삼성생명",
     "value": "032830.KS"
   },
@@ -2870,6 +2873,10 @@
   {
     "key": "삼성전기",
     "value": "009150.KS"
+  },
+  {
+    "key": "삼성전자",
+    "value": "005930.KS"
   },
   {
     "key": "삼성제약",
@@ -3476,6 +3483,10 @@
     "value": "308430.KQ"
   },
   {
+    "key": "셀트리온",
+    "value": "068270.KS"
+  },
+  {
     "key": "셀트리온제약",
     "value": "068760.KQ"
   },
@@ -3830,6 +3841,10 @@
   {
     "key": "신한제16호스팩",
     "value": "496070.KQ"
+  },
+  {
+    "key": "신한지주",
+    "value": "055550.KS"
   },
   {
     "key": "신화인터텍",
@@ -4424,6 +4439,10 @@
     "value": "347860.KQ"
   },
   {
+    "key": "알테오젠",
+    "value": "196170.KQ"
+  },
+  {
     "key": "알톤",
     "value": "123750.KQ"
   },
@@ -4926,6 +4945,10 @@
   {
     "key": "에코프로머티",
     "value": "450080.KS"
+  },
+  {
+    "key": "에코프로비엠",
+    "value": "247540.KQ"
   },
   {
     "key": "에코프로에이치엔",
@@ -7062,6 +7085,10 @@
   {
     "key": "카이노스메드",
     "value": "284620.KQ"
+  },
+  {
+    "key": "카카오",
+    "value": "035720.KS"
   },
   {
     "key": "카카오게임즈",
@@ -9992,6 +10019,10 @@
     "value": "035900.KQ"
   },
   {
+    "key": "KB금융",
+    "value": "105560.KS"
+  },
+  {
     "key": "KB발해인프라",
     "value": "415640.KS"
   },
@@ -10164,6 +10195,10 @@
     "value": "064400.KS"
   },
   {
+    "key": "LG에너지솔루션",
+    "value": "373220.KS"
+  },
+  {
     "key": "LG유플러스",
     "value": "032640.KS"
   },
@@ -10178,6 +10213,10 @@
   {
     "key": "LG헬로비전",
     "value": "037560.KS"
+  },
+  {
+    "key": "LG화학",
+    "value": "051910.KS"
   },
   {
     "key": "LIG디펜스앤에어로스페이스",
@@ -10260,6 +10299,10 @@
     "value": "123010.KQ"
   },
   {
+    "key": "NAVER",
+    "value": "035420.KS"
+  },
+  {
     "key": "NC",
     "value": "036570.KS"
   },
@@ -10334,6 +10377,10 @@
   {
     "key": "PN풍년",
     "value": "024940.KQ"
+  },
+  {
+    "key": "POSCO홀딩스",
+    "value": "005490.KS"
   },
   {
     "key": "PS일렉트로닉스",
@@ -10510,6 +10557,10 @@
   {
     "key": "SK텔레콤",
     "value": "017670.KS"
+  },
+  {
+    "key": "SK하이닉스",
+    "value": "000660.KS"
   },
   {
     "key": "SKAI",

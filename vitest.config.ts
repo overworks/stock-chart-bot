@@ -11,6 +11,7 @@ export default defineConfig({
           DISCORD_PUBLIC_KEY: keypair.publicHex,
           DISCORD_BOT_TOKEN: "test-bot-token",
           SLACK_SIGNING_SECRET: "test-signing-secret",
+          SLACK_ALIAS_ADMINS: "U_ADMIN, U_OTHER",
         },
       },
     }),

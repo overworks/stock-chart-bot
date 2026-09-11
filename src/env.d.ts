@@ -13,6 +13,7 @@ interface Env {
   DISCORD_APPLICATION_ID: string;
   DISCORD_BOT_TOKEN: string;
   SLACK_SIGNING_SECRET: string;
+  SLACK_ALIAS_ADMINS?: string;
   SYMBOLS: KVNamespace;
   CHARTS: R2Bucket;
 }

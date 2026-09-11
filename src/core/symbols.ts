@@ -6,9 +6,12 @@ export type { SymbolChoice };
 export interface SymbolEntry {
   key: string;
   value: string;
+  /** 검색에만 쓰고 표시명으로는 쓰지 않는 별칭 */
+  alias?: boolean;
 }
 
 export const SYMBOLS_KEY = "symbols:v1";
+export const ALIASES_KEY = "aliases:v1";
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX = 25;
 
@@ -72,13 +75,19 @@ export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
     if (Date.now() - loaded.at < CACHE_TTL_MS) return loaded;
   }
   cache = (async () => {
-    const entries = (await kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json")) ?? [];
+    const [base, user] = await Promise.all([
+      kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json"),
+      kv.get<SymbolEntry[]>(ALIASES_KEY, "json"),
+    ]);
+    const entries = [...(base ?? []), ...(user ?? []).map((e) => ({ ...e, alias: true }))];
     const byKey = new Map<string, string>();
     const byValue = new Map<string, string>();
     for (const e of entries) {
       if (!byKey.has(e.key)) byKey.set(e.key, e.value);
-      if (!byValue.has(e.value)) byValue.set(e.value, e.key);
+      if (!e.alias && !byValue.has(e.value)) byValue.set(e.value, e.key);
     }
+    // 정식명이 없는 심볼은 첫 별칭을 표시명으로 쓴다.
+    for (const e of entries) if (!byValue.has(e.value)) byValue.set(e.value, e.key);
     return { entries, byKey, byValue, at: Date.now() };
   })();
   try {
@@ -106,7 +115,7 @@ export async function searchSymbols(query: string, kv: KVNamespace): Promise<Sym
   const q = norm(query);
   if (!q) return [];
 
-  const { entries } = await loadSymbols(kv);
+  const { entries, byValue } = await loadSymbols(kv);
   const jamo = hasJamo(q) ? jamoPattern(q) : null;
   const ranked: { score: number; e: SymbolEntry }[] = [];
   for (const e of entries) {
@@ -133,7 +142,7 @@ export async function searchSymbols(query: string, kv: KVNamespace): Promise<Sym
       out.push(c);
     }
   };
-  for (const { e } of ranked) push({ name: `${e.key} (${e.value})`, value: e.value });
+  for (const { e } of ranked) push({ name: `${byValue.get(e.value) ?? e.key} (${e.value})`, value: e.value });
 
   if (out.length < MAX && isAsciiQuery(query.trim()) && q.length >= 2) {
     for (const c of await searchRemote(query.trim())) push(c);

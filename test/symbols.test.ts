@@ -80,12 +80,12 @@ describe("searchSymbols", () => {
     expect(out[2].name).toBe("SK Hynix Inc. (HY9H.F, FRA)");
   });
 
-  it("reads the list from KV once per cache window", async () => {
+  it("reads both KV keys once per cache window", async () => {
     const spy = vi.spyOn(KV, "get");
     await searchSymbols("삼성", KV);
     await searchSymbols("애플", KV);
     await resolveSymbol("삼성전자", KV);
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });
 
@@ -123,11 +123,11 @@ describe("resolveSymbol", () => {
     expect(await resolveSymbol("^KS11", KV)).toBe("^KS11");
   });
 
-  it("dedupes concurrent cold loads into one KV read", async () => {
+  it("dedupes concurrent cold loads into one KV round trip", async () => {
     resetSymbolCache();
     const spy = vi.spyOn(KV, "get");
     await Promise.all([resolveSymbol("삼성전자", KV), resolveSymbol("NAVER", KV), searchSymbols("삼성", KV)]);
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });
 });

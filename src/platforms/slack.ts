@@ -1,3 +1,4 @@
+import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../core/command";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
@@ -22,12 +23,50 @@ export async function handleSlack(
 
   const form = new URLSearchParams(body);
   const responseUrl = form.get("response_url") ?? "";
+  if (form.get("command") === "/alias") return handleAlias(form, responseUrl, env, ctx);
+
   const args = parseText(form.get("text") ?? "");
   if (!args.ticker || !responseUrl) return ephemeral(USAGE);
 
   const origin = new URL(req.url).origin;
   ctx.waitUntil(serveChart(responseUrl, origin, args, env));
   return ephemeral("차트를 만드는 중입니다…");
+}
+
+async function handleAlias(form: URLSearchParams, responseUrl: string, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const args = parseAliasText(form.get("text") ?? "");
+  if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
+  if (args.action === "list") {
+    try {
+      return ephemeral(await runAlias(args, env));
+    } catch (err) {
+      return ephemeral(`⚠️ ${(err as Error).message}`);
+    }
+  }
+  if (!isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
+    return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
+  }
+  ctx.waitUntil(
+    runAlias(args, env)
+      .then((text) => post(responseUrl, { response_type: "in_channel", text }))
+      .catch((err) => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${(err as Error).message}` })),
+  );
+  return new Response("", { status: 200 });
+}
+
+/** `add <별칭> <종목…>`, `remove <별칭>`, `list`. 종목은 공백을 포함할 수 있다. */
+export function parseAliasText(text: string): { action?: string; alias?: string; target?: string } {
+  const tokens = unescapeSlack(text).trim().split(/\s+/).filter(Boolean);
+  const action = tokens[0]?.toLowerCase();
+  if (action === "list") return { action };
+  if (action === "add" && tokens.length >= 3) return { action, alias: tokens[1], target: tokens.slice(2).join(" ") };
+  if (action === "remove" && tokens.length === 2) return { action, alias: tokens[1] };
+  return {};
+}
+
+function isAliasAdmin(userId: string | null, admins: string | undefined): boolean {
+  if (!userId || !admins) return false;
+  return admins.split(",").map((s) => s.trim()).filter(Boolean).includes(userId);
 }
 
 /** 첫 토큰은 항상 종목. 이후 토큰 중 기간·스타일·날짜는 옵션, 나머지는 종목명에 이어 붙인다. */

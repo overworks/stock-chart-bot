@@ -27,6 +27,14 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 - 일봉 이상 차트에는 MA20(주황)·MA60(보라)이 함께 그려진다. 봉 수가 부족하면 생략한다.
 - 환율·암호화폐처럼 24시간 거래되는 상품은 KST로 표시한다. 우하단에 데이터 출처와 생성 시각이 찍힌다.
 
+별칭 관리 (Discord는 서버 관리 권한, Slack은 `SLACK_ALIAS_ADMINS`에 등록된 사용자만 변경 가능):
+
+```
+/alias add <별칭> <종목명|심볼>     예: /alias add 삼전 삼성전자
+/alias remove <별칭>
+/alias list
+```
+
 ### 종목 입력
 
 `ticker`에는 한글 종목명, 영문명, 티커 어느 것이든 넣을 수 있다.
@@ -34,6 +42,7 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 | 입력 | 해석 |
 |---|---|
 | `삼성전자`, `SK하이닉스` | KRX 상장 종목명 → `005930.KS`, `000660.KS` |
+| `삼전`, `하닉`, `삼바`, `엔솔`, `네이버`, `현대차`, `포스코` | 줄임말 별칭 → 정식 종목으로 매핑 |
 | `코스피`, `나스닥`, `애플` | 수동 별칭 → `^KS11`, `^IXIC`, `AAPL` |
 | `달러`, `달러/원`, `USDKRW` / `엔`, `엔화`, `JPYKRW` | 환율 → `KRW=X`(USD/KRW), `JPYKRW=X`(JPY/KRW, 100엔 기준으로 환산해 표시) |
 | `비트코인` / `이더리움` | 암호화폐 → `BTC-USD`, `ETH-USD`. 원화는 `비트코인/원`, `이더리움/원` |
@@ -49,6 +58,17 @@ Yahoo 검색으로 보충한다. Yahoo 검색은 한글을 받지 않으므로 �
 실행 시 별칭은 **정확히 일치할 때만** 적용된다(`GS`는 GS홀딩스, `gs`는 Yahoo에 그대로).
 `005930.KS`, `KRW=X`, `BTC-USD`, `^KS11`처럼 이미 Yahoo 심볼 형식이면 별칭을 거치지 않는다.
 KRX 약칭과 해외 티커가 겹치면(`GS`, `DB`, `SK`) 자동완성에서 둘 다 보이니 원하는 쪽을 고른다.
+
+별칭은 검색에만 쓰이고 자동완성 목록과 차트 제목에는 항상 정식 종목명이 나온다
+(`삼전` 입력 → `삼성전자 (005930.KS)`). 심볼당 정식명은 KRX 회사명이 있으면 그것, 없으면
+수동 목록의 첫 항목이다.
+
+별칭을 추가하는 방법은 둘이다.
+
+- 채팅에서 `/alias add 삼전 삼성전자`. 종목은 이름·심볼 어느 쪽이든 되고, 이름은 검색 첫
+  결과로 확정해 응답에 보여 준다. KV의 `aliases:v1`에 저장되며 주간 갱신에 영향받지 않는다.
+- 저장소의 `scripts/symbols.manual.json`을 편집해 push. 파일이 바뀌면 `refresh-symbols`
+  워크플로가 자동으로 돌아 KV에 반영한다. 정식명은 따로 적을 필요 없다.
 
 ## 구조
 
@@ -98,6 +118,7 @@ cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOK
 npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
+npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
 npm run fetch:symbols                      # KRX 목록 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                       # KV SYMBOLS 의 symbols:v1 키에 적재
@@ -123,7 +144,9 @@ Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 �
 1. Basic Information → **Signing Secret**을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
 2. Slash Commands → `/chart` 생성, Request URL은
    `https://stock-chart-bot.<subdomain>.workers.dev/slack`.
-3. 워크스페이스에 설치한다. 봇 토큰이나 추가 스코프는 필요 없다. 응답은 `response_url`로
+3. (선택) Slash Commands → `/alias`도 같은 Request URL로 만들고, 별칭을 바꿀 사용자의
+   Slack 멤버 ID를 쉼표로 이어 `SLACK_ALIAS_ADMINS` 시크릿에 넣는다. 없으면 `/alias list`만 된다.
+4. 워크스페이스에 설치한다. 봇 토큰이나 추가 스코프는 필요 없다. 응답은 `response_url`로
    보내고, 이미지는 R2에 저장한 뒤 Worker의 `/charts/<key>` URL로 노출한다(7일 후 만료).
 
 ## 배포
@@ -147,12 +170,12 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"   # 차트 PNG를 dist/smoke/ 에
 ## 종목 목록 갱신
 
 GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND 목록을 다시 받아
-변경이 있으면 `scripts/symbols.json`을 커밋하고 KV에 적재한다. Actions 탭에서 수동 실행도
+변경이 있으면 `scripts/symbols.json`을 커밋하고 KV에 적재한다. `scripts/symbols.manual.json`이나
+`scripts/fetch-krx-symbols.ts`가 push되면 즉시 한 번 더 돈다. Actions 탭에서 수동 실행도
 된다. 로컬에서는 `npm run fetch:symbols && npm run seed:symbols`.
 
-별칭을 추가하려면 `scripts/symbols.manual.json`을 편집하고 push한다. 다음 갱신 때 반영되며,
-바로 반영하려면 워크플로를 수동 실행한다. `scripts/symbols.json`은 생성물이라 직접 수정하지
-않는다.
+`scripts/symbols.json`은 생성물이라 직접 수정하지 않는다. 채팅에서 추가한 별칭은 별도 키
+(`aliases:v1`)에 있어 이 갱신으로 지워지지 않는다.
 
 ## 다른 플랫폼 추가
 
