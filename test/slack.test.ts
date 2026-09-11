@@ -60,12 +60,19 @@ function stubOutbound(yahooStatus = 200) {
 }
 
 describe("parseText", () => {
-  it("extracts ticker, range, style, and dates in any order", () => {
+  it("takes the first token as ticker, then options in any order", () => {
     expect(parseText("삼성전자")).toEqual({ ticker: "삼성전자" });
     expect(parseText("AAPL 1m candle")).toEqual({ ticker: "AAPL", range: "1m", style: "candle" });
-    expect(parseText("candle 3M sk 하이닉스")).toEqual({ ticker: "sk 하이닉스", range: "3m", style: "candle" });
+    expect(parseText("sk candle 3M 하이닉스")).toEqual({ ticker: "sk 하이닉스", range: "3m", style: "candle" });
     expect(parseText("AAPL 2024-01-01 2024-06-30")).toEqual({ ticker: "AAPL", from: "2024-01-01", to: "2024-06-30" });
     expect(parseText("   ")).toEqual({ ticker: "" });
+  });
+
+  it("lets keyword-like tickers through and unescapes Slack HTML entities", () => {
+    expect(parseText("MAX")).toEqual({ ticker: "MAX" });
+    expect(parseText("max 1m")).toEqual({ ticker: "max", range: "1m" });
+    expect(parseText("S&amp;P500 1y")).toEqual({ ticker: "S&P500", range: "1y" });
+    expect(parseText("삼성E&amp;A")).toEqual({ ticker: "삼성E&A" });
   });
 });
 
@@ -78,6 +85,12 @@ describe("slack adapter", () => {
     expect((await worker.fetch(stale, ENV, createExecutionContext())).status).toBe(401);
     const noSig = new Request("https://bot.test/slack", { method: "POST", body: "text=AAPL" });
     expect((await worker.fetch(noSig, ENV, createExecutionContext())).status).toBe(401);
+  });
+
+  it("returns 401 instead of crashing when the signing secret is unset", async () => {
+    const req = await slash({ text: "AAPL" });
+    const res = await worker.fetch(req, { ...ENV, SLACK_SIGNING_SECRET: undefined as unknown as string }, createExecutionContext());
+    expect(res.status).toBe(401);
   });
 
   it("replies with usage when no ticker is given", async () => {

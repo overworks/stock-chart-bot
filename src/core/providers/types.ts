@@ -5,6 +5,8 @@ export class SymbolNotFoundError extends Error {}
 export interface PriceSeries {
   bars: ChartBar[];
   label: string;
+  /** 분·시간 단위 봉인지. x축 시각 표시와 이동평균 생략에 쓴다. */
+  intraday: boolean;
   timeZone: string;
   currency: string;
   source: string;

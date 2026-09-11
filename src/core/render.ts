@@ -21,5 +21,14 @@ export async function svgToPng(svg: string, width = 900): Promise<Uint8Array> {
       loadSystemFonts: false,
     },
   });
-  return resvg.render().asPng();
+  try {
+    const image = resvg.render();
+    try {
+      return image.asPng();
+    } finally {
+      image.free();
+    }
+  } finally {
+    resvg.free();
+  }
 }

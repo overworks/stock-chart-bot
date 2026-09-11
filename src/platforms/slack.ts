@@ -4,7 +4,7 @@ import { storeChart } from "../core/store";
 
 const TOLERANCE_SEC = 5 * 60;
 const USAGE =
-  "사용법: `/chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]` 또는 `/chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]`";
+  "사용법: `/chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]` 또는 `/chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]` (종목을 먼저 씁니다)";
 
 export async function handleSlack(
   req: Request,
@@ -30,11 +30,12 @@ export async function handleSlack(
   return ephemeral("차트를 만드는 중입니다…");
 }
 
+/** 첫 토큰은 항상 종목. 이후 토큰 중 기간·스타일·날짜는 옵션, 나머지는 종목명에 이어 붙인다. */
 export function parseText(text: string): Record<string, string | undefined> {
-  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  const tokens = unescapeSlack(text).trim().split(/\s+/).filter(Boolean);
   const args: Record<string, string | undefined> = {};
-  const rest: string[] = [];
-  for (const tok of tokens) {
+  const rest: string[] = tokens.length ? [tokens[0]] : [];
+  for (const tok of tokens.slice(1)) {
     const low = tok.toLowerCase();
     if ((RANGE_CHOICES as readonly string[]).includes(low) && !args.range) args.range = low;
     else if ((STYLE_CHOICES as readonly string[]).includes(low) && !args.style) args.style = low;
@@ -66,7 +67,12 @@ async function serveChart(
   }
 }
 
-async function verifySlack(body: string, signature: string, timestamp: string, secret: string): Promise<boolean> {
+function unescapeSlack(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+}
+
+async function verifySlack(body: string, signature: string, timestamp: string, secret: string | undefined): Promise<boolean> {
+  if (!secret) return false;
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > TOLERANCE_SEC) return false;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

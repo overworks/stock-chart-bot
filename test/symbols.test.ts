@@ -105,11 +105,30 @@ describe("searchSymbols", () => {
 });
 
 describe("resolveSymbol", () => {
-  it("maps aliases case-insensitively and passes unknown tickers through", async () => {
+  it("maps aliases only on exact match and passes unknown tickers through", async () => {
     expect(await resolveSymbol("삼성전자", KV)).toBe("005930.KS");
-    expect(await resolveSymbol("naver", KV)).toBe("035420.KS");
+    expect(await resolveSymbol("NAVER", KV)).toBe("035420.KS");
     expect(await resolveSymbol(" 애플 ", KV)).toBe("AAPL");
+    expect(await resolveSymbol("naver", KV)).toBe("naver");
     expect(await resolveSymbol("TSLA", KV)).toBe("TSLA");
+  });
+
+  it("never remaps inputs that already look like Yahoo symbols", async () => {
+    await KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "GS", value: "078930.KS" }, { key: "005930.KS", value: "WRONG" }, { key: "KRW=X", value: "WRONG" }]));
+    resetSymbolCache();
+    expect(await resolveSymbol("GS", KV)).toBe("078930.KS");
+    expect(await resolveSymbol("005930.KS", KV)).toBe("005930.KS");
+    expect(await resolveSymbol("KRW=X", KV)).toBe("KRW=X");
+    expect(await resolveSymbol("BTC-USD", KV)).toBe("BTC-USD");
+    expect(await resolveSymbol("^KS11", KV)).toBe("^KS11");
+  });
+
+  it("dedupes concurrent cold loads into one KV read", async () => {
+    resetSymbolCache();
+    const spy = vi.spyOn(KV, "get");
+    await Promise.all([resolveSymbol("삼성전자", KV), resolveSymbol("NAVER", KV), searchSymbols("삼성", KV)]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
 

@@ -19,6 +19,8 @@ export interface ChartOptions {
   reference?: number;
   source?: string;
   now?: Date;
+  /** 분·시간봉 여부. 없으면 봉 간격으로 추정한다. */
+  intraday?: boolean;
 }
 
 export interface ChangeSummary {
@@ -51,6 +53,7 @@ export function summarizeChange(bars: ChartBar[], currency = "", reference?: num
 
 export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {}): string {
   const { timeZone = "UTC", currency = "", style = "line", reference, source, now = new Date() } = opts;
+  if (bars.length < 2) throw new Error("차트를 그리기에 데이터가 부족합니다.");
   const candle = style === "candle";
   const hasVolume = bars.some((b) => (b.v ?? 0) > 0);
   const change = summarizeChange(bars, currency, reference);
@@ -94,7 +97,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
         .join("")
     : "";
 
-  const intraday = bars[1].t - bars[0].t < 86_400;
+  const intraday = opts.intraday ?? bars[1].t - bars[0].t < 86_400;
   const mas = intraday ? [] : MA_PERIODS.filter((p) => bars.length > p).map((p) => ({ p, values: movingAverage(bars, p) }));
   const maLines = mas
     .map(({ p, values }) => {

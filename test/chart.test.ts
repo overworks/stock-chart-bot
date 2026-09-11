@@ -116,6 +116,17 @@ describe("moving averages", () => {
     const bars = Array.from({ length: 80 }, (_, i) => ({ t: 1_700_000_000 + i * 300, c: 10 + (i % 7) }));
     expect(buildSvg(bars, "i")).not.toContain("MA20");
   });
+
+  it("trusts an explicit intraday flag over the timestamp heuristic", () => {
+    const thirtyMin = Array.from({ length: 80 }, (_, i) => ({ t: 1_700_000_000 + i * 1800, c: 10 + (i % 7) }));
+    expect(buildSvg(thirtyMin, "i", { intraday: false })).toContain("MA20");
+    expect(buildSvg(daily(80), "d", { intraday: true })).not.toContain("MA20");
+    expect(buildSvg(daily(3), "d", { intraday: true, timeZone: "UTC" })).toMatch(/\d{2}:\d{2}</);
+  });
+
+  it("refuses to draw fewer than two bars", () => {
+    expect(() => buildSvg(daily(1), "x")).toThrow("부족");
+  });
 });
 
 describe("summarizeChange", () => {

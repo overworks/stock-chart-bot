@@ -23,8 +23,10 @@ export async function runChart(
   try {
     series = await getPrices(symbol, req);
   } catch (err) {
-    if (!(err instanceof SymbolNotFoundError) || !isAsciiQuery(req.ticker)) throw err;
-    const hit = (await searchRemote(req.ticker))[0];
+    // 별칭으로 해석되지 않은 영문 입력이 '없는 심볼'일 때만 검색으로 한 번 더 시도한다.
+    const unresolved = symbol === req.ticker.trim();
+    if (!(err instanceof SymbolNotFoundError) || !unresolved || !isAsciiQuery(symbol)) throw err;
+    const hit = (await searchRemote(symbol))[0];
     if (!hit) throw err;
     symbol = hit.value;
     series = await getPrices(symbol, req);
@@ -32,13 +34,12 @@ export async function runChart(
 
   const rule = displayRule(symbol);
   if (rule) series = scaleSeries(series, rule.factor);
-  const { bars, label, currency, previousClose, source } = series;
+  const { bars, label, currency, previousClose, source, intraday } = series;
   const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
   const name = (await symbolName(symbol, env.SYMBOLS)) ?? series.name;
-  const base = name && name !== symbol ? `${name} (${symbol}` : `${symbol} (`;
-  const title = rule ? `${base}, ${rule.label})` : name && name !== symbol ? `${base})` : symbol;
+  const title = buildTitle(symbol, name, rule?.label);
   const reference = req.range === "1d" && !req.from ? previousClose : undefined;
-  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source });
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source, intraday });
   const png = await svgToPng(svg);
   const change = summarizeChange(bars, currency, reference);
 
@@ -48,4 +49,12 @@ export async function runChart(
     color: change.color,
     source,
   };
+}
+
+/** "삼성전자 (005930.KS)", "JPY/KRW (JPYKRW=X, 100엔)", "JPYKRW=X (100엔)", "AAPL" */
+export function buildTitle(symbol: string, name?: string, label?: string): string {
+  const hasName = !!name && name !== symbol;
+  const inner = [hasName ? symbol : undefined, label].filter(Boolean).join(", ");
+  const head = hasName ? name! : symbol;
+  return inner ? `${head} (${inner})` : head;
 }

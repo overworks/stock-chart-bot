@@ -73,19 +73,39 @@ describe("getPrices", () => {
     await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("429");
   });
 
-  it("throws when the symbol is unknown", async () => {
-    yahoo({ chart: { result: null, error: { code: "Not Found" } } });
+  it("throws SymbolNotFoundError on Yahoo's 404 and on a null result", async () => {
+    yahoo({ chart: { result: null, error: { code: "Not Found" } } }, 404);
+    await expect(getPrices("NOPE", { ticker: "NOPE" })).rejects.toBeInstanceOf(SymbolNotFoundError);
+    yahoo({ chart: { result: null } });
     await expect(getPrices("NOPE", { ticker: "NOPE" })).rejects.toThrow("찾지 못했습니다");
   });
 
-  it("throws when fewer than two bars remain", async () => {
+  it("treats too few bars as a plain error, not as not-found", async () => {
     yahoo({ chart: { result: [{ timestamp: [1, 2], indicators: { quote: [{ close: [1, null] }] } }] } });
-    await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("부족");
+    const err = await getPrices("AAPL", { ticker: "AAPL" }).catch((e) => e);
+    expect(err.message).toContain("부족");
+    expect(err).not.toBeInstanceOf(SymbolNotFoundError);
+  });
+
+  it("reports unparseable bodies instead of throwing SyntaxError", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>consent</html>", { status: 200 })));
+    await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("해석하지");
+  });
+
+  it("flags intraday for minute intervals only", async () => {
+    yahoo(ok);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).intraday).toBe(true);
+    yahoo(ok);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).intraday).toBe(true);
+    yahoo(ok);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "max" })).intraday).toBe(false);
+    yahoo(ok);
+    expect((await getPrices("AAPL", { ticker: "AAPL", from: "2024-01-01", to: "2024-02-01" })).intraday).toBe(false);
   });
 });
 
 describe("provider fallback", () => {
-  const series = { bars: [{ t: 1, c: 1 }, { t: 2, c: 2 }], label: "1d", timeZone: "UTC", currency: "USD", source: "B" };
+  const series = { bars: [{ t: 1, c: 1 }, { t: 2, c: 2 }], label: "1d", intraday: true, timeZone: "UTC", currency: "USD", source: "B" };
   const failing: MarketProvider = {
     name: "A",
     getPrices: async () => { throw new Error("시세 조회 실패 (503)"); },
@@ -112,9 +132,16 @@ describe("provider fallback", () => {
     await expect(getPrices("X", { ticker: "X" }, [])).rejects.toThrow("제공자");
   });
 
-  it("returns the first non-empty search result", async () => {
+  it("returns the first non-empty search result and swallows provider errors", async () => {
+    const throwing: MarketProvider = { name: "T", getPrices: async () => series, search: async () => { throw new Error("boom"); } };
     expect(await searchRemote("x", [failing, ok])).toEqual([{ name: "X (X)", value: "X" }]);
+    expect(await searchRemote("x", [throwing, ok])).toEqual([{ name: "X (X)", value: "X" }]);
     expect(await searchRemote("x", [failing])).toEqual([]);
+  });
+
+  it("rejects a provider result with fewer than two bars", async () => {
+    const thin: MarketProvider = { name: "thin", getPrices: async () => ({ ...series, bars: [{ t: 1, c: 1 }] }), search: async () => [] };
+    await expect(getPrices("X", { ticker: "X" }, [thin])).rejects.toThrow("부족");
   });
 
   it("marks crypto and FX as continuous markets", async () => {

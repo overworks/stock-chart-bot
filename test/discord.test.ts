@@ -100,6 +100,15 @@ describe("discord adapter", () => {
     expect(body.data.choices.map((c: any) => c.value)).toEqual(["005930.KS", "005935.KS"]);
   });
 
+  it("keeps KV autocomplete hits when the remote search returns garbage", async () => {
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SAMSUNG", value: "005930.KS" }]));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>consent</html>", { status: 200 })));
+    const req = await signed({ type: 4, data: { name: "chart", options: [{ name: "ticker", value: "sa", focused: true }] } });
+    const res = await worker.fetch(req, ENV, createExecutionContext());
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).data.choices.map((c: any) => c.value)).toEqual(["005930.KS"]);
+  });
+
   it("defers /chart, resolves the alias, renders a PNG and patches the original message", async () => {
     await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();

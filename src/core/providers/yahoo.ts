@@ -23,14 +23,21 @@ export const yahoo: MarketProvider = {
   name: "Yahoo Finance",
 
   async getPrices(symbol, req) {
-    const { url, label } = buildUrl(symbol, req);
+    const { url, label, intraday } = buildUrl(symbol, req);
     const res = await fetch(url, {
       headers: { "User-Agent": UA },
       cf: { cacheTtl: 300, cacheEverything: true },
     } as RequestInit);
+    // 모르는 심볼은 404 + {chart:{result:null}} 로 온다.
+    if (res.status === 404) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
     if (!res.ok) throw new Error(`시세 조회 실패 (${res.status})`);
 
-    const json = (await res.json()) as any;
+    let json: any;
+    try {
+      json = await res.json();
+    } catch {
+      throw new Error("시세 응답을 해석하지 못했습니다.");
+    }
     const result = json?.chart?.result?.[0];
     if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
 
@@ -42,13 +49,14 @@ export const yahoo: MarketProvider = {
       if (c === undefined) continue;
       bars.push({ t: timestamps[i], c, o: num(quote.open, i), h: num(quote.high, i), l: num(quote.low, i), v: num(quote.volume, i) });
     }
-    if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
+    if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
 
     const meta = result.meta ?? {};
     const prev = meta.chartPreviousClose ?? meta.previousClose;
     return {
       bars,
       label,
+      intraday,
       timeZone: meta.exchangeTimezoneName ?? "UTC",
       currency: meta.currency ?? "",
       source: yahoo.name,
@@ -71,7 +79,12 @@ export const yahoo: MarketProvider = {
     }
     if (!res.ok) return [];
 
-    const json = (await res.json()) as any;
+    let json: any;
+    try {
+      json = await res.json();
+    } catch {
+      return [];
+    }
     const quotes: any[] = json?.quotes ?? [];
     return quotes
       .filter((x) => typeof x?.symbol === "string" && QUOTE_TYPES.has(x.quoteType))
@@ -93,9 +106,9 @@ function buildUrl(symbol: string, req: ChartRequest) {
   if (req.from && req.to) {
     const p1 = Math.floor(Date.parse(req.from) / 1000);
     const p2 = Math.floor(Date.parse(req.to) / 1000) + 86_400;
-    return { url: `${CHART}/${sym}?period1=${p1}&period2=${p2}&interval=1d`, label: `${req.from} ~ ${req.to}` };
+    return { url: `${CHART}/${sym}?period1=${p1}&period2=${p2}&interval=1d`, label: `${req.from} ~ ${req.to}`, intraday: false };
   }
   const label = req.range ?? "1d";
   const { range, interval } = RANGE[label] ?? RANGE["1d"];
-  return { url: `${CHART}/${sym}?range=${range}&interval=${interval}`, label };
+  return { url: `${CHART}/${sym}?range=${range}&interval=${interval}`, label, intraday: /^\d+[mh]$/.test(interval) };
 }

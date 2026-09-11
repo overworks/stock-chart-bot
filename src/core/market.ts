@@ -16,7 +16,9 @@ export async function getPrices(
   let firstError: unknown;
   for (const p of providers) {
     try {
-      return await p.getPrices(symbol, req);
+      const series = await p.getPrices(symbol, req);
+      if (series.bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
+      return series;
     } catch (err) {
       firstError ??= err;
     }
@@ -29,8 +31,12 @@ export async function searchRemote(
   providers: readonly MarketProvider[] = PROVIDERS,
 ): Promise<SymbolChoice[]> {
   for (const p of providers) {
-    const hits = await p.search(query);
-    if (hits.length) return hits;
+    try {
+      const hits = await p.search(query);
+      if (hits.length) return hits;
+    } catch {
+      continue;
+    }
   }
   return [];
 }

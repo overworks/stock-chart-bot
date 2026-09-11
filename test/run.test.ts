@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runChart } from "../src/core/run";
+import { buildTitle, runChart } from "../src/core/run";
 import { resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 
 const ENV = env as unknown as Env;
@@ -25,7 +25,9 @@ function stub(handler: (url: URL) => unknown) {
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       urls.push(url);
-      return new Response(JSON.stringify(handler(url)));
+      const body = handler(url);
+      const status = body === notFound ? 404 : 200;
+      return new Response(JSON.stringify(body), { status });
     }),
   );
   return urls;
@@ -119,9 +121,33 @@ describe("runChart", () => {
     await expect(runChart({ ticker: "zzzz" }, ENV)).rejects.toThrow("'zzzz' 시세를 찾지 못했습니다.");
   });
 
+  it("does not search when KV resolved the alias, even if the symbol is missing upstream", async () => {
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "LG", value: "003550.KS" }]));
+    const urls = stub(() => notFound);
+    await expect(runChart({ ticker: "LG" }, ENV)).rejects.toThrow("찾지 못했습니다");
+    expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/003550.KS"]);
+  });
+
+  it("does not search when the error is 'not enough data'", async () => {
+    const urls = stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
+    await expect(runChart({ ticker: "AAPL" }, ENV)).rejects.toThrow("부족");
+    expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/AAPL"]);
+  });
+
   it("does not search for Hangul tickers that miss KV", async () => {
     const urls = stub(() => notFound);
     await expect(runChart({ ticker: "없는종목" }, ENV)).rejects.toThrow("찾지 못했습니다");
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/%EC%97%86%EB%8A%94%EC%A2%85%EB%AA%A9"]);
+  });
+});
+
+describe("buildTitle", () => {
+  it("handles every combination of name and display label", () => {
+    expect(buildTitle("005930.KS", "삼성전자")).toBe("삼성전자 (005930.KS)");
+    expect(buildTitle("JPYKRW=X", "JPY/KRW", "100엔")).toBe("JPY/KRW (JPYKRW=X, 100엔)");
+    expect(buildTitle("JPYKRW=X", undefined, "100엔")).toBe("JPYKRW=X (100엔)");
+    expect(buildTitle("JPYKRW=X", "JPYKRW=X", "100엔")).toBe("JPYKRW=X (100엔)");
+    expect(buildTitle("AAPL")).toBe("AAPL");
+    expect(buildTitle("AAPL", "AAPL")).toBe("AAPL");
   });
 });

@@ -19,10 +19,15 @@ interface Loaded {
   at: number;
 }
 
-let cache: Loaded | null = null;
+let cache: Promise<Loaded> | null = null;
 
 export function resetSymbolCache(): void {
   cache = null;
+}
+
+/** Yahoo 심볼 형식(005930.KS, KRW=X, BTC-USD, ^KS11)이면 별칭 매핑을 건너뛴다. */
+export function looksLikeSymbol(s: string): boolean {
+  return /^\^?[A-Z0-9][A-Z0-9.=-]*$/.test(s) && /[.=^-]/.test(s);
 }
 
 export function isAsciiQuery(q: string): boolean {
@@ -62,16 +67,26 @@ function jamoPattern(q: string): RegExp | null {
 }
 
 export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache;
-  const entries = (await kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json")) ?? [];
-  const byKey = new Map<string, string>();
-  const byValue = new Map<string, string>();
-  for (const e of entries) {
-    byKey.set(norm(e.key), e.value);
-    if (!byValue.has(e.value)) byValue.set(e.value, e.key);
+  if (cache) {
+    const loaded = await cache;
+    if (Date.now() - loaded.at < CACHE_TTL_MS) return loaded;
   }
-  cache = { entries, byKey, byValue, at: Date.now() };
-  return cache;
+  cache = (async () => {
+    const entries = (await kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json")) ?? [];
+    const byKey = new Map<string, string>();
+    const byValue = new Map<string, string>();
+    for (const e of entries) {
+      if (!byKey.has(e.key)) byKey.set(e.key, e.value);
+      if (!byValue.has(e.value)) byValue.set(e.value, e.key);
+    }
+    return { entries, byKey, byValue, at: Date.now() };
+  })();
+  try {
+    return await cache;
+  } catch (err) {
+    cache = null;
+    throw err;
+  }
 }
 
 export async function symbolName(symbol: string, kv: KVNamespace): Promise<string | undefined> {
@@ -79,9 +94,12 @@ export async function symbolName(symbol: string, kv: KVNamespace): Promise<strin
   return byValue.get(symbol);
 }
 
+/** 별칭은 정확히 일치할 때만 적용한다. 심볼 형식 입력은 그대로 둔다. */
 export async function resolveSymbol(ticker: string, kv: KVNamespace): Promise<string> {
+  const t = ticker.trim();
+  if (looksLikeSymbol(t)) return t;
   const { byKey } = await loadSymbols(kv);
-  return byKey.get(norm(ticker)) ?? ticker;
+  return byKey.get(t) ?? t;
 }
 
 export async function searchSymbols(query: string, kv: KVNamespace): Promise<SymbolChoice[]> {

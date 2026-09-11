@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import { getPrices } from "../src/core/market";
 import { buildSvg } from "../src/core/chart";
+import { RANGE_CHOICES } from "../src/core/command";
 import { displayRule, scaleSeries } from "../src/core/display";
 
 const outDir = process.env.OUT_DIR ?? "dist/smoke";
@@ -12,16 +13,20 @@ const fonts = ["fonts/NanumSquareR.ttf", "fonts/NanumSquareB.ttf"].map((f) => ne
 mkdirSync(outDir, { recursive: true });
 
 for (const c of cases) {
-  const [sym, range = "1y", style = "line"] = c.split(":");
+  const [sym, range = "1d", style = "line"] = c.split(":");
+  if (!(RANGE_CHOICES as readonly string[]).includes(range)) {
+    console.log(`FAIL ${sym} ${range}: 알 수 없는 range`);
+    continue;
+  }
   try {
     let series = await getPrices(sym, { ticker: sym, range });
     const rule = displayRule(sym);
     if (rule) series = scaleSeries(series, rule.factor);
-    const { bars, label, currency, name, previousClose, source } = series;
+    const { bars, label, currency, name, previousClose, source, intraday } = series;
     const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
     const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym}${rule ? `, ${rule.label}` : ""})` : sym);
     const reference = range === "1d" ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source });
+    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source, intraday });
     const png = new Resvg(svg, {
       fitTo: { mode: "width", value: 900 },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },

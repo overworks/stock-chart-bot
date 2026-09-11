@@ -49,14 +49,15 @@ src/
   `src/platforms/**`에만 둔다.
 - 새 플랫폼은 어댑터 파일 + `src/index.ts` 라우트 추가로 끝내고 core는 건드리지 않는다.
 - Discord/Slack 서명 검증은 **raw body 문자열**로 수행한다(파싱된 객체 금지). `req.text()` 사용.
-- 시세·검색 API 호출은 `src/core/providers/*`에만 둔다. 새 소스는 `MarketProvider`를 구현해 `market.ts`의 `PROVIDERS`에 추가한다.
+- 시세·검색 API 호출은 `src/core/providers/*`에만 둔다. 새 소스는 `MarketProvider`를 구현해 `market.ts`의 `PROVIDERS`에 추가한다. 없는 심볼은 `SymbolNotFoundError`, 그 외(HTTP 오류, 데이터 부족, 파싱 실패)는 일반 `Error`로 던진다. 검색 폴백은 전자에만 반응한다.
+- resvg 인스턴스와 렌더 결과는 반드시 `free()`한다(GC에 등록되지 않아 wasm 메모리가 새어 나간다).
 - KV 쓰기는 무료 플랜 기준 하루 1,000회다. `seed:symbols`는 1회지만, 개별 키를 대량으로 쓰지 않는다.
 - 파일 업로드가 안 되는 플랫폼은 `core/store.ts`로 R2에 저장하고 `/charts/<key>` URL을 쓴다.
 - 슬래시 커맨드는 3초 내 `{ type: 5 }`(deferred)를 반환하고 실제 작업은
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.
 - `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
-- 종목 별칭: `scripts/symbols.manual.json`(수동, 우선)과 KIND 목록을 합쳐 `scripts/symbols.json`을 만든다. `symbols.json`은 직접 편집하지 않는다.
+- 종목 별칭: `scripts/symbols.manual.json`(수동, 우선)과 KIND 목록을 합쳐 `scripts/symbols.json`을 만든다. `symbols.json`은 직접 편집하지 않는다. 실행 시 별칭은 정확 일치만 적용하고, Yahoo 심볼 형식 입력은 매핑하지 않는다. 미국 티커와 겹치는 짧은 영문 별칭(`USD`, `ETH` 등)은 넣지 않는다.
 - 종목 목록은 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON으로 저장한다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
 - 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.
 - 사용자 노출 메시지는 한국어. 2 spaces. 주석은 최소화.

@@ -16,10 +16,6 @@
     "value": "KRW=X"
   },
   {
-    "key": "USD",
-    "value": "KRW=X"
-  },
-  {
     "key": "USDKRW",
     "value": "KRW=X"
   },
@@ -40,19 +36,11 @@
     "value": "JPYKRW=X"
   },
   {
-    "key": "JPY",
-    "value": "JPYKRW=X"
-  },
-  {
     "key": "JPYKRW",
     "value": "JPYKRW=X"
   },
   {
     "key": "비트코인",
-    "value": "BTC-USD"
-  },
-  {
-    "key": "BTC",
     "value": "BTC-USD"
   },
   {
@@ -65,10 +53,6 @@
   },
   {
     "key": "이더리움",
-    "value": "ETH-USD"
-  },
-  {
-    "key": "ETH",
     "value": "ETH-USD"
   },
   {
