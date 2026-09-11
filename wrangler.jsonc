@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stock-chart-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "rules": [
+    { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }
+  ],
+  "observability": { "enabled": true },
+  "vars": {
+    "DISCORD_APPLICATION_ID": "REPLACE_ME"
+  },
+  "kv_namespaces": [
+    { "binding": "SYMBOLS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+  "r2_buckets": [
+    { "binding": "CHARTS", "bucket_name": "stock-chart-bot-charts" }
+  ]
+}
