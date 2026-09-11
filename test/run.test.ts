@@ -82,6 +82,23 @@ describe("runChart", () => {
     expect(msg.text).toBe("**애플 (AAPL)** 1m · 104.00 USD ▲ +4.00 (+4.00%)");
   });
 
+  it("scales JPY/KRW to 100 yen and says so in the title", async () => {
+    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "엔/원", value: "JPYKRW=X" }, { key: "엔화", value: "JPYKRW=X" }]));
+    stub(() => ({
+      chart: {
+        result: [
+          {
+            meta: { currency: "KRW", instrumentType: "CURRENCY", chartPreviousClose: 8.716, exchangeTimezoneName: "Europe/London" },
+            timestamp: [1, 2, 3],
+            indicators: { quote: [{ close: [8.7, 8.71, 8.697], open: [8.7, 8.7, 8.71], high: [8.72, 8.72, 8.72], low: [8.69, 8.69, 8.69] }] },
+          },
+        ],
+      },
+    }));
+    const msg = await runChart({ ticker: "엔화" }, ENV);
+    expect(msg.text).toBe("**엔/원 (JPYKRW=X, 100엔)** 1d · 869.70 KRW ▼ -1.90 (-0.22%)");
+  });
+
   it("falls back to Yahoo search when an ASCII ticker is unknown", async () => {
     const urls = stub((u) => {
       if (u.pathname.endsWith("/chart/hynix")) return notFound;

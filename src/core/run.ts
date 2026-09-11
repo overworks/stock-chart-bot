@@ -1,5 +1,6 @@
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
+import { displayRule, scaleSeries } from "./display";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
@@ -29,10 +30,13 @@ export async function runChart(
     series = await getPrices(symbol, req);
   }
 
+  const rule = displayRule(symbol);
+  if (rule) series = scaleSeries(series, rule.factor);
   const { bars, label, currency, previousClose, source } = series;
   const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
   const name = (await symbolName(symbol, env.SYMBOLS)) ?? series.name;
-  const title = name && name !== symbol ? `${name} (${symbol})` : symbol;
+  const base = name && name !== symbol ? `${name} (${symbol}` : `${symbol} (`;
+  const title = rule ? `${base}, ${rule.label})` : name && name !== symbol ? `${base})` : symbol;
   const reference = req.range === "1d" && !req.from ? previousClose : undefined;
   const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source });
   const png = await svgToPng(svg);

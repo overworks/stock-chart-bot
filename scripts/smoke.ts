@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import { getPrices } from "../src/core/market";
 import { buildSvg } from "../src/core/chart";
+import { displayRule, scaleSeries } from "../src/core/display";
 
 const outDir = process.env.OUT_DIR ?? "dist/smoke";
 const cases = (process.argv[2] ?? "AAPL:1y,005930.KS:1m,AAPL:1d").split(",");
@@ -13,10 +14,12 @@ mkdirSync(outDir, { recursive: true });
 for (const c of cases) {
   const [sym, range = "1y", style = "line"] = c.split(":");
   try {
-    const series = await getPrices(sym, { ticker: sym, range });
+    let series = await getPrices(sym, { ticker: sym, range });
+    const rule = displayRule(sym);
+    if (rule) series = scaleSeries(series, rule.factor);
     const { bars, label, currency, name, previousClose, source } = series;
     const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
-    const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym})` : sym);
+    const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym}${rule ? `, ${rule.label}` : ""})` : sym);
     const reference = range === "1d" ? previousClose : undefined;
     const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source });
     const png = new Resvg(svg, {
