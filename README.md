@@ -112,9 +112,13 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"   # 차트 PNG를 dist/smoke/ 에
 
 ## 종목 목록 갱신
 
-신규 상장·상장폐지를 반영하려면 `npm run fetch:symbols && npm run seed:symbols`를 다시
-실행한다. 별칭을 추가하려면 `scripts/symbols.manual.json`을 편집한다. `scripts/symbols.json`은
-생성물이라 직접 수정하지 않는다.
+GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND 목록을 다시 받아
+변경이 있으면 `scripts/symbols.json`을 커밋하고 KV에 적재한다. Actions 탭에서 수동 실행도
+된다. 로컬에서는 `npm run fetch:symbols && npm run seed:symbols`.
+
+별칭을 추가하려면 `scripts/symbols.manual.json`을 편집하고 push한다. 다음 갱신 때 반영되며,
+바로 반영하려면 워크플로를 수동 실행한다. `scripts/symbols.json`은 생성물이라 직접 수정하지
+않는다.
 
 ## 다른 플랫폼 추가
 
