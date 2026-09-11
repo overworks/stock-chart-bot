@@ -27,7 +27,7 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립 `core` + 플랫�
 
 ```
 src/
-├─ index.ts            # 경로 라우팅 (/discord, ...)
+├─ index.ts            # 경로 라우팅 (/discord, /slack, /charts/*)
 ├─ env.d.ts            # Env 바인딩, *.wasm 모듈 선언
 ├─ core/               # 플랫폼 의존성 없음
 │  ├─ command.ts       #   인자 검증/정규화
@@ -35,9 +35,11 @@ src/
 │  ├─ chart.ts         #   SVG 생성
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
 │  ├─ render.ts        #   resvg-wasm SVG→PNG (fonts/ 번들 폰트 사용)
+│  ├─ store.ts         #   R2 저장/서빙 (URL 전용 플랫폼)
 │  └─ run.ts           #   오케스트레이션 (어댑터가 호출)
 └─ platforms/
-   └─ discord.ts       #   서명 검증, deferred, multipart 업로드
+   ├─ discord.ts       #   Ed25519 서명 검증, deferred, multipart 업로드
+   └─ slack.ts         #   HMAC 서명 검증, 3초 ack, response_url
 ```
 
 ## 반드시 지킬 규칙
@@ -45,7 +47,8 @@ src/
 - `src/core/**`에서 플랫폼 SDK/Discord 타입을 import 하지 않는다. 플랫폼 코드는
   `src/platforms/**`에만 둔다.
 - 새 플랫폼은 어댑터 파일 + `src/index.ts` 라우트 추가로 끝내고 core는 건드리지 않는다.
-- Discord 서명 검증은 **raw body 문자열**로 수행한다(파싱된 객체 금지). `req.text()` 사용.
+- Discord/Slack 서명 검증은 **raw body 문자열**로 수행한다(파싱된 객체 금지). `req.text()` 사용.
+- 파일 업로드가 안 되는 플랫폼은 `core/store.ts`로 R2에 저장하고 `/charts/<key>` URL을 쓴다.
 - 슬래시 커맨드는 3초 내 `{ type: 5 }`(deferred)를 반환하고 실제 작업은
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.

@@ -10,6 +10,7 @@ export default defineConfig({
         bindings: {
           DISCORD_PUBLIC_KEY: keypair.publicHex,
           DISCORD_BOT_TOKEN: "test-bot-token",
+          SLACK_SIGNING_SECRET: "test-signing-secret",
         },
       },
     }),

@@ -1,13 +1,22 @@
 # stock-chart-bot
 
-Discord 슬래시 커맨드로 종목 주가 차트를 그려 주는 봇. Cloudflare Workers 엣지에서 동작하며,
+Discord/Slack 슬래시 커맨드로 종목 주가 차트를 그려 주는 봇. Cloudflare Workers 엣지에서 동작하며,
 플랫폼 중립 `core` + 플랫폼별 `adapter` 구조라 Slack 등 다른 메신저로 확장할 수 있다.
 
 ## 사용법
 
+Discord:
+
 ```
 /chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>]
 /chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>]
+```
+
+Slack (자동완성 없음, 토큰 순서 무관):
+
+```
+/chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]
+/chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]
 ```
 
 - `range`를 생략하면 `1y`. `from`/`to`는 둘 다 넣어야 하며 `range`보다 우선한다.
@@ -43,9 +52,11 @@ src/
 │  ├─ market.ts        # Yahoo Finance 시세 조회
 │  ├─ chart.ts         # SVG 생성
 │  ├─ render.ts        # resvg-wasm SVG→PNG (fonts/ 번들 폰트)
+│  ├─ store.ts         # R2 저장 + /charts/<key> 서빙 (URL만 받는 플랫폼용)
 │  └─ run.ts           # 오케스트레이션
 └─ platforms/
-   └─ discord.ts       # 서명 검증, deferred 응답, multipart 업로드
+   ├─ discord.ts       # Ed25519 서명 검증, deferred 응답, multipart 업로드
+   └─ slack.ts         # HMAC 서명 검증, 3초 ack, response_url 로 이미지 블록 전송
 scripts/
 ├─ fetch-krx-symbols.ts  # KIND 상장법인 목록 → scripts/symbols.json
 ├─ symbols.manual.json   # 수동 별칭 (우선 적용)
@@ -65,7 +76,7 @@ npm install                                # postinstall에서 wasm/resvg.wasm �
 npx wrangler login
 npx wrangler kv namespace create SYMBOLS   # 출력된 id를 wrangler.jsonc에 반영
 npx wrangler r2 bucket create stock-chart-bot-charts
-cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN
+cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, SLACK_SIGNING_SECRET
 ```
 
 `wrangler.jsonc`의 `DISCORD_APPLICATION_ID`를 자기 앱 ID로 바꾼다.
@@ -75,6 +86,8 @@ cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOK
 ```bash
 npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put DISCORD_BOT_TOKEN
+npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
+npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
 npm run fetch:symbols                      # KRX 목록 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                       # KV SYMBOLS 의 symbols:v1 키에 적재
 ```
@@ -91,6 +104,16 @@ DISCORD_GUILD_ID=<서버 ID> DISCORD_APPLICATION_ID=<앱 ID> npm run register   
 마지막으로 Developer Portal → General Information → **Interactions Endpoint URL**에
 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, OAuth2 URL
 Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 만들어 서버에 추가한다.
+
+### Slack
+
+[api.slack.com/apps](https://api.slack.com/apps)에서 앱을 만들고:
+
+1. Basic Information → **Signing Secret**을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
+2. Slash Commands → `/chart` 생성, Request URL은
+   `https://stock-chart-bot.<subdomain>.workers.dev/slack`.
+3. 워크스페이스에 설치한다. 봇 토큰이나 추가 스코프는 필요 없다. 응답은 `response_url`로
+   보내고, 이미지는 R2에 저장한 뒤 Worker의 `/charts/<key>` URL로 노출한다(7일 후 만료).
 
 ## 배포
 

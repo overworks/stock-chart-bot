@@ -69,9 +69,10 @@ PR 전에 다음은 반드시 통과해야 한다.
 
 ### 이미지 전달
 
-Kakao/LINE 등 일부 플랫폼은 업로드가 아니라 공개 URL만 허용한다. 따라서
-core는 가능하면 PNG 바이트가 아니라 R2에 적재한 뒤 URL을 반환하는 방향을 지향한다.
-Discord 어댑터는 현재 attachment 업로드를 사용한다.
+`runChart`는 PNG 바이트를 돌려준다. 업로드를 지원하는 플랫폼(Discord)은 그대로 첨부하고,
+공개 URL만 받는 플랫폼(Slack, Kakao, LINE)은 `core/store.ts`의 `storeChart`로 R2에 넣은 뒤
+`${origin}/charts/<key>`를 쓴다. `/charts/*` 라우트가 R2에서 읽어 서빙하며, 버킷 lifecycle
+규칙으로 7일 뒤 삭제된다.
 
 ### 종목 검색
 
