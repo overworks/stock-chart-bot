@@ -58,6 +58,17 @@ describe("searchSymbols", () => {
     expect((await searchSymbols("sk 하이닉스", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
   });
 
+  it("matches Hangul initial consonants, mixed with syllables, and ranks prefix first", async () => {
+    const fn = stubYahoo();
+    expect((await searchSymbols("ㅅㅅㅈㅈ", KV)).map((c) => c.value)).toEqual(["005930.KS", "005935.KS"]);
+    expect((await searchSymbols("ㅅㅅ", KV))[0].value).toBe("005930.KS");
+    expect((await searchSymbols("삼ㅅ", KV)).map((c) => c.value).sort()).toEqual(["005930.KS", "005935.KS", "006400.KS"]);
+    expect((await searchSymbols("ㅎㅇㄴㅅ", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect((await searchSymbols("skㅎ", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect(await searchSymbols("ㅋㅋ", KV)).toEqual([]);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it("falls back to Yahoo search for ASCII queries and dedupes against local hits", async () => {
     const fn = stubYahoo();
     const out = await searchSymbols("hynix", KV);

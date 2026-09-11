@@ -34,6 +34,34 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/\s+/g, "");
 }
 
+const CHOSUNG = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+const HANGUL_BASE = 0xac00;
+const PER_CHOSUNG = 21 * 28;
+
+function hasJamo(q: string): boolean {
+  return /[ㄱ-ㅎ]/.test(q);
+}
+
+// "ㅅㅅ전자" → /[가-깋][싸-앃]전자/ 처럼, 초성 글자는 해당 초성으로 시작하는 음절 범위로 바꾼다.
+function jamoPattern(q: string): RegExp | null {
+  let src = "";
+  for (const ch of q) {
+    const idx = CHOSUNG.indexOf(ch);
+    if (idx >= 0) {
+      const from = String.fromCharCode(HANGUL_BASE + idx * PER_CHOSUNG);
+      const to = String.fromCharCode(HANGUL_BASE + (idx + 1) * PER_CHOSUNG - 1);
+      src += `[${from}-${to}${ch}]`;
+    } else {
+      src += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  try {
+    return new RegExp(src);
+  } catch {
+    return null;
+  }
+}
+
 export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache;
   const entries = (await kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json")) ?? [];
@@ -53,12 +81,17 @@ export async function searchSymbols(query: string, kv: KVNamespace): Promise<Sym
   if (!q) return [];
 
   const { entries } = await loadSymbols(kv);
+  const jamo = hasJamo(q) ? jamoPattern(q) : null;
   const ranked: { score: number; e: SymbolEntry }[] = [];
   for (const e of entries) {
     const k = norm(e.key);
     const v = norm(e.value);
     let score: number;
-    if (k === q || v === q) score = 0;
+    if (jamo) {
+      const m = jamo.exec(k);
+      if (!m) continue;
+      score = m.index === 0 ? (m[0].length === k.length ? 0 : 1) : 2;
+    } else if (k === q || v === q) score = 0;
     else if (k.startsWith(q) || v.startsWith(q)) score = 1;
     else if (k.includes(q)) score = 2;
     else continue;
