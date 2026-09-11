@@ -21,14 +21,17 @@ npx wrangler r2 bucket create stock-chart-bot-charts
 cp .dev.vars.example .dev.vars             # 로컬 개발용 시크릿 채우기
 ```
 
-`wrangler.jsonc`의 `REPLACE_ME` / `REPLACE_WITH_KV_NAMESPACE_ID`는 반드시 실제 값으로
-교체한다. 교체 전에는 PING 검증과 KV 접근이 실패한다.
+새 계정에 올릴 때는 `wrangler.jsonc`의 `DISCORD_APPLICATION_ID`와 KV 네임스페이스 `id`를
+자기 값으로 바꾼다.
 
 ## 개발 워크플로
 
 ```bash
 npm run dev          # 로컬 워커 (http://localhost:8787/discord)
 npm run typecheck    # 타입 검사 (필수)
+npm test             # vitest (workerd 런타임에서 실행)
+npm run smoke -- "AAPL:1d,005930.KS:1m"   # Yahoo 조회 → PNG 로컬 확인 (dist/smoke/)
+npm run seed:symbols # scripts/symbols.json 을 KV SYMBOLS 에 적재
 npm run deploy       # 운영 배포
 npm run register     # Discord 슬래시 커맨드 등록
 ```
@@ -41,10 +44,16 @@ npx wrangler deploy --dry-run --outdir dist
 
 ## 검증
 
-별도 테스트 프레임워크는 아직 없다. PR 전에 다음 두 가지는 반드시 통과해야 한다.
+테스트는 `@cloudflare/vitest-plugin`으로 실제 workerd 런타임 안에서 실행된다(`vitest.config.ts`).
+`test/discord.test.ts`는 서명 검증부터 PNG 렌더, webhook PATCH까지 전 구간을 검증한다.
+외부 호출(Yahoo, Discord API)은 `vi.stubGlobal("fetch", ...)`로 대체한다.
+`test/keypair.json`은 테스트 전용 Ed25519 키다.
+
+PR 전에 다음은 반드시 통과해야 한다.
 
 1. `npm run typecheck`
-2. `npx wrangler deploy --dry-run`
+2. `npm test`
+3. `npx wrangler deploy --dry-run`
 
 ## 아키텍처 규칙
 
@@ -67,6 +76,7 @@ Discord 어댑터는 현재 attachment 업로드를 사용한다.
 
 차트는 SVG 문자열을 만든 뒤 `@resvg/resvg-wasm`으로 PNG로 변환한다.
 `wasm/resvg.wasm`은 생성물이므로 커밋하지 않는다(`npm run setup:wasm`로 생성).
+resvg-wasm에는 폰트가 없어 `fonts/NanumSquare{R,B}.ttf`(OFL, 라틴+한글 서브셋)를 번들한다.
 
 ## 코딩 컨벤션
 

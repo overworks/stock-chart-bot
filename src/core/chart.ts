@@ -33,7 +33,7 @@ export function buildSvg(bars: ChartBar[], title: string, timeZone = "UTC"): str
     })
     .join("");
 
-  const intraday = bars[bars.length - 1].t - bars[0].t < 3 * 86_400;
+  const intraday = bars[1].t - bars[0].t < 86_400;
   const fmtDate = dateFormatter(timeZone, intraday);
   const xLabels = [0, Math.floor((bars.length - 1) / 2), bars.length - 1]
     .map((i) => {

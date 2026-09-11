@@ -14,6 +14,9 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립 `core` + 플랫�
 |---|---|
 | 로컬 개발 | `npm run dev` |
 | 타입 검사 | `npm run typecheck` |
+| 테스트 | `npm test` |
+| 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
+| KV 심볼 시드 | `npm run seed:symbols` |
 | 빌드 확인 | `npx wrangler deploy --dry-run --outdir dist` |
 | 운영 배포 | `npm run deploy` |
 | 커맨드 등록 | `npm run register` |
@@ -29,7 +32,7 @@ src/
 │  ├─ command.ts       #   인자 검증/정규화
 │  ├─ market.ts        #   시세 조회 + 캐시
 │  ├─ chart.ts         #   SVG 생성
-│  ├─ render.ts        #   resvg-wasm SVG→PNG
+│  ├─ render.ts        #   resvg-wasm SVG→PNG (fonts/ 번들 폰트 사용)
 │  └─ run.ts           #   오케스트레이션 (어댑터가 호출)
 └─ platforms/
    └─ discord.ts       #   서명 검증, deferred, multipart 업로드
@@ -44,15 +47,16 @@ src/
 - 슬래시 커맨드는 3초 내 `{ type: 5 }`(deferred)를 반환하고 실제 작업은
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.
-- `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다.
-- `wrangler.jsonc`의 `REPLACE_ME`, `REPLACE_WITH_KV_NAMESPACE_ID`를 실제 값으로 바꿔야 동작한다.
+- `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
+- 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.
 - 사용자 노출 메시지는 한국어. 2 spaces. 주석은 최소화.
 
 ## 완료 전 확인
 
 1. `npm run typecheck` 통과
-2. `npx wrangler deploy --dry-run --outdir dist` 성공
-3. core에 플랫폼 의존성이 유입되지 않았는지 확인
+2. `npm test` 통과
+3. `npx wrangler deploy --dry-run --outdir dist` 성공
+4. core에 플랫폼 의존성이 유입되지 않았는지 확인
 
 ## 하지 말 것
 

@@ -11,17 +11,21 @@
     "postinstall": "npm run setup:wasm",
     "register": "tsx scripts/register-commands.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "seed:symbols": "wrangler kv bulk put scripts/symbols.json --binding SYMBOLS --remote"
+    "seed:symbols": "wrangler kv bulk put scripts/symbols.json --binding SYMBOLS --remote",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
     "discord-interactions": "^4.4.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.7",
     "@cloudflare/workers-types": "^5.20260911.1",
     "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
     "wrangler": "^4.131.0"
   }
 }
