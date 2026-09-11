@@ -17,6 +17,8 @@ export interface ChartOptions {
   style?: ChartStyle;
   /** 등락 계산 기준가. 없으면 첫 봉 종가. 1d 차트에서는 전일 종가를 넘긴다. */
   reference?: number;
+  source?: string;
+  now?: Date;
 }
 
 export interface ChangeSummary {
@@ -31,7 +33,7 @@ export interface ChangeSummary {
 
 const W = 900;
 const H = 560;
-const PAD = { l: 72, r: 24, t: 80, b: 44 };
+const PAD = { l: 72, r: 24, t: 80, b: 62 };
 const VOL_H = 80;
 const VOL_GAP = 12;
 
@@ -48,7 +50,7 @@ export function summarizeChange(bars: ChartBar[], currency = "", reference?: num
 }
 
 export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {}): string {
-  const { timeZone = "UTC", currency = "", style = "line", reference } = opts;
+  const { timeZone = "UTC", currency = "", style = "line", reference, source, now = new Date() } = opts;
   const candle = style === "candle";
   const hasVolume = bars.some((b) => (b.v ?? 0) > 0);
   const change = summarizeChange(bars, currency, reference);
@@ -58,6 +60,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const min = Math.min(...lows);
   const max = Math.max(...highs);
   const span = max - min || 1;
+  const allInt = bars.every((b) => Number.isInteger(b.c));
 
   const plotW = W - PAD.l - PAD.r;
   const volH = hasVolume ? VOL_H : 0;
@@ -128,7 +131,8 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const gridLines = [0, 0.25, 0.5, 0.75, 1]
     .map((r) => {
       const gy = PAD.t + r * plotH;
-      const price = max - r * span;
+      const raw = max - r * span;
+      const price = allInt ? Math.round(raw) : raw;
       return (
         `<line x1="${PAD.l}" y1="${fmt(gy)}" x2="${W - PAD.r}" y2="${fmt(gy)}" ` +
         `stroke="#e5e7eb" stroke-width="1"/>` +
@@ -143,11 +147,15 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     .map((i) => {
       const anchor = i === 0 ? "start" : i === bars.length - 1 ? "end" : "middle";
       return (
-        `<text x="${fmt(x(i))}" y="${H - PAD.b + 22}" text-anchor="${anchor}" ` +
+        `<text x="${fmt(x(i))}" y="${H - PAD.b + 20}" text-anchor="${anchor}" ` +
         `font-size="12" fill="#6b7280">${fmtDate(bars[i].t)}</text>`
       );
     })
     .join("");
+
+  const footer = source
+    ? `<text x="${W - PAD.r}" y="${H - 14}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
+    : "";
 
   const sign = change.diff > 0 ? "+" : "";
   const subtitle =
@@ -167,6 +175,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${maLegend}
   ${volumes}
   ${xLabels}
+  ${footer}
 </svg>`;
 }
 
@@ -176,9 +185,25 @@ function fmt(n: number): string {
 
 const ZERO_DECIMAL = new Set(["KRW", "JPY", "IDR", "VND", "HUF", "CLP"]);
 
+/** 큰 값은 정수, 원·엔 등은 1,000 이상이거나 정수면 소수점 없이, 그 외 소수 둘째 자리. */
 export function fmtPrice(n: number, currency = ""): string {
-  const digits = ZERO_DECIMAL.has(currency) ? 0 : Math.abs(n) >= 10_000 ? 0 : 2;
+  const abs = Math.abs(n);
+  const zero = abs >= 10_000 || (ZERO_DECIMAL.has(currency) && Number.isInteger(n));
+  const digits = zero ? 0 : 2;
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+}
+
+function footerTime(d: Date): string {
+  const s = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${s} KST`;
 }
 
 export function movingAverage(bars: ChartBar[], period: number): (number | undefined)[] {

@@ -124,6 +124,7 @@ describe("discord adapter", () => {
     const payload = JSON.parse(form.get("payload_json") as string);
     expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m · 71,900 KRW ▲ +1,900 (+2.71%)");
     expect(payload.embeds[0].color).toBe(0xdc2626);
+    expect(payload.embeds[0].footer.text).toBe("출처: Yahoo Finance");
     const file = form.get("files[0]") as File;
     expect(file.name).toBe("chart.png");
     const bytes = new Uint8Array(await file.arrayBuffer());

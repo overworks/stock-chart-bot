@@ -1,30 +1,186 @@
 [
-  { "key": "삼성전자", "value": "005930.KS" },
-  { "key": "삼성전자우", "value": "005935.KS" },
-  { "key": "SK하이닉스", "value": "000660.KS" },
-  { "key": "LG에너지솔루션", "value": "373220.KS" },
-  { "key": "현대차", "value": "005380.KS" },
-  { "key": "기아", "value": "000270.KS" },
-  { "key": "NAVER", "value": "035420.KS" },
-  { "key": "카카오", "value": "035720.KS" },
-  { "key": "셀트리온", "value": "068270.KS" },
-  { "key": "POSCO홀딩스", "value": "005490.KS" },
-  { "key": "KB금융", "value": "105560.KS" },
-  { "key": "신한지주", "value": "055550.KS" },
-  { "key": "삼성바이오로직스", "value": "207940.KS" },
-  { "key": "LG화학", "value": "051910.KS" },
-  { "key": "에코프로비엠", "value": "247540.KQ" },
-  { "key": "알테오젠", "value": "196170.KQ" },
-  { "key": "코스피", "value": "^KS11" },
-  { "key": "코스닥", "value": "^KQ11" },
-  { "key": "나스닥", "value": "^IXIC" },
-  { "key": "S&P500", "value": "^GSPC" },
-  { "key": "애플", "value": "AAPL" },
-  { "key": "엔비디아", "value": "NVDA" },
-  { "key": "테슬라", "value": "TSLA" },
-  { "key": "마이크로소프트", "value": "MSFT" },
-  { "key": "구글", "value": "GOOGL" },
-  { "key": "아마존", "value": "AMZN" },
-  { "key": "비트코인", "value": "BTC-USD" },
-  { "key": "달러원", "value": "KRW=X" }
+  {
+    "key": "달러/원",
+    "value": "KRW=X"
+  },
+  {
+    "key": "달러",
+    "value": "KRW=X"
+  },
+  {
+    "key": "미국달러",
+    "value": "KRW=X"
+  },
+  {
+    "key": "원달러",
+    "value": "KRW=X"
+  },
+  {
+    "key": "USD",
+    "value": "KRW=X"
+  },
+  {
+    "key": "USDKRW",
+    "value": "KRW=X"
+  },
+  {
+    "key": "엔/원",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "엔화",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "엔",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "일본엔",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "JPY",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "JPYKRW",
+    "value": "JPYKRW=X"
+  },
+  {
+    "key": "비트코인",
+    "value": "BTC-USD"
+  },
+  {
+    "key": "BTC",
+    "value": "BTC-USD"
+  },
+  {
+    "key": "비트코인/원",
+    "value": "BTC-KRW"
+  },
+  {
+    "key": "비트코인원화",
+    "value": "BTC-KRW"
+  },
+  {
+    "key": "이더리움",
+    "value": "ETH-USD"
+  },
+  {
+    "key": "ETH",
+    "value": "ETH-USD"
+  },
+  {
+    "key": "이더리움/원",
+    "value": "ETH-KRW"
+  },
+  {
+    "key": "이더리움원화",
+    "value": "ETH-KRW"
+  },
+  {
+    "key": "삼성전자",
+    "value": "005930.KS"
+  },
+  {
+    "key": "삼성전자우",
+    "value": "005935.KS"
+  },
+  {
+    "key": "SK하이닉스",
+    "value": "000660.KS"
+  },
+  {
+    "key": "LG에너지솔루션",
+    "value": "373220.KS"
+  },
+  {
+    "key": "현대차",
+    "value": "005380.KS"
+  },
+  {
+    "key": "기아",
+    "value": "000270.KS"
+  },
+  {
+    "key": "NAVER",
+    "value": "035420.KS"
+  },
+  {
+    "key": "카카오",
+    "value": "035720.KS"
+  },
+  {
+    "key": "셀트리온",
+    "value": "068270.KS"
+  },
+  {
+    "key": "POSCO홀딩스",
+    "value": "005490.KS"
+  },
+  {
+    "key": "KB금융",
+    "value": "105560.KS"
+  },
+  {
+    "key": "신한지주",
+    "value": "055550.KS"
+  },
+  {
+    "key": "삼성바이오로직스",
+    "value": "207940.KS"
+  },
+  {
+    "key": "LG화학",
+    "value": "051910.KS"
+  },
+  {
+    "key": "에코프로비엠",
+    "value": "247540.KQ"
+  },
+  {
+    "key": "알테오젠",
+    "value": "196170.KQ"
+  },
+  {
+    "key": "코스피",
+    "value": "^KS11"
+  },
+  {
+    "key": "코스닥",
+    "value": "^KQ11"
+  },
+  {
+    "key": "나스닥",
+    "value": "^IXIC"
+  },
+  {
+    "key": "S&P500",
+    "value": "^GSPC"
+  },
+  {
+    "key": "애플",
+    "value": "AAPL"
+  },
+  {
+    "key": "엔비디아",
+    "value": "NVDA"
+  },
+  {
+    "key": "테슬라",
+    "value": "TSLA"
+  },
+  {
+    "key": "마이크로소프트",
+    "value": "MSFT"
+  },
+  {
+    "key": "구글",
+    "value": "GOOGL"
+  },
+  {
+    "key": "아마존",
+    "value": "AMZN"
+  }
 ]

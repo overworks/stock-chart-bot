@@ -1,82 +1,36 @@
-import type { ChartBar, ChartRequest } from "./types";
+import { yahoo } from "./providers/yahoo";
+import type { ChartRequest } from "./types";
+import type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
-const YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart";
+export { SymbolNotFoundError } from "./providers/types";
+export type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
-const YAHOO_RANGE: Record<string, { range: string; interval: string }> = {
-  "1d": { range: "1d", interval: "5m" },
-  "1w": { range: "5d", interval: "30m" },
-  "1m": { range: "1mo", interval: "1d" },
-  "3m": { range: "3mo", interval: "1d" },
-  "6m": { range: "6mo", interval: "1d" },
-  "1y": { range: "1y", interval: "1d" },
-  "5y": { range: "5y", interval: "1wk" },
-  max: { range: "max", interval: "1mo" },
-};
-
-export class SymbolNotFoundError extends Error {}
-
-export interface PriceSeries {
-  bars: ChartBar[];
-  label: string;
-  timeZone: string;
-  currency: string;
-  name?: string;
-  previousClose?: number;
-}
+/** 앞에서부터 시도하고 실패하면 다음 제공자로 넘어간다. */
+export const PROVIDERS: readonly MarketProvider[] = [yahoo];
 
 export async function getPrices(
   symbol: string,
   req: ChartRequest,
+  providers: readonly MarketProvider[] = PROVIDERS,
 ): Promise<PriceSeries> {
-  const { url, label } = buildUrl(symbol, req);
-
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 stock-chart-bot" },
-    cf: { cacheTtl: 300, cacheEverything: true },
-  } as RequestInit);
-
-  if (!res.ok) throw new Error(`시세 조회 실패 (${res.status})`);
-
-  const json = (await res.json()) as any;
-  const result = json?.chart?.result?.[0];
-  if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
-
-  const timestamps: number[] = result.timestamp ?? [];
-  const quote = result.indicators?.quote?.[0] ?? {};
-  const num = (arr: unknown, i: number): number | undefined => {
-    const x = Array.isArray(arr) ? arr[i] : undefined;
-    return typeof x === "number" && Number.isFinite(x) ? x : undefined;
-  };
-  const bars: ChartBar[] = [];
-  for (let i = 0; i < timestamps.length; i++) {
-    const c = num(quote.close, i);
-    if (c === undefined) continue;
-    bars.push({ t: timestamps[i], c, o: num(quote.open, i), h: num(quote.high, i), l: num(quote.low, i), v: num(quote.volume, i) });
+  let firstError: unknown;
+  for (const p of providers) {
+    try {
+      return await p.getPrices(symbol, req);
+    } catch (err) {
+      firstError ??= err;
+    }
   }
-
-  if (bars.length < 2) throw new SymbolNotFoundError(`'${symbol}' 데이터가 부족합니다.`);
-  const timeZone: string = result.meta?.exchangeTimezoneName ?? "UTC";
-  const currency: string = result.meta?.currency ?? "";
-  const name: string | undefined = result.meta?.shortName ?? result.meta?.longName ?? undefined;
-  const prev = result.meta?.chartPreviousClose ?? result.meta?.previousClose;
-  const previousClose = typeof prev === "number" && Number.isFinite(prev) ? prev : undefined;
-  return { bars, label, timeZone, currency, name, previousClose };
+  throw firstError ?? new Error("사용 가능한 시세 제공자가 없습니다.");
 }
 
-function buildUrl(symbol: string, req: ChartRequest) {
-  const sym = encodeURIComponent(symbol);
-  if (req.from && req.to) {
-    const p1 = Math.floor(Date.parse(req.from) / 1000);
-    const p2 = Math.floor(Date.parse(req.to) / 1000) + 86_400;
-    return {
-      url: `${YAHOO}/${sym}?period1=${p1}&period2=${p2}&interval=1d`,
-      label: `${req.from} ~ ${req.to}`,
-    };
+export async function searchRemote(
+  query: string,
+  providers: readonly MarketProvider[] = PROVIDERS,
+): Promise<SymbolChoice[]> {
+  for (const p of providers) {
+    const hits = await p.search(query);
+    if (hits.length) return hits;
   }
-  const label = req.range ?? "1d";
-  const { range, interval } = YAHOO_RANGE[label] ?? YAHOO_RANGE["1d"];
-  return {
-    url: `${YAHOO}/${sym}?range=${range}&interval=${interval}`,
-    label,
-  };
+  return [];
 }

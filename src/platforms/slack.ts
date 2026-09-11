@@ -59,6 +59,7 @@ async function serveChart(
       const key = await storeChart(env.CHARTS, result.image.png);
       blocks.push({ type: "image", image_url: `${origin}/${key}`, alt_text: stripMarkdown(result.text) });
     }
+    if (result.source) blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `출처: ${result.source}` }] });
     await post(responseUrl, { response_type: "in_channel", text: stripMarkdown(result.text), blocks });
   } catch (err) {
     await post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${(err as Error).message}` });

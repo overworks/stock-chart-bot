@@ -25,10 +25,11 @@ async function fetchMarket(market: string, suffix: string): Promise<Entry[]> {
 const manual: Entry[] = JSON.parse(readFileSync("scripts/symbols.manual.json", "utf8"));
 const krx = (await Promise.all(Object.entries(MARKETS).map(([m, s]) => fetchMarket(m, s)))).flat();
 
-const merged = new Map<string, string>();
-for (const e of krx) merged.set(e.key, e.value);
-for (const e of manual) merged.set(e.key, e.value);
-
-const out = [...merged].map(([key, value]) => ({ key, value })).sort((a, b) => a.key.localeCompare(b.key, "ko"));
+// 수동 별칭이 앞에 오며 파일 순서를 유지한다(심볼→이름 역매핑은 첫 항목을 쓴다).
+const manualKeys = new Set(manual.map((e) => e.key));
+const out = [
+  ...manual,
+  ...krx.filter((e) => !manualKeys.has(e.key)).sort((a, b) => a.key.localeCompare(b.key, "ko")),
+];
 writeFileSync("scripts/symbols.json", JSON.stringify(out, null, 2) + "\n");
 console.log(`KRX ${krx.length}개 + 수동 ${manual.length}개 → ${out.length}개 → scripts/symbols.json`);

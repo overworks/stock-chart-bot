@@ -44,6 +44,7 @@ describe("runChart", () => {
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/005930.KS"]);
     expect(msg.text).toBe("**삼성전자 (005930.KS)** 1m · 109 KRW ▲ +9 (+9.00%)");
     expect(msg.color).toBe("#dc2626");
+    expect(msg.source).toBe("Yahoo Finance");
     expect(msg.image?.png.length).toBeGreaterThan(1000);
   });
 

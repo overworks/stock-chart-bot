@@ -31,7 +31,8 @@ src/
 ├─ env.d.ts            # Env 바인딩, *.wasm 모듈 선언
 ├─ core/               # 플랫폼 의존성 없음
 │  ├─ command.ts       #   인자 검증/정규화
-│  ├─ market.ts        #   시세 조회 + 캐시
+│  ├─ market.ts        #   시세 조회 파사드 (PROVIDERS 순서대로 폴백)
+│  ├─ providers/       #   MarketProvider 구현체 (yahoo.ts). 외부 API 호출은 여기에만
 │  ├─ chart.ts         #   SVG 생성
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
 │  ├─ render.ts        #   resvg-wasm SVG→PNG (fonts/ 번들 폰트 사용)
@@ -48,6 +49,8 @@ src/
   `src/platforms/**`에만 둔다.
 - 새 플랫폼은 어댑터 파일 + `src/index.ts` 라우트 추가로 끝내고 core는 건드리지 않는다.
 - Discord/Slack 서명 검증은 **raw body 문자열**로 수행한다(파싱된 객체 금지). `req.text()` 사용.
+- 시세·검색 API 호출은 `src/core/providers/*`에만 둔다. 새 소스는 `MarketProvider`를 구현해 `market.ts`의 `PROVIDERS`에 추가한다.
+- KV 쓰기는 무료 플랜 기준 하루 1,000회다. `seed:symbols`는 1회지만, 개별 키를 대량으로 쓰지 않는다.
 - 파일 업로드가 안 되는 플랫폼은 `core/store.ts`로 R2에 저장하고 `/charts/<key>` URL을 쓴다.
 - 슬래시 커맨드는 3초 내 `{ type: 5 }`(deferred)를 반환하고 실제 작업은
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.

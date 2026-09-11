@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPrices } from "../src/core/market";
+import { getPrices, searchRemote, SymbolNotFoundError, type MarketProvider } from "../src/core/market";
 
 function yahoo(body: unknown, status = 200) {
   const fn = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));
@@ -11,7 +11,7 @@ const ok = {
   chart: {
     result: [
       {
-        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW", shortName: "SamsungElec", chartPreviousClose: 9.5 },
+        meta: { exchangeTimezoneName: "Asia/Seoul", currency: "KRW", shortName: "SamsungElec", chartPreviousClose: 9.5, instrumentType: "EQUITY" },
         timestamp: [1, 2, 3, 4],
         indicators: { quote: [{ close: [10, null, 12, 13], open: [9, 10, 11, null], high: [11, 11, 13, 14], low: [8, 9, 11, 12], volume: [100, 0, 300, 400] }] },
       },
@@ -39,6 +39,8 @@ describe("getPrices", () => {
     expect(series.currency).toBe("KRW");
     expect(series.name).toBe("SamsungElec");
     expect(series.previousClose).toBe(9.5);
+    expect(series.source).toBe("Yahoo Finance");
+    expect(series.continuous).toBe(false);
   });
 
   it.each([
@@ -79,5 +81,44 @@ describe("getPrices", () => {
   it("throws when fewer than two bars remain", async () => {
     yahoo({ chart: { result: [{ timestamp: [1, 2], indicators: { quote: [{ close: [1, null] }] } }] } });
     await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("부족");
+  });
+});
+
+describe("provider fallback", () => {
+  const series = { bars: [{ t: 1, c: 1 }, { t: 2, c: 2 }], label: "1d", timeZone: "UTC", currency: "USD", source: "B" };
+  const failing: MarketProvider = {
+    name: "A",
+    getPrices: async () => { throw new Error("시세 조회 실패 (503)"); },
+    search: async () => [],
+  };
+  const missing: MarketProvider = {
+    name: "A2",
+    getPrices: async () => { throw new SymbolNotFoundError("'X' 시세를 찾지 못했습니다."); },
+    search: async () => [],
+  };
+  const ok: MarketProvider = {
+    name: "B",
+    getPrices: async () => series,
+    search: async () => [{ name: "X (X)", value: "X" }],
+  };
+
+  it("moves to the next provider on errors and on not-found", async () => {
+    expect((await getPrices("X", { ticker: "X" }, [failing, ok])).source).toBe("B");
+    expect((await getPrices("X", { ticker: "X" }, [missing, ok])).source).toBe("B");
+  });
+
+  it("rethrows the first error when every provider fails", async () => {
+    await expect(getPrices("X", { ticker: "X" }, [failing, missing])).rejects.toThrow("503");
+    await expect(getPrices("X", { ticker: "X" }, [])).rejects.toThrow("제공자");
+  });
+
+  it("returns the first non-empty search result", async () => {
+    expect(await searchRemote("x", [failing, ok])).toEqual([{ name: "X (X)", value: "X" }]);
+    expect(await searchRemote("x", [failing])).toEqual([]);
+  });
+
+  it("marks crypto and FX as continuous markets", async () => {
+    yahoo({ chart: { result: [{ meta: { instrumentType: "CRYPTOCURRENCY", currency: "USD" }, timestamp: [1, 2], indicators: { quote: [{ close: [1, 2] }] } }] } });
+    expect((await getPrices("BTC-USD", { ticker: "BTC-USD" })).continuous).toBe(true);
   });
 });

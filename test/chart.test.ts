@@ -142,9 +142,23 @@ describe("summarizeChange", () => {
 });
 
 describe("fmtPrice", () => {
-  it("drops decimals for large non-KRW values", () => {
+  it("drops decimals for large values and for integer or 1,000+ KRW amounts", () => {
     expect(fmtPrice(12345.678, "USD")).toBe("12,346");
     expect(fmtPrice(0.1234, "USD")).toBe("0.12");
-    expect(fmtPrice(1234.5, "KRW")).toBe("1,235");
+    expect(fmtPrice(1234.5, "KRW")).toBe("1,234.50");
+    expect(fmtPrice(1345.14, "KRW")).toBe("1,345.14");
+    expect(fmtPrice(259500, "KRW")).toBe("259,500");
+    expect(fmtPrice(800, "KRW")).toBe("800");
+    expect(fmtPrice(8.697, "KRW")).toBe("8.70");
+    expect(fmtPrice(-4.01, "KRW")).toBe("-4.01");
+  });
+});
+
+describe("source footer", () => {
+  it("prints the provider and generation time in the chart time zone", () => {
+    const now = new Date(Date.UTC(2026, 8, 11, 6, 30));
+    const svg = buildSvg(daily(5), "s", { source: "Yahoo Finance", timeZone: "America/New_York", now });
+    expect(svg).toContain(">Yahoo Finance · 2026-09-11 15:30 KST<");
+    expect(buildSvg(daily(5), "s")).not.toContain("Yahoo Finance");
   });
 });

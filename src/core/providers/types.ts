@@ -1,0 +1,26 @@
+import type { ChartBar, ChartRequest } from "../types";
+
+export class SymbolNotFoundError extends Error {}
+
+export interface PriceSeries {
+  bars: ChartBar[];
+  label: string;
+  timeZone: string;
+  currency: string;
+  source: string;
+  name?: string;
+  previousClose?: number;
+  /** 24시간 거래 상품(환율, 암호화폐). 표시 타임존을 사용자 기준으로 바꾼다. */
+  continuous?: boolean;
+}
+
+export interface SymbolChoice {
+  name: string;
+  value: string;
+}
+
+export interface MarketProvider {
+  readonly name: string;
+  getPrices(symbol: string, req: ChartRequest): Promise<PriceSeries>;
+  search(query: string): Promise<SymbolChoice[]>;
+}

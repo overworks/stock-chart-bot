@@ -1,13 +1,15 @@
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
-import { getPrices, SymbolNotFoundError, type PriceSeries } from "./market";
+import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
-import { isAsciiQuery, resolveSymbol, searchYahoo, symbolName } from "./symbols";
+import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { OutgoingMessage } from "./types";
 
 export interface CoreEnv {
   SYMBOLS: KVNamespace;
 }
+
+const DISPLAY_TZ = "Asia/Seoul";
 
 export async function runChart(
   args: Record<string, string | undefined>,
@@ -21,17 +23,18 @@ export async function runChart(
     series = await getPrices(symbol, req);
   } catch (err) {
     if (!(err instanceof SymbolNotFoundError) || !isAsciiQuery(req.ticker)) throw err;
-    const hit = (await searchYahoo(req.ticker))[0];
+    const hit = (await searchRemote(req.ticker))[0];
     if (!hit) throw err;
     symbol = hit.value;
     series = await getPrices(symbol, req);
   }
 
-  const { bars, label, timeZone, currency, previousClose } = series;
+  const { bars, label, currency, previousClose, source } = series;
+  const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
   const name = (await symbolName(symbol, env.SYMBOLS)) ?? series.name;
   const title = name && name !== symbol ? `${name} (${symbol})` : symbol;
   const reference = req.range === "1d" && !req.from ? previousClose : undefined;
-  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference });
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source });
   const png = await svgToPng(svg);
   const change = summarizeChange(bars, currency, reference);
 
@@ -39,5 +42,6 @@ export async function runChart(
     text: `**${title}** ${label} · ${change.text}`,
     image: { png, filename: "chart.png" },
     color: change.color,
+    source,
   };
 }

@@ -67,6 +67,14 @@ PR 전에 다음은 반드시 통과해야 한다.
   `src/platforms/<platform>.ts`에 둔다.
 - 공용 오케스트레이션은 `src/core/run.ts`에 두고 각 어댑터가 호출한다.
 
+### 데이터 소스
+
+`src/core/providers/types.ts`의 `MarketProvider`(이름, `getPrices`, `search`)를 구현한 파일을
+`providers/`에 두고 `market.ts`의 `PROVIDERS` 배열에 넣는다. `getPrices`는 앞에서부터
+시도해 오류(네트워크, HTTP, 미발견)가 나면 다음 제공자로 넘어가고, 전부 실패하면 첫 오류를
+던진다. `PriceSeries.source`에 제공자 이름이 실려 차트 푸터와 메시지에 출처로 표시된다.
+24시간 거래 상품은 `continuous: true`로 표시해 KST로 그리게 한다.
+
 ### 이미지 전달
 
 `runChart`는 PNG 바이트를 돌려준다. 업로드를 지원하는 플랫폼(Discord)은 그대로 첨부하고,

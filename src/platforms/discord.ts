@@ -65,6 +65,7 @@ async function serveChart(
           {
             image: { url: "attachment://chart.png" },
             ...(result.color ? { color: parseInt(result.color.slice(1), 16) } : {}),
+            ...(result.source ? { footer: { text: `출처: ${result.source}` } } : {}),
           },
         ],
       }),

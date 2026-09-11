@@ -1,7 +1,7 @@
-export interface SymbolChoice {
-  name: string;
-  value: string;
-}
+import { searchRemote } from "./market";
+import type { SymbolChoice } from "./providers/types";
+
+export type { SymbolChoice };
 
 export interface SymbolEntry {
   key: string;
@@ -10,9 +10,7 @@ export interface SymbolEntry {
 
 export const SYMBOLS_KEY = "symbols:v1";
 const CACHE_TTL_MS = 10 * 60_000;
-const YAHOO_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search";
 const MAX = 25;
-const QUOTE_TYPES = new Set(["EQUITY", "ETF", "INDEX", "MUTUALFUND", "CRYPTOCURRENCY", "CURRENCY", "FUTURE"]);
 
 interface Loaded {
   entries: SymbolEntry[];
@@ -120,31 +118,7 @@ export async function searchSymbols(query: string, kv: KVNamespace): Promise<Sym
   for (const { e } of ranked) push({ name: `${e.key} (${e.value})`, value: e.value });
 
   if (out.length < MAX && isAsciiQuery(query.trim()) && q.length >= 2) {
-    for (const c of await searchYahoo(query.trim())) push(c);
+    for (const c of await searchRemote(query.trim())) push(c);
   }
   return out;
-}
-
-export async function searchYahoo(query: string): Promise<SymbolChoice[]> {
-  const url = `${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&quotesCount=${MAX}&newsCount=0&listsCount=0`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 stock-chart-bot" },
-      cf: { cacheTtl: 3600, cacheEverything: true },
-    } as RequestInit);
-  } catch {
-    return [];
-  }
-  if (!res.ok) return [];
-
-  const json = (await res.json()) as any;
-  const quotes: any[] = json?.quotes ?? [];
-  return quotes
-    .filter((x) => typeof x?.symbol === "string" && QUOTE_TYPES.has(x.quoteType))
-    .map((x) => {
-      const label = x.shortname ?? x.longname ?? x.symbol;
-      const exch = x.exchDisp ?? x.exchange;
-      return { name: `${label} (${x.symbol}${exch ? `, ${exch}` : ""})`.slice(0, 100), value: x.symbol };
-    });
 }

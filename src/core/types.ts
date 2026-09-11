@@ -23,6 +23,7 @@ export interface OutgoingMessage {
   text: string;
   image?: { png: Uint8Array; filename: string };
   color?: string;
+  source?: string;
 }
 
 export interface IncomingCommand {

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetSymbolCache, resolveSymbol, searchSymbols, searchYahoo, SYMBOLS_KEY } from "../src/core/symbols";
+import { resetSymbolCache, resolveSymbol, searchSymbols, SYMBOLS_KEY } from "../src/core/symbols";
+import { yahoo } from "../src/core/providers/yahoo";
 
 const KV = (env as unknown as Env).SYMBOLS;
 
@@ -112,11 +113,11 @@ describe("resolveSymbol", () => {
   });
 });
 
-describe("searchYahoo", () => {
+describe("yahoo.search", () => {
   it("returns an empty list on http errors or network failures", async () => {
     stubYahoo({}, 500);
-    expect(await searchYahoo("aapl")).toEqual([]);
+    expect(await yahoo.search("aapl")).toEqual([]);
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("boom"); }));
-    expect(await searchYahoo("aapl")).toEqual([]);
+    expect(await yahoo.search("aapl")).toEqual([]);
   });
 });

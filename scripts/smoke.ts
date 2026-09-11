@@ -13,10 +13,12 @@ mkdirSync(outDir, { recursive: true });
 for (const c of cases) {
   const [sym, range = "1y", style = "line"] = c.split(":");
   try {
-    const { bars, label, timeZone, currency, name, previousClose } = await getPrices(sym, { ticker: sym, range });
+    const series = await getPrices(sym, { ticker: sym, range });
+    const { bars, label, currency, name, previousClose, source } = series;
+    const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
     const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym})` : sym);
     const reference = range === "1d" ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference });
+    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source });
     const png = new Resvg(svg, {
       fitTo: { mode: "width", value: 900 },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },
