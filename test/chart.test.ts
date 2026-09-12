@@ -155,7 +155,8 @@ describe("summarizeChange", () => {
 describe("fmtPrice", () => {
   it("drops decimals for large values and for integer or 1,000+ KRW amounts", () => {
     expect(fmtPrice(12345.678, "USD")).toBe("12,346");
-    expect(fmtPrice(0.1234, "USD")).toBe("0.12");
+    expect(fmtPrice(0.1234, "USD")).toBe("0.1234");
+    expect(fmtPrice(0.00123456, "KRW")).toBe("0.001235");
     expect(fmtPrice(1234.5, "KRW")).toBe("1,234.50");
     expect(fmtPrice(1345.14, "KRW")).toBe("1,345.14");
     expect(fmtPrice(259500, "KRW")).toBe("259,500");

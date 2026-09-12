@@ -8,6 +8,7 @@ const FUNDS: { path: string; field: string; min: number }[] = [
   { path: "etfItemList.nhn?etfType=0", field: "etfItemList", min: 300 },
   { path: "etnItemList.nhn?etnType=0", field: "etnItemList", min: 50 },
 ];
+const UPBIT = "https://api.upbit.com/v1/market/all?is_details=false";
 const UA = { "User-Agent": "Mozilla/5.0 stock-chart-bot" };
 // 2025년부터 영문이 섞인 6자리 코드(0167A0 등)도 쓰인다.
 const CODE = /^[0-9A-Z]{6}$/;
@@ -43,16 +44,33 @@ async function fetchFunds(path: string, field: string, min: number): Promise<Ent
   return entries;
 }
 
+// 업비트 원화 마켓. 한글 이름 → KRW-BTC. 시세는 providers/upbit.ts가 맡는다.
+async function fetchUpbit(): Promise<Entry[]> {
+  const res = await fetch(UPBIT, { headers: UA });
+  if (!res.ok) throw new Error(`upbit: HTTP ${res.status}`);
+  const items: { market: string; korean_name: string }[] = await res.json();
+  const entries = items
+    .filter((m) => /^KRW-[A-Z0-9]+$/.test(m.market) && m.korean_name?.trim())
+    .map((m) => ({ key: m.korean_name.trim(), value: m.market }));
+  if (entries.length < 100) throw new Error(`upbit: parsed only ${entries.length} rows, format may have changed`);
+  return entries;
+}
+
 const manual: Entry[] = JSON.parse(readFileSync("scripts/symbols.manual.json", "utf8"));
-const [stocks, funds] = await Promise.all([
+const [stocks, funds, crypto] = await Promise.all([
   Promise.all(Object.entries(MARKETS).map(([m, s]) => fetchMarket(m, s))).then((r) => r.flat()),
   Promise.all(FUNDS.map((f) => fetchFunds(f.path, f.field, f.min))).then((r) => r.flat()),
+  fetchUpbit(),
 ]);
-// KIND 목록에 같은 행이 두 번 나오는 경우가 있어 코드 기준으로 중복을 제거한다.
-const seen = new Set<string>();
-const krx = [...stocks, ...funds].filter((e) => !seen.has(e.value) && seen.add(e.value));
+// 수동 항목이 우선. KIND에 같은 행이 두 번 나오거나 종목명이 코인명과 겹치면(하이브 등) 앞선 것만 남긴다.
+const manualKeys = new Set(manual.map((e) => e.key));
+const seenValue = new Set<string>();
+const seenKey = new Set<string>(manualKeys);
+const krx = [...stocks, ...funds, ...crypto].filter(
+  (e) => !seenValue.has(e.value) && !seenKey.has(e.key) && seenValue.add(e.value) && seenKey.add(e.key),
+);
 
-// 심볼당 정식명은 하나다. KRX에 있으면 KRX 회사명, 없으면 수동 목록의 첫 항목. 나머지는 alias로 표시한다.
+// 심볼당 정식명은 하나다. KRX·업비트 목록에 있으면 그 이름, 없으면 수동 목록의 첫 항목. 나머지는 alias로 표시한다.
 const canonical = new Map(krx.map((e) => [e.value, e.key]));
 const manualOut: Entry[] = manual.map((e) => {
   const name = canonical.get(e.value);
@@ -60,13 +78,9 @@ const manualOut: Entry[] = manual.map((e) => {
     canonical.set(e.value, e.key);
     return { key: e.key, value: e.value };
   }
-  return name === e.key ? { key: e.key, value: e.value } : { key: e.key, value: e.value, alias: true };
+  return { key: e.key, value: e.value, alias: true };
 });
-const manualKeys = new Set(manual.map((e) => e.key));
-const out = [
-  ...manualOut,
-  ...krx.filter((e) => !manualKeys.has(e.key)).sort((a, b) => a.key.localeCompare(b.key, "ko")),
-];
+const out = [...manualOut, ...krx.sort((a, b) => a.key.localeCompare(b.key, "ko"))];
 writeFileSync("scripts/symbols.json", JSON.stringify(out, null, 2) + "\n");
 const aliases = manualOut.filter((e) => e.alias).length;
-console.log(`KRX 주식 ${stocks.length}개 + ETF/ETN ${funds.length}개 + 수동 ${manual.length}개(별칭 ${aliases}개) → ${out.length}개 → scripts/symbols.json`);
+console.log(`KRX 주식 ${stocks.length}개 + ETF/ETN ${funds.length}개 + 업비트 ${crypto.length}개 + 수동 ${manual.length}개(별칭 ${aliases}개) → ${out.length}개 → scripts/symbols.json`);

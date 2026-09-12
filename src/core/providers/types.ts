@@ -23,6 +23,8 @@ export interface SymbolChoice {
 
 export interface MarketProvider {
   readonly name: string;
+  /** 없으면 모든 심볼을 시도한다. 있으면 true인 심볼만 이 제공자로 보낸다. */
+  supports?(symbol: string): boolean;
   getPrices(symbol: string, req: ChartRequest): Promise<PriceSeries>;
   search(query: string): Promise<SymbolChoice[]>;
 }

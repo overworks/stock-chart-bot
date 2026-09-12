@@ -40,28 +40,36 @@
     "value": "JPYKRW=X"
   },
   {
-    "key": "비트코인",
-    "value": "BTC-USD"
-  },
-  {
     "key": "비트코인/원",
-    "value": "BTC-KRW"
+    "value": "KRW-BTC"
   },
   {
     "key": "비트코인원화",
-    "value": "BTC-KRW"
+    "value": "KRW-BTC"
   },
   {
-    "key": "이더리움",
-    "value": "ETH-USD"
+    "key": "비트코인/달러",
+    "value": "BTC-USD"
+  },
+  {
+    "key": "비트코인달러",
+    "value": "BTC-USD"
   },
   {
     "key": "이더리움/원",
-    "value": "ETH-KRW"
+    "value": "KRW-ETH"
   },
   {
     "key": "이더리움원화",
-    "value": "ETH-KRW"
+    "value": "KRW-ETH"
+  },
+  {
+    "key": "이더리움/달러",
+    "value": "ETH-USD"
+  },
+  {
+    "key": "이더리움달러",
+    "value": "ETH-USD"
   },
   {
     "key": "삼성전자우",

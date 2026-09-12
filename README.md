@@ -46,12 +46,14 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 | `삼전`, `하닉`, `삼바`, `엔솔`, `네이버`, `현대차`, `포스코` | 줄임말 별칭 → 정식 종목으로 매핑 |
 | `코스피`, `나스닥`, `애플` | 수동 별칭 → `^KS11`, `^IXIC`, `AAPL` |
 | `달러`, `달러/원`, `USDKRW` / `엔`, `엔화`, `JPYKRW` | 환율 → `KRW=X`(USD/KRW), `JPYKRW=X`(JPY/KRW, 100엔 기준으로 환산해 표시) |
-| `비트코인` / `이더리움` | 암호화폐 → `BTC-USD`, `ETH-USD`. 원화는 `비트코인/원`, `이더리움/원` |
+| `비트코인`, `이더리움`, `리플`, `도지코인`, `KRW-SOL` | 업비트 원화 마켓 → `KRW-BTC`, `KRW-ETH`, `KRW-XRP`, `KRW-DOGE`, `KRW-SOL` (실제 원화 체결가) |
+| `비트코인/달러`, `이더리움/달러` | 달러 시세 → `BTC-USD`, `ETH-USD` (Yahoo) |
 | `AAPL`, `005930.KS`, `TSLA` | Yahoo Finance 심볼 그대로 |
 | `ㅅㅅㅈㅈ`, `삼ㅈ` | 초성 검색 (자동완성에서) |
 | `hynix`, `samsung` | Yahoo 검색 결과의 첫 종목 |
 
-자동완성은 KRX 전 종목(KOSPI·KOSDAQ 주식 약 2,700개, ETF·ETN 약 1,500개)과 수동 별칭에서 정확 일치 → 접두 →
+자동완성은 KRX 전 종목(KOSPI·KOSDAQ 주식 약 2,700개, ETF·ETN 약 1,500개), 업비트 원화 마켓
+약 290개(한글 이름)와 수동 별칭에서 정확 일치 → 접두 →
 부분 문자열 순으로 찾는다. 대소문자와 공백은 무시하며 초성(`ㅅㅅㅈㅈ`)도 인식한다. 영문 입력은 결과가 부족하면
 Yahoo 검색으로 보충한다. Yahoo 검색은 한글을 받지 않으므로 한글 종목은 시드 목록에
 있어야 한다.
@@ -80,7 +82,7 @@ src/
 │  ├─ command.ts       # 인자 검증/정규화
 │  ├─ symbols.ts       # 종목 검색 (KV 단일 키 + 메모리 캐시, Yahoo 검색 폴백)
 │  ├─ market.ts        # 시세 조회 파사드 (providers 순서대로 시도, 실패 시 다음 제공자)
-│  ├─ providers/       # 데이터 소스. yahoo.ts (현재 유일)
+│  ├─ providers/       # 데이터 소스. upbit.ts (KRW-* 마켓), yahoo.ts (그 외)
 │  ├─ chart.ts         # SVG 생성
 │  ├─ render.ts        # resvg-wasm SVG→PNG (fonts/ 번들 폰트)
 │  ├─ store.ts         # R2 저장 + /charts/<key> 서빙 (URL만 받는 플랫폼용)
@@ -89,15 +91,18 @@ src/
    ├─ discord.ts       # Ed25519 서명 검증, deferred 응답, multipart 업로드
    └─ slack.ts         # HMAC 서명 검증, 3초 ack, response_url 로 이미지 블록 전송
 scripts/
-├─ fetch-krx-symbols.ts  # KIND 상장법인 + 네이버 ETF/ETN 목록 → scripts/symbols.json
+├─ fetch-krx-symbols.ts  # KIND 상장법인 + 네이버 ETF/ETN + 업비트 원화 마켓 → scripts/symbols.json
 ├─ symbols.manual.json   # 수동 별칭 (우선 적용)
 ├─ register-commands.ts  # Discord 슬래시 커맨드 등록
 └─ smoke.ts              # Yahoo 조회 → PNG 로컬 확인
 ```
 
 시세와 검색은 Yahoo Finance의 비공개 엔드포인트를 쓴다. 키는 필요 없지만 예고 없이
-바뀌거나 막힐 수 있다. `src/core/providers/`에 `MarketProvider`를 하나 더 구현해
-`market.ts`의 `PROVIDERS`에 넣으면 앞 제공자가 실패할 때 자동으로 넘어간다.
+바뀌거나 막힐 수 있다. 암호화폐는 기본적으로 업비트 원화 마켓(`KRW-BTC` 형식)을 업비트 공개 API로
+조회해 국내 거래소 체결가를 보여 준다. 달러 시세가 필요하면 `비트코인/달러`나 `BTC-USD`처럼
+Yahoo 심볼을 쓴다.
+`src/core/providers/`에 `MarketProvider`를 하나 더 구현해 `market.ts`의 `PROVIDERS`에
+넣으면 `supports`가 참인 제공자를 앞에서부터 시도하고 실패하면 다음으로 넘어간다.
 
 ## 셋업
 
@@ -121,7 +126,7 @@ npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
 npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
-npm run fetch:symbols                      # KRX 주식 + ETF/ETN + 수동 별칭 → scripts/symbols.json
+npm run fetch:symbols                      # KRX 주식 + ETF/ETN + 업비트 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                       # KV SYMBOLS 의 symbols:v1 키에 적재
 ```
 
@@ -170,7 +175,7 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"   # 차트 PNG를 dist/smoke/ 에
 
 ## 종목 목록 갱신
 
-GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND·네이버 목록을 다시 받아
+GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND·네이버·업비트 목록을 다시 받아
 변경이 있으면 `scripts/symbols.json`을 커밋하고 KV에 적재한다. `scripts/symbols.manual.json`이나
 `scripts/fetch-krx-symbols.ts`가 push되면 즉시 한 번 더 돈다. Actions 탭에서 수동 실행도
 된다. 로컬에서는 `npm run fetch:symbols && npm run seed:symbols`.

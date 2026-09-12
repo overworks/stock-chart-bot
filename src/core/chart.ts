@@ -36,6 +36,7 @@ export interface ChangeSummary {
 const W = 900;
 const H = 560;
 const PAD = { l: 72, r: 24, t: 80, b: 62 };
+const GRID = [0, 0.25, 0.5, 0.75, 1];
 const VOL_H = 80;
 const VOL_GAP = 12;
 
@@ -64,19 +65,25 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const max = Math.max(...highs);
   const span = max - min || 1;
   const allInt = bars.every((b) => Number.isInteger(b.c));
+  const yLabels = GRID.map((r) => {
+    const raw = max - r * span;
+    return fmtPrice(allInt ? Math.round(raw) : raw, currency);
+  });
+  // 1억 단위 원화(KRW-BTC)처럼 긴 눈금 라벨이 잘리지 않게 왼쪽 여백을 라벨 길이에 맞춘다.
+  const pad = { ...PAD, l: Math.max(PAD.l, 14 + Math.max(...yLabels.map((s) => s.length)) * 7) };
 
-  const plotW = W - PAD.l - PAD.r;
+  const plotW = W - pad.l - pad.r;
   const volH = hasVolume ? VOL_H : 0;
-  const plotH = H - PAD.t - PAD.b - (hasVolume ? volH + VOL_GAP : 0);
-  const volTop = PAD.t + plotH + VOL_GAP;
+  const plotH = H - pad.t - pad.b - (hasVolume ? volH + VOL_GAP : 0);
+  const volTop = pad.t + plotH + VOL_GAP;
   const slot = plotW / Math.max(bars.length, 1);
   const x = candle
-    ? (i: number) => PAD.l + (i + 0.5) * slot
-    : (i: number) => PAD.l + (i / (bars.length - 1)) * plotW;
-  const y = (c: number) => PAD.t + (1 - (c - min) / span) * plotH;
+    ? (i: number) => pad.l + (i + 0.5) * slot
+    : (i: number) => pad.l + (i / (bars.length - 1)) * plotW;
+  const y = (c: number) => pad.t + (1 - (c - min) / span) * plotH;
 
   const line = bars.map((b, i) => `${i === 0 ? "M" : "L"}${fmt(x(i))},${fmt(y(b.c))}`).join(" ");
-  const area = `${line} L${fmt(x(bars.length - 1))},${PAD.t + plotH} L${fmt(x(0))},${PAD.t + plotH} Z`;
+  const area = `${line} L${fmt(x(bars.length - 1))},${pad.t + plotH} L${fmt(x(0))},${pad.t + plotH} Z`;
 
   const bodyW = Math.max(1, Math.min(12, slot * 0.7));
   const candles = candle
@@ -110,7 +117,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     })
     .join("");
   const maLegend = mas
-    .map(({ p }, i) => `<text x="${PAD.l + i * 62}" y="${PAD.t - 8}" font-size="12" fill="${MA_COLOR[p]}">MA${p}</text>`)
+    .map(({ p }, i) => `<text x="${pad.l + i * 62}" y="${pad.t - 8}" font-size="12" fill="${MA_COLOR[p]}">MA${p}</text>`)
     .join("");
 
   const maxVol = hasVolume ? Math.max(...bars.map((b) => b.v ?? 0)) || 1 : 1;
@@ -127,20 +134,18 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
           return `<rect x="${fmt(cx - volW / 2)}" y="${fmt(volTop + volH - hgt)}" width="${fmt(volW)}" height="${fmt(hgt)}" fill="${color}" fill-opacity="0.45"/>`;
         })
         .join("") +
-      `<line x1="${PAD.l}" y1="${fmt(volTop + volH)}" x2="${W - PAD.r}" y2="${fmt(volTop + volH)}" stroke="#e5e7eb" stroke-width="1"/>` +
-      `<text x="${PAD.l - 10}" y="${fmt(volTop + 12)}" text-anchor="end" font-size="11" fill="#9ca3af">${fmtVolume(maxVol)}</text>`
+      `<line x1="${pad.l}" y1="${fmt(volTop + volH)}" x2="${W - pad.r}" y2="${fmt(volTop + volH)}" stroke="#e5e7eb" stroke-width="1"/>` +
+      `<text x="${pad.l - 10}" y="${fmt(volTop + 12)}" text-anchor="end" font-size="11" fill="#9ca3af">${fmtVolume(maxVol)}</text>`
     : "";
 
-  const gridLines = [0, 0.25, 0.5, 0.75, 1]
-    .map((r) => {
-      const gy = PAD.t + r * plotH;
-      const raw = max - r * span;
-      const price = allInt ? Math.round(raw) : raw;
+  const gridLines = GRID
+    .map((r, i) => {
+      const gy = pad.t + r * plotH;
       return (
-        `<line x1="${PAD.l}" y1="${fmt(gy)}" x2="${W - PAD.r}" y2="${fmt(gy)}" ` +
+        `<line x1="${pad.l}" y1="${fmt(gy)}" x2="${W - pad.r}" y2="${fmt(gy)}" ` +
         `stroke="#e5e7eb" stroke-width="1"/>` +
-        `<text x="${PAD.l - 10}" y="${fmt(gy + 4)}" text-anchor="end" ` +
-        `font-size="12" fill="#6b7280">${fmtPrice(price, currency)}</text>`
+        `<text x="${pad.l - 10}" y="${fmt(gy + 4)}" text-anchor="end" ` +
+        `font-size="12" fill="#6b7280">${yLabels[i]}</text>`
       );
     })
     .join("");
@@ -150,14 +155,14 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     .map((i) => {
       const anchor = i === 0 ? "start" : i === bars.length - 1 ? "end" : "middle";
       return (
-        `<text x="${fmt(x(i))}" y="${H - PAD.b + 20}" text-anchor="${anchor}" ` +
+        `<text x="${fmt(x(i))}" y="${H - pad.b + 20}" text-anchor="${anchor}" ` +
         `font-size="12" fill="#6b7280">${fmtDate(bars[i].t)}</text>`
       );
     })
     .join("");
 
   const footer = source
-    ? `<text x="${W - PAD.r}" y="${H - 14}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
+    ? `<text x="${W - pad.r}" y="${H - 14}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
     : "";
 
   const sign = change.diff > 0 ? "+" : "";
@@ -167,10 +172,10 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
-  <text x="${PAD.l}" y="34" font-size="22" font-weight="700" fill="#111827">${escapeXml(title)}</text>
-  <text x="${PAD.l}" y="58" font-size="14" fill="${change.color}">${escapeXml(subtitle)}</text>
-  <text x="${W - PAD.r}" y="34" text-anchor="end" font-size="26" font-weight="700" fill="${change.color}">${escapeXml(fmtPrice(change.last, currency))}</text>
-  <text x="${W - PAD.r}" y="58" text-anchor="end" font-size="14" fill="#6b7280">${escapeXml(currency)}</text>
+  <text x="${pad.l}" y="34" font-size="22" font-weight="700" fill="#111827">${escapeXml(title)}</text>
+  <text x="${pad.l}" y="58" font-size="14" fill="${change.color}">${escapeXml(subtitle)}</text>
+  <text x="${W - pad.r}" y="34" text-anchor="end" font-size="26" font-weight="700" fill="${change.color}">${escapeXml(fmtPrice(change.last, currency))}</text>
+  <text x="${W - pad.r}" y="58" text-anchor="end" font-size="14" fill="#6b7280">${escapeXml(currency)}</text>
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
@@ -191,6 +196,7 @@ const ZERO_DECIMAL = new Set(["KRW", "JPY", "IDR", "VND", "HUF", "CLP"]);
 /** 큰 값은 정수, 원·엔 등은 1,000 이상이거나 정수면 소수점 없이, 그 외 소수 둘째 자리. */
 export function fmtPrice(n: number, currency = ""): string {
   const abs = Math.abs(n);
+  if (abs > 0 && abs < 1) return new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 }).format(n);
   const zero = abs >= 10_000 || (ZERO_DECIMAL.has(currency) && Number.isInteger(n));
   const digits = zero ? 0 : 2;
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);

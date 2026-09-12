@@ -16,7 +16,7 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립 `core` + 플랫�
 | 타입 검사 | `npm run typecheck` |
 | 테스트 | `npm test` |
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
-| KRX 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN → `scripts/symbols.json`) |
+| 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN + 업비트 → `scripts/symbols.json`) |
 | KV 심볼 시드 | `npm run seed:symbols` |
 | 빌드 확인 | `npx wrangler deploy --dry-run --outdir dist` |
 | 운영 배포 | `npm run deploy` |
@@ -31,8 +31,8 @@ src/
 ├─ env.d.ts            # Env 바인딩, *.wasm 모듈 선언
 ├─ core/               # 플랫폼 의존성 없음
 │  ├─ command.ts       #   인자 검증/정규화
-│  ├─ market.ts        #   시세 조회 파사드 (PROVIDERS 순서대로 폴백)
-│  ├─ providers/       #   MarketProvider 구현체 (yahoo.ts). 외부 API 호출은 여기에만
+│  ├─ market.ts        #   시세 조회 파사드 (supports 필터 후 PROVIDERS 순서대로 폴백)
+│  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, yahoo.ts: 그 외). 외부 API 호출은 여기에만
 │  ├─ chart.ts         #   SVG 생성
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
 │  ├─ aliases.ts       #   /alias add|remove|list (KV aliases:v1)
@@ -50,7 +50,7 @@ src/
   `src/platforms/**`에만 둔다.
 - 새 플랫폼은 어댑터 파일 + `src/index.ts` 라우트 추가로 끝내고 core는 건드리지 않는다.
 - Discord/Slack 서명 검증은 **raw body 문자열**로 수행한다(파싱된 객체 금지). `req.text()` 사용.
-- 시세·검색 API 호출은 `src/core/providers/*`에만 둔다. 새 소스는 `MarketProvider`를 구현해 `market.ts`의 `PROVIDERS`에 추가한다. 없는 심볼은 `SymbolNotFoundError`, 그 외(HTTP 오류, 데이터 부족, 파싱 실패)는 일반 `Error`로 던진다. 검색 폴백은 전자에만 반응한다.
+- 시세·검색 API 호출은 `src/core/providers/*`에만 둔다. 새 소스는 `MarketProvider`를 구현해 `market.ts`의 `PROVIDERS`에 추가한다. 특정 심볼 형식만 맡으면 `supports(symbol)`를 구현한다. `search`는 영문 질의에 네트워크를 쓰지 않는 게 원칙이다(자동완성마다 호출됨). 없는 심볼은 `SymbolNotFoundError`, 그 외(HTTP 오류, 데이터 부족, 파싱 실패)는 일반 `Error`로 던진다. 검색 폴백은 전자에만 반응한다.
 - resvg 인스턴스와 렌더 결과는 반드시 `free()`한다(GC에 등록되지 않아 wasm 메모리가 새어 나간다).
 - KV 쓰기는 무료 플랜 기준 하루 1,000회다. `seed:symbols`는 1회지만, 개별 키를 대량으로 쓰지 않는다.
 - 파일 업로드가 안 되는 플랫폼은 `core/store.ts`로 R2에 저장하고 `/charts/<key>` URL을 쓴다.
@@ -58,7 +58,7 @@ src/
   `ctx.waitUntil(...)`에서 처리한 뒤 interaction token으로 원본 메시지를 수정한다.
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.
 - `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
-- 종목 별칭: `scripts/symbols.manual.json`(수동)과 KIND 상장법인·네이버 ETF/ETN 목록을 합쳐 `scripts/symbols.json`을 만든다. 심볼당 정식명은 하나(KRX 회사명 우선, 없으면 수동 첫 항목)이고 나머지는 `alias: true`로 표시된다. 별칭은 검색·해석에만 쓰고 자동완성 표시명과 차트 제목은 정식명을 쓴다. `symbols.json`은 직접 편집하지 않는다. 실행 시 별칭은 정확 일치만 적용하고, Yahoo 심볼 형식 입력은 매핑하지 않는다. 미국 티커와 겹치는 짧은 영문 별칭(`USD`, `ETH` 등)은 넣지 않는다.
+- 종목 별칭: `scripts/symbols.manual.json`(수동)과 KIND 상장법인·네이버 ETF/ETN·업비트 원화 마켓 목록을 합쳐 `scripts/symbols.json`을 만든다. 심볼당 정식명은 하나(KRX 회사명 우선, 없으면 수동 첫 항목)이고 나머지는 `alias: true`로 표시된다. 별칭은 검색·해석에만 쓰고 자동완성 표시명과 차트 제목은 정식명을 쓴다. `symbols.json`은 직접 편집하지 않는다. 실행 시 별칭은 정확 일치만 적용하고, Yahoo 심볼 형식 입력은 매핑하지 않는다. 미국 티커와 겹치는 짧은 영문 별칭(`USD`, `ETH` 등)은 넣지 않는다.
 - 종목 목록은 KV `SYMBOLS`의 단일 키 `symbols:v1`, 채팅으로 추가한 별칭은 `aliases:v1`에 JSON으로 저장한다. `loadSymbols`가 둘을 합친다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
 - `/alias` 변경 권한: Discord는 `member.permissions`의 ADMINISTRATOR/MANAGE_GUILD, Slack은 `SLACK_ALIAS_ADMINS`(쉼표 구분 사용자 ID). `list`는 누구나.
 - 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.

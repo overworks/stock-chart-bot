@@ -1,3 +1,4 @@
+import { upbit } from "./providers/upbit";
 import { yahoo } from "./providers/yahoo";
 import type { ChartRequest } from "./types";
 import type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
@@ -5,8 +6,8 @@ import type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/type
 export { SymbolNotFoundError } from "./providers/types";
 export type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
-/** 앞에서부터 시도하고 실패하면 다음 제공자로 넘어간다. */
-export const PROVIDERS: readonly MarketProvider[] = [yahoo];
+/** 심볼을 지원하는 제공자를 앞에서부터 시도하고 실패하면 다음으로 넘어간다. */
+export const PROVIDERS: readonly MarketProvider[] = [upbit, yahoo];
 
 export async function getPrices(
   symbol: string,
@@ -14,7 +15,7 @@ export async function getPrices(
   providers: readonly MarketProvider[] = PROVIDERS,
 ): Promise<PriceSeries> {
   let firstError: unknown;
-  for (const p of providers) {
+  for (const p of providers.filter((p) => !p.supports || p.supports(symbol))) {
     try {
       const series = await p.getPrices(symbol, req);
       if (series.bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);

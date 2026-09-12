@@ -31,7 +31,7 @@ npm run dev          # 로컬 워커 (http://localhost:8787/discord)
 npm run typecheck    # 타입 검사 (필수)
 npm test             # vitest (workerd 런타임에서 실행)
 npm run smoke -- "AAPL:1d,005930.KS:1m"   # Yahoo 조회 → PNG 로컬 확인 (dist/smoke/)
-npm run fetch:symbols # KIND 상장법인 + 네이버 ETF/ETN + symbols.manual.json → scripts/symbols.json
+npm run fetch:symbols # KIND 상장법인 + 네이버 ETF/ETN + 업비트 원화 마켓 + symbols.manual.json → scripts/symbols.json
 npm run seed:symbols  # scripts/symbols.json 을 KV SYMBOLS 에 적재
 npm run deploy       # 운영 배포
 npm run register     # Discord 슬래시 커맨드 등록
@@ -70,9 +70,11 @@ PR 전에 다음은 반드시 통과해야 한다.
 ### 데이터 소스
 
 `src/core/providers/types.ts`의 `MarketProvider`(이름, `getPrices`, `search`)를 구현한 파일을
-`providers/`에 두고 `market.ts`의 `PROVIDERS` 배열에 넣는다. `getPrices`는 앞에서부터
-시도해 오류(네트워크, HTTP, 미발견)가 나면 다음 제공자로 넘어가고, 전부 실패하면 첫 오류를
-던진다. `PriceSeries.source`에 제공자 이름이 실려 차트 푸터와 메시지에 출처로 표시된다.
+`providers/`에 두고 `market.ts`의 `PROVIDERS` 배열에 넣는다. `supports(symbol)`를 구현하면
+그 심볼 형식만 맡는다(`upbit.ts`는 `KRW-*`만, `yahoo.ts`는 전부). `getPrices`는 지원하는
+제공자를 앞에서부터 시도해 오류(네트워크, HTTP, 미발견)가 나면 다음으로 넘어가고, 전부
+실패하면 첫 오류를 던진다. `search`는 자동완성마다 불리므로 영문 질의에 네트워크를 쓰지
+않는 게 원칙이다(업비트는 한글·`KRW-` 질의만 처리). `PriceSeries.source`에 제공자 이름이 실려 차트 푸터와 메시지에 출처로 표시된다.
 24시간 거래 상품은 `continuous: true`로 표시해 KST로 그리게 한다.
 
 ### 이미지 전달
@@ -84,12 +86,12 @@ PR 전에 다음은 반드시 통과해야 한다.
 
 ### 종목 검색
 
-종목 목록 전체(주식·ETF·ETN 약 4,200개, 약 290KB)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
+종목 목록 전체(주식·ETF·ETN·업비트 코인 약 4,500개, 약 310KB)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
 워커는 이를 한 번 읽어 10분간 메모리에 캐시한다. 자동완성은 이 메모리에서 정확 일치 →
 접두 → 부분 문자열 순으로 찾는다(대소문자·공백 무시). KV `list`는 무료 플랜 한도가
 하루 1,000회라 사용하지 않는다. 결과가 부족하면서 입력이 ASCII이면
 Yahoo search API(`/v1/finance/search`)로 폴백한다. Yahoo search는 한글 질의를 거부하므로
-한글 종목명은 KV 시드(KRX 주식 + ETF/ETN + 수동 별칭)로만 커버한다. ETF·ETN은 KIND에 없어
+한글 종목명은 KV 시드(KRX 주식 + ETF/ETN + 업비트 코인 + 수동 별칭)로만 커버한다. ETF·ETN은 KIND에 없어
 네이버 금융의 `api/sise/etfItemList.nhn`·`etnItemList.nhn`(비공식, EUC-KR)에서 받는다.
 종목 코드는 2025년부터 영문이 섞인 6자리(`0167A0`)도 있으며 Yahoo도 그대로 받는다. 실행 시에도 KV에 없는
 ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재시도한다.
