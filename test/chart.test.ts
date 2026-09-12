@@ -135,6 +135,18 @@ describe("summarizeChange", () => {
     expect(s.text).toBe("99.00 USD ▼ -11.00 (-10.00%)");
   });
 
+  it("draws a dashed previous-close line with a label and widens the axis to include it", () => {
+    const bars = [{ t: 1, c: 100 }, { t: 2, c: 101 }, { t: 3, c: 102 }];
+    const svg = buildSvg(bars, "T", { reference: 110, currency: "KRW" });
+    expect(svg).toContain('stroke-dasharray="4 3"');
+    expect(svg).toContain("전일 종가 110");
+    expect(svg).toContain(">110<");
+    expect(svg).toContain(">100<");
+    const without = buildSvg(bars, "T", { currency: "KRW" });
+    expect(without).not.toContain("stroke-dasharray");
+    expect(without).not.toContain("전일 종가");
+  });
+
   it("formats KRW without decimals and with thousands separators", () => {
     const s = summarizeChange([{ t: 1, c: 269_000 }, { t: 2, c: 258_500 }], "KRW");
     expect(s.direction).toBe("down");

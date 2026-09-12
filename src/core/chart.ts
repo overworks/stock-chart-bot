@@ -61,8 +61,9 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
 
   const lows = candle ? bars.map((b) => b.l ?? b.c) : bars.map((b) => b.c);
   const highs = candle ? bars.map((b) => b.h ?? b.c) : bars.map((b) => b.c);
-  const min = Math.min(...lows);
-  const max = Math.max(...highs);
+  // 기준가(전일 종가)가 있으면 눈금 범위에 넣어 기준선이 항상 보이게 한다.
+  const min = Math.min(...lows, reference ?? Infinity);
+  const max = Math.max(...highs, reference ?? -Infinity);
   const span = max - min || 1;
   const allInt = bars.every((b) => Number.isInteger(b.c));
   const yLabels = GRID.map((r) => {
@@ -161,6 +162,12 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     })
     .join("");
 
+  const referenceLine =
+    reference !== undefined
+      ? `<line x1="${pad.l}" y1="${fmt(y(reference))}" x2="${W - pad.r}" y2="${fmt(y(reference))}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>` +
+        `<text x="${W - pad.r}" y="${fmt(y(reference) - 5)}" text-anchor="end" font-size="11" fill="#6b7280" stroke="#ffffff" stroke-width="3" paint-order="stroke">${escapeXml(`전일 종가 ${fmtPrice(reference, currency)}`)}</text>`
+      : "";
+
   const footer = source
     ? `<text x="${W - pad.r}" y="${H - 14}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
     : "";
@@ -179,6 +186,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
+  ${referenceLine}
   ${maLines}
   ${maLegend}
   ${volumes}
