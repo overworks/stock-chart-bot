@@ -42,6 +42,7 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 | 입력 | 해석 |
 |---|---|
 | `삼성전자`, `SK하이닉스` | KRX 상장 종목명 → `005930.KS`, `000660.KS` |
+| `KODEX 200`, `TIGER 미국S&P500` | 국내 ETF·ETN → `069500.KS`, `360750.KS` |
 | `삼전`, `하닉`, `삼바`, `엔솔`, `네이버`, `현대차`, `포스코` | 줄임말 별칭 → 정식 종목으로 매핑 |
 | `코스피`, `나스닥`, `애플` | 수동 별칭 → `^KS11`, `^IXIC`, `AAPL` |
 | `달러`, `달러/원`, `USDKRW` / `엔`, `엔화`, `JPYKRW` | 환율 → `KRW=X`(USD/KRW), `JPYKRW=X`(JPY/KRW, 100엔 기준으로 환산해 표시) |
@@ -50,7 +51,7 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 | `ㅅㅅㅈㅈ`, `삼ㅈ` | 초성 검색 (자동완성에서) |
 | `hynix`, `samsung` | Yahoo 검색 결과의 첫 종목 |
 
-자동완성은 KRX 전 종목(KOSPI, KOSDAQ 약 2,600개)과 수동 별칭에서 정확 일치 → 접두 →
+자동완성은 KRX 전 종목(KOSPI·KOSDAQ 주식 약 2,700개, ETF·ETN 약 1,500개)과 수동 별칭에서 정확 일치 → 접두 →
 부분 문자열 순으로 찾는다. 대소문자와 공백은 무시하며 초성(`ㅅㅅㅈㅈ`)도 인식한다. 영문 입력은 결과가 부족하면
 Yahoo 검색으로 보충한다. Yahoo 검색은 한글을 받지 않으므로 한글 종목은 시드 목록에
 있어야 한다.
@@ -88,7 +89,7 @@ src/
    ├─ discord.ts       # Ed25519 서명 검증, deferred 응답, multipart 업로드
    └─ slack.ts         # HMAC 서명 검증, 3초 ack, response_url 로 이미지 블록 전송
 scripts/
-├─ fetch-krx-symbols.ts  # KIND 상장법인 목록 → scripts/symbols.json
+├─ fetch-krx-symbols.ts  # KIND 상장법인 + 네이버 ETF/ETN 목록 → scripts/symbols.json
 ├─ symbols.manual.json   # 수동 별칭 (우선 적용)
 ├─ register-commands.ts  # Discord 슬래시 커맨드 등록
 └─ smoke.ts              # Yahoo 조회 → PNG 로컬 확인
@@ -120,7 +121,7 @@ npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
 npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
-npm run fetch:symbols                      # KRX 목록 + 수동 별칭 → scripts/symbols.json
+npm run fetch:symbols                      # KRX 주식 + ETF/ETN + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                       # KV SYMBOLS 의 symbols:v1 키에 적재
 ```
 
@@ -169,7 +170,7 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"   # 차트 PNG를 dist/smoke/ 에
 
 ## 종목 목록 갱신
 
-GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND 목록을 다시 받아
+GitHub Actions(`refresh-symbols`)가 매주 월요일 09:00 KST에 KIND·네이버 목록을 다시 받아
 변경이 있으면 `scripts/symbols.json`을 커밋하고 KV에 적재한다. `scripts/symbols.manual.json`이나
 `scripts/fetch-krx-symbols.ts`가 push되면 즉시 한 번 더 돈다. Actions 탭에서 수동 실행도
 된다. 로컬에서는 `npm run fetch:symbols && npm run seed:symbols`.

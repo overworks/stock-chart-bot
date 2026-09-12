@@ -31,7 +31,7 @@ npm run dev          # 로컬 워커 (http://localhost:8787/discord)
 npm run typecheck    # 타입 검사 (필수)
 npm test             # vitest (workerd 런타임에서 실행)
 npm run smoke -- "AAPL:1d,005930.KS:1m"   # Yahoo 조회 → PNG 로컬 확인 (dist/smoke/)
-npm run fetch:symbols # KIND 상장법인 목록 + symbols.manual.json → scripts/symbols.json
+npm run fetch:symbols # KIND 상장법인 + 네이버 ETF/ETN + symbols.manual.json → scripts/symbols.json
 npm run seed:symbols  # scripts/symbols.json 을 KV SYMBOLS 에 적재
 npm run deploy       # 운영 배포
 npm run register     # Discord 슬래시 커맨드 등록
@@ -84,12 +84,14 @@ PR 전에 다음은 반드시 통과해야 한다.
 
 ### 종목 검색
 
-종목 목록 전체(약 2,600개)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
+종목 목록 전체(주식·ETF·ETN 약 4,200개, 약 290KB)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
 워커는 이를 한 번 읽어 10분간 메모리에 캐시한다. 자동완성은 이 메모리에서 정확 일치 →
 접두 → 부분 문자열 순으로 찾는다(대소문자·공백 무시). KV `list`는 무료 플랜 한도가
 하루 1,000회라 사용하지 않는다. 결과가 부족하면서 입력이 ASCII이면
 Yahoo search API(`/v1/finance/search`)로 폴백한다. Yahoo search는 한글 질의를 거부하므로
-한글 종목명은 KV 시드(KRX 전 종목 + 수동 별칭)로만 커버한다. 실행 시에도 KV에 없는
+한글 종목명은 KV 시드(KRX 주식 + ETF/ETN + 수동 별칭)로만 커버한다. ETF·ETN은 KIND에 없어
+네이버 금융의 `api/sise/etfItemList.nhn`·`etnItemList.nhn`(비공식, EUC-KR)에서 받는다.
+종목 코드는 2025년부터 영문이 섞인 6자리(`0167A0`)도 있으며 Yahoo도 그대로 받는다. 실행 시에도 KV에 없는
 ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재시도한다.
 
 항목은 `{ key, value, alias? }`다. 심볼당 정식명은 하나이고(`alias`가 없는 항목), 별칭은
