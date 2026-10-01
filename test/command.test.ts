@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { parseChartArgs } from "../src/core/command";
 
 describe("parseChartArgs", () => {
+  it.each(["2024-13-01", "2024-00-01", "2024-02-30", "2023-02-29", "2024-04-31"])("rejects nonexistent date %s in either boundary", (date) => {
+    expect(() => parseChartArgs({ ticker: "AAPL", from: date, to: "2025-01-01" })).toThrow("존재하는 날짜");
+    expect(() => parseChartArgs({ ticker: "AAPL", from: "2023-01-01", to: date })).toThrow("존재하는 날짜");
+  });
+
+  it("accepts a leap day", () => {
+    expect(parseChartArgs({ ticker: "AAPL", from: "2024-02-29", to: "2024-03-01" }).from).toBe("2024-02-29");
+  });
+
   it("defaults range to 1d", () => {
     expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1d", style: "line" });
   });

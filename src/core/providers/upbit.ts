@@ -84,7 +84,8 @@ function buildPlan(req: ChartRequest): { path: string; count: number; to?: strin
   if (req.from && req.to) {
     const since = Math.floor(Date.parse(req.from) / 1000);
     const until = Math.floor(Date.parse(req.to) / 1000) + 86_400;
-    const count = Math.min(MAX_BARS, Math.ceil((until - since) / 86_400));
+    const count = Math.ceil((until - since) / 86_400);
+    if (count > MAX_BARS) throw new Error(`업비트 직접 날짜 조회는 최대 ${MAX_BARS}일입니다. 기간을 줄이거나 5y/max를 사용해 주세요.`);
     return { path: "days", count, to: iso(until), since, label: `${req.from} ~ ${req.to}`, intraday: false };
   }
   const label = req.range ?? "1d";

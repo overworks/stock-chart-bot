@@ -33,7 +33,14 @@ export function parseChartArgs(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
       throw new Error("날짜 형식은 YYYY-MM-DD 이어야 합니다.");
     }
-    if (Date.parse(from) >= Date.parse(to)) {
+    const start = Date.parse(from);
+    const end = Date.parse(to);
+    if (!Number.isFinite(start) || !Number.isFinite(end)
+      || new Date(start).toISOString().slice(0, 10) !== from
+      || new Date(end).toISOString().slice(0, 10) !== to) {
+      throw new Error("존재하는 날짜를 YYYY-MM-DD 형식으로 입력해 주세요.");
+    }
+    if (start >= end) {
       throw new Error("시작일은 종료일보다 앞서야 합니다.");
     }
     return { ticker, from, to, style };

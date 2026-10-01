@@ -1,3 +1,4 @@
+import { mutateAlias } from "./alias-writer";
 import { getPrices, SymbolNotFoundError } from "./market";
 import {
   ALIASES_KEY,
@@ -32,6 +33,7 @@ export async function addAlias(
   kv: KVNamespace,
   aliasInput: string,
   targetInput: string,
+  writer: DurableObjectNamespace,
 ): Promise<{ alias: string; symbol: string; display: string }> {
   const alias = aliasInput.trim();
   const target = targetInput.trim();
@@ -47,19 +49,15 @@ export async function addAlias(
   }
 
   const { symbol, display } = await resolveTarget(target, kv, byKey, byValue);
-  const next = [...user.filter((e) => e.key !== alias), { key: alias, value: symbol }];
-  await kv.put(ALIASES_KEY, JSON.stringify(next));
+  await mutateAlias(writer, { key: alias, value: symbol });
   resetSymbolCache();
   return { alias, symbol, display };
 }
 
-export async function removeAlias(kv: KVNamespace, aliasInput: string): Promise<SymbolEntry> {
+export async function removeAlias(aliasInput: string, writer: DurableObjectNamespace): Promise<SymbolEntry> {
   const alias = aliasInput.trim();
   if (!alias) throw new Error(ALIAS_USAGE);
-  const user = await listAliases(kv);
-  const hit = user.find((e) => e.key === alias);
-  if (!hit) throw new Error(`'${alias}' 별칭이 없습니다.`);
-  await kv.put(ALIASES_KEY, JSON.stringify(user.filter((e) => e.key !== alias)));
+  const hit = await mutateAlias(writer, { key: alias });
   resetSymbolCache();
   return hit;
 }
@@ -94,14 +92,14 @@ function label(symbol: string, byValue: Map<string, string>, fallback?: string):
 }
 
 /** 어댑터 공용 진입점. 결과 메시지를 돌려주고 실패는 Error로 던진다. */
-export async function runAlias(args: AliasArgs, env: { SYMBOLS: KVNamespace }): Promise<string> {
+export async function runAlias(args: AliasArgs, env: { SYMBOLS: KVNamespace; ALIAS_WRITER: DurableObjectNamespace }): Promise<string> {
   switch (args.action) {
     case "add": {
-      const r = await addAlias(env.SYMBOLS, args.alias ?? "", args.target ?? "");
+      const r = await addAlias(env.SYMBOLS, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER);
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }
     case "remove": {
-      const r = await removeAlias(env.SYMBOLS, args.alias ?? "");
+      const r = await removeAlias(args.alias ?? "", env.ALIAS_WRITER);
       return `🗑️ 별칭 삭제: ${r.key} → ${r.value}`;
     }
     case "list": {

@@ -56,7 +56,7 @@ const commands = [
   {
     name: "alias",
     description: "종목 별칭을 관리합니다",
-    default_member_permissions: "32", // MANAGE_GUILD
+    default_member_permissions: null,
     options: [
       {
         type: 1,

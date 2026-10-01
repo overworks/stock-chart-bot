@@ -15,6 +15,10 @@
   "kv_namespaces": [
     { "binding": "SYMBOLS", "id": "536161eca4ca4abcbdf454cd8f252b36" }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "ALIAS_WRITER", "class_name": "AliasWriter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AliasWriter"] }],
   "r2_buckets": [
     { "binding": "CHARTS", "bucket_name": "stock-chart-bot-charts" }
   ]

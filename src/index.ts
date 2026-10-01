@@ -1,3 +1,4 @@
+export { AliasWriter } from "./core/alias-writer";
 import { serveChart } from "./core/store";
 import { handleDiscord } from "./platforms/discord";
 import { handleSlack } from "./platforms/slack";

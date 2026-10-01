@@ -15,5 +15,6 @@ interface Env {
   SLACK_SIGNING_SECRET: string;
   SLACK_ALIAS_ADMINS?: string;
   SYMBOLS: KVNamespace;
+  ALIAS_WRITER: DurableObjectNamespace;
   CHARTS: R2Bucket;
 }

@@ -23,6 +23,28 @@ function stub(handler: (url: URL) => { status?: number; body: unknown }) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("upbit provider", () => {
+  it("rejects custom periods above 2000 days before fetching", async () => {
+    const urls = stub(() => ({ body: [] }));
+    const to = new Date(Date.parse("2020-01-01") + 2000 * 86_400_000).toISOString().slice(0, 10);
+    await expect(upbit.getPrices("KRW-BTC", { ticker: "KRW-BTC", from: "2020-01-01", to })).rejects.toThrow("최대 2000일");
+    expect(urls).toHaveLength(0);
+  });
+
+  it("includes both boundaries of a 2000-day custom period", async () => {
+    const from = "2020-01-01";
+    const to = new Date(Date.parse(from) + 1999 * 86_400_000).toISOString().slice(0, 10);
+    const urls = stub((url) => {
+      const until = Date.parse(url.searchParams.get("to")!);
+      return { body: Array.from({ length: Number(url.searchParams.get("count")) }, (_, i) =>
+        candle(new Date(until - (i + 1) * 86_400_000).toISOString().slice(0, 19), 100)) };
+    });
+    const series = await upbit.getPrices("KRW-BTC", { ticker: "KRW-BTC", from, to });
+    expect(series.bars).toHaveLength(2000);
+    expect(series.bars[0].t).toBe(Date.parse(from) / 1000);
+    expect(series.bars.at(-1)!.t).toBe(Date.parse(to) / 1000);
+    expect(urls).toHaveLength(10);
+  });
+
   it("only claims KRW markets", () => {
     expect(upbit.supports!("KRW-BTC")).toBe(true);
     expect(upbit.supports!("BTC-USD")).toBe(false);
