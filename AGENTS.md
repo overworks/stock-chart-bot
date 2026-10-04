@@ -59,7 +59,7 @@ src/
 - 시크릿은 `.dev.vars`(로컬) / `wrangler secret`(운영)만 사용한다. 코드·설정·로그에 넣지 않는다.
 - `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
 - 종목 별칭: `scripts/symbols.manual.json`(수동)과 KIND 상장법인·네이버 ETF/ETN·업비트 원화 마켓 목록을 합쳐 `scripts/symbols.json`을 만든다. 심볼당 정식명은 하나(KRX 회사명 우선, 없으면 수동 첫 항목)이고 나머지는 `alias: true`로 표시된다. 별칭은 검색·해석에만 쓰고 자동완성 표시명과 차트 제목은 정식명을 쓴다. `symbols.json`은 직접 편집하지 않는다. 실행 시 별칭은 정확 일치만 적용하고, Yahoo 심볼 형식 입력은 매핑하지 않는다. 미국 티커와 겹치는 짧은 영문 별칭(`USD`, `ETH` 등)은 넣지 않는다.
-- 종목 목록은 KV `SYMBOLS`의 단일 키 `symbols:v1`, 채팅으로 추가한 별칭은 `aliases:v1`에 JSON으로 저장한다. `loadSymbols`가 둘을 합친다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
+- 종목 목록은 KV(바인딩 `KV`)의 단일 키 `symbols:v1`, 채팅으로 추가한 별칭은 `aliases:v1`에 JSON으로 저장한다. `loadSymbols`가 둘을 합친다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
 - `/alias` 변경 권한: Discord는 `member.permissions`의 ADMINISTRATOR/MANAGE_GUILD, Slack은 `SLACK_ALIAS_ADMINS`(쉼표 구분 사용자 ID). `list`는 누구나.
 - 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.
 - 사용자 노출 메시지는 한국어. 2 spaces. 주석은 최소화.

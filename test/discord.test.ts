@@ -82,7 +82,7 @@ describe("discord adapter", () => {
   });
 
   it("autocompletes symbols from KV by prefix", async () => {
-    await ENV.SYMBOLS.put(
+    await ENV.KV.put(
       SYMBOLS_KEY,
       JSON.stringify([
         { key: "삼성전자", value: "005930.KS" },
@@ -101,7 +101,7 @@ describe("discord adapter", () => {
   });
 
   it("keeps KV autocomplete hits when the remote search returns garbage", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SAMSUNG", value: "005930.KS" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SAMSUNG", value: "005930.KS" }]));
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>consent</html>", { status: 200 })));
     const req = await signed({ type: 4, data: { name: "chart", options: [{ name: "ticker", value: "sa", focused: true }] } });
     const res = await worker.fetch(req, ENV, createExecutionContext());
@@ -110,7 +110,7 @@ describe("discord adapter", () => {
   });
 
   it("defers /chart, resolves the alias, renders a PNG and patches the original message", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const req = await signed({
@@ -168,8 +168,8 @@ describe("discord adapter", () => {
   });
 
   it("lets managers add and remove aliases and autocompletes them", async () => {
-    await ENV.SYMBOLS.delete(ALIASES_KEY);
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
+    await ENV.KV.delete(ALIASES_KEY);
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
     const calls = stubOutbound();
     const manager = { permissions: String(1 << 5) };
 
@@ -183,7 +183,7 @@ describe("discord adapter", () => {
     expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
     await waitOnExecutionContext(ctx);
     expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
-    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
+    expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
 
     req = await signed({
       type: 4,
@@ -210,7 +210,7 @@ describe("discord adapter", () => {
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
     expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toContain("별칭 삭제");
-    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([]);
+    expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([]);
   });
 
   it("reports validation errors without calling upstream", async () => {

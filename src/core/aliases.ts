@@ -92,10 +92,10 @@ function label(symbol: string, byValue: Map<string, string>, fallback?: string):
 }
 
 /** 어댑터 공용 진입점. 결과 메시지를 돌려주고 실패는 Error로 던진다. */
-export async function runAlias(args: AliasArgs, env: { SYMBOLS: KVNamespace; ALIAS_WRITER: DurableObjectNamespace }): Promise<string> {
+export async function runAlias(args: AliasArgs, env: { KV: KVNamespace; ALIAS_WRITER: DurableObjectNamespace }): Promise<string> {
   switch (args.action) {
     case "add": {
-      const r = await addAlias(env.SYMBOLS, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER);
+      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER);
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }
     case "remove": {
@@ -103,9 +103,9 @@ export async function runAlias(args: AliasArgs, env: { SYMBOLS: KVNamespace; ALI
       return `🗑️ 별칭 삭제: ${r.key} → ${r.value}`;
     }
     case "list": {
-      const user = await listAliases(env.SYMBOLS);
+      const user = await listAliases(env.KV);
       if (!user.length) return "등록된 별칭이 없습니다.";
-      const { byValue } = await loadSymbols(env.SYMBOLS);
+      const { byValue } = await loadSymbols(env.KV);
       const lines = user.slice(0, LIST_LIMIT).map((e) => `• ${e.key} → ${label(e.value, byValue)}`);
       if (user.length > LIST_LIMIT) lines.push(`… 외 ${user.length - LIST_LIMIT}개`);
       return lines.join("\n");

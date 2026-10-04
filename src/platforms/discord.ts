@@ -39,8 +39,8 @@ export async function handleDiscord(
     const query = String(focused?.value ?? "");
     const choices =
       name === "alias" && focused?.name === "alias"
-        ? await searchAliases(query, env.SYMBOLS)
-        : await searchSymbols(query, env.SYMBOLS);
+        ? await searchAliases(query, env.KV)
+        : await searchSymbols(query, env.KV);
     return json({ type: 8, data: { choices } });
   }
 

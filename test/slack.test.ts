@@ -89,7 +89,7 @@ describe("parseAliasText", () => {
 
 describe("slack /alias", () => {
   it("shows usage, lets anyone list, and blocks non-admins from changes", async () => {
-    await ENV.SYMBOLS.delete(ALIASES_KEY);
+    await ENV.KV.delete(ALIASES_KEY);
     const usage = (await (await worker.fetch(await slash({ command: "/alias", text: "add" }), ENV, createExecutionContext())).json()) as any;
     expect(usage.text).toContain("사용법");
     const list = (await (await worker.fetch(await slash({ command: "/alias", text: "list" }), ENV, createExecutionContext())).json()) as any;
@@ -99,8 +99,8 @@ describe("slack /alias", () => {
   });
 
   it("lets admins add aliases and posts the result in channel", async () => {
-    await ENV.SYMBOLS.delete(ALIASES_KEY);
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
+    await ENV.KV.delete(ALIASES_KEY);
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const res = await worker.fetch(await slash({ command: "/alias", text: "add 하닉 SK하이닉스", user_id: "U_OTHER" }), ENV, ctx);
@@ -109,7 +109,7 @@ describe("slack /alias", () => {
     await waitOnExecutionContext(ctx);
     const hook = calls.find((c) => c.url.startsWith("https://hooks.slack.test/"))!;
     expect(JSON.parse(hook.init?.body as string)).toEqual({ response_type: "in_channel", text: "✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)" });
-    expect(await ENV.SYMBOLS.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
+    expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
   });
 });
 
@@ -138,7 +138,7 @@ describe("slack adapter", () => {
   });
 
   it("acks, stores the PNG in R2, posts an image block, and serves the image", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const res = await worker.fetch(await slash({ text: "삼성전자 1m" }), ENV, ctx);

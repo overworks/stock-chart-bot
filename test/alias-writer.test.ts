@@ -9,7 +9,7 @@ it("recovers durable aliases after a failed KV write and a new instance", async 
   await runInDurableObject(stub, async (_, state) => {
     const get = vi.fn().mockResolvedValue([{ key: "기존", value: "AAPL" }]);
     const put = vi.fn().mockRejectedValue(new Error("KV unavailable"));
-    const bindings = { ...env, SYMBOLS: { get, put } } as unknown as Env;
+    const bindings = { ...env, KV: { get, put } } as unknown as Env;
     const writer = new AliasWriter(state, bindings);
     const response = await writer.fetch(new Request("https://aliases/mutate", {
       method: "POST", body: JSON.stringify({ key: "추가", value: "MSFT" }),

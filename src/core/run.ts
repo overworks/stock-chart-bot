@@ -7,7 +7,7 @@ import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { OutgoingMessage } from "./types";
 
 export interface CoreEnv {
-  SYMBOLS: KVNamespace;
+  KV: KVNamespace;
 }
 
 const DISPLAY_TZ = "Asia/Seoul";
@@ -17,7 +17,7 @@ export async function runChart(
   env: CoreEnv,
 ): Promise<OutgoingMessage> {
   const req = parseChartArgs(args);
-  let symbol = await resolveSymbol(req.ticker, env.SYMBOLS);
+  let symbol = await resolveSymbol(req.ticker, env.KV);
 
   let series: PriceSeries;
   try {
@@ -36,7 +36,7 @@ export async function runChart(
   if (rule) series = scaleSeries(series, rule.factor);
   const { bars, label, currency, previousClose, source, intraday } = series;
   const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
-  const name = (await symbolName(symbol, env.SYMBOLS)) ?? series.name;
+  const name = (await symbolName(symbol, env.KV)) ?? series.name;
   const title = buildTitle(symbol, name, rule?.label);
   const reference = req.range === "1d" && !req.from ? previousClose : undefined;
   const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source, intraday });

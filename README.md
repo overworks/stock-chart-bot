@@ -111,7 +111,7 @@ Discord Developer Portal에서 앱을 만들고 Application ID, Public Key, Bot 
 ```bash
 npm install                                # postinstall에서 wasm/resvg.wasm 복사
 npx wrangler login
-npx wrangler kv namespace create SYMBOLS   # 출력된 id를 wrangler.jsonc에 반영
+npx wrangler kv namespace create stock-chart-bot --binding KV   # 출력된 id를 wrangler.jsonc에 반영
 npx wrangler r2 bucket create stock-chart-bot-charts
 cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, SLACK_SIGNING_SECRET
 ```
@@ -127,7 +127,7 @@ npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
 npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
 npm run fetch:symbols                      # KRX 주식 + ETF/ETN + 업비트 + 수동 별칭 → scripts/symbols.json
-npm run seed:symbols                       # KV SYMBOLS 의 symbols:v1 키에 적재
+npm run seed:symbols                       # KV 의 symbols:v1 키에 적재
 ```
 
 배포하고 커맨드를 등록한다.

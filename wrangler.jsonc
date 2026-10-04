@@ -13,7 +13,7 @@
     "DISCORD_APPLICATION_ID": "1545454333120741386"
   },
   "kv_namespaces": [
-    { "binding": "SYMBOLS", "id": "536161eca4ca4abcbdf454cd8f252b36" }
+    { "binding": "KV", "id": "536161eca4ca4abcbdf454cd8f252b36" }
   ],
   "durable_objects": {
     "bindings": [{ "name": "ALIAS_WRITER", "class_name": "AliasWriter" }]

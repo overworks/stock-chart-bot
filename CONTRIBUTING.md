@@ -16,7 +16,7 @@
 
 ```bash
 npm install                                # postinstall에서 wasm/resvg.wasm 자동 복사
-npx wrangler kv namespace create SYMBOLS   # 출력된 id를 wrangler.jsonc에 반영
+npx wrangler kv namespace create stock-chart-bot --binding KV   # 출력된 id를 wrangler.jsonc에 반영
 npx wrangler r2 bucket create stock-chart-bot-charts
 cp .dev.vars.example .dev.vars             # 로컬 개발용 시크릿 채우기
 ```
@@ -86,7 +86,7 @@ PR 전에 다음은 반드시 통과해야 한다.
 
 ### 종목 검색
 
-종목 목록 전체(주식·ETF·ETN·업비트 코인 약 4,500개, 약 310KB)는 KV `SYMBOLS`의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
+종목 목록 전체(주식·ETF·ETN·업비트 코인 약 4,500개, 약 310KB)는 KV(바인딩 `KV`)의 단일 키 `symbols:v1`에 JSON 배열로 저장하고,
 워커는 이를 한 번 읽어 10분간 메모리에 캐시한다. 자동완성은 이 메모리에서 정확 일치 →
 접두 → 부분 문자열 순으로 찾는다(대소문자·공백 무시). KV `list`는 무료 플랜 한도가
 하루 1,000회라 사용하지 않는다. 결과가 부족하면서 입력이 ASCII이면

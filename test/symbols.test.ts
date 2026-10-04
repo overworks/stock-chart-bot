@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSymbolCache, resolveSymbol, searchSymbols, SYMBOLS_KEY } from "../src/core/symbols";
 import { yahoo } from "../src/core/providers/yahoo";
 
-const KV = (env as unknown as Env).SYMBOLS;
+const KV = (env as unknown as Env).KV;
 
 const yahooQuotes = {
   quotes: [

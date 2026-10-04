@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addAlias, listAliases, removeAlias, runAlias, searchAliases } from "../src/core/aliases";
 import { ALIASES_KEY, resetSymbolCache, resolveSymbol, searchSymbols, symbolName, SYMBOLS_KEY } from "../src/core/symbols";
 
-const KV = (env as unknown as Env).SYMBOLS;
+const KV = (env as unknown as Env).KV;
 const WRITER = (env as unknown as Env).ALIAS_WRITER;
 
 const series = {
@@ -128,12 +128,12 @@ describe("user aliases", () => {
 
   it("runAlias formats add/remove/list and autocompletes aliases", async () => {
     stub(() => ({ quotes: [] }));
-    expect(await runAlias({ action: "list" }, { SYMBOLS: KV, ALIAS_WRITER: WRITER })).toBe("등록된 별칭이 없습니다.");
-    expect(await runAlias({ action: "add", alias: "하닉", target: "SK하이닉스" }, { SYMBOLS: KV, ALIAS_WRITER: WRITER })).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
-    expect(await runAlias({ action: "list" }, { SYMBOLS: KV, ALIAS_WRITER: WRITER })).toBe("• 하닉 → SK하이닉스 (000660.KS)");
+    expect(await runAlias({ action: "list" }, { KV, ALIAS_WRITER: WRITER })).toBe("등록된 별칭이 없습니다.");
+    expect(await runAlias({ action: "add", alias: "하닉", target: "SK하이닉스" }, { KV, ALIAS_WRITER: WRITER })).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
+    expect(await runAlias({ action: "list" }, { KV, ALIAS_WRITER: WRITER })).toBe("• 하닉 → SK하이닉스 (000660.KS)");
     expect(await searchAliases("하", KV)).toEqual([{ name: "하닉 → SK하이닉스 (000660.KS)", value: "하닉" }]);
     expect(await searchAliases("zz", KV)).toEqual([]);
-    expect(await runAlias({ action: "remove", alias: "하닉" }, { SYMBOLS: KV, ALIAS_WRITER: WRITER })).toBe("🗑️ 별칭 삭제: 하닉 → 000660.KS");
-    await expect(runAlias({ action: "bogus" }, { SYMBOLS: KV, ALIAS_WRITER: WRITER })).rejects.toThrow("사용법");
+    expect(await runAlias({ action: "remove", alias: "하닉" }, { KV, ALIAS_WRITER: WRITER })).toBe("🗑️ 별칭 삭제: 하닉 → 000660.KS");
+    await expect(runAlias({ action: "bogus" }, { KV, ALIAS_WRITER: WRITER })).rejects.toThrow("사용법");
   });
 });

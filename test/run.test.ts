@@ -40,7 +40,7 @@ afterEach(() => {
 
 describe("runChart", () => {
   it("uses the KV alias directly", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const urls = stub(() => series);
     const msg = await runChart({ ticker: "삼성전자", range: "1m" }, ENV);
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/005930.KS"]);
@@ -51,7 +51,7 @@ describe("runChart", () => {
   });
 
   it("titles by name from Yahoo meta when the symbol is not in KV, and uses previous close for 1d", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([]));
     stub(() => ({
       chart: {
         result: [
@@ -68,7 +68,7 @@ describe("runChart", () => {
   });
 
   it("uses the first bar as reference outside 1d even if previous close exists", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "애플", value: "AAPL" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "애플", value: "AAPL" }]));
     stub(() => ({
       chart: {
         result: [
@@ -85,7 +85,7 @@ describe("runChart", () => {
   });
 
   it("scales JPY/KRW to 100 yen and says so in the title", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "엔/원", value: "JPYKRW=X" }, { key: "엔화", value: "JPYKRW=X" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "엔/원", value: "JPYKRW=X" }, { key: "엔화", value: "JPYKRW=X" }]));
     stub(() => ({
       chart: {
         result: [
@@ -122,7 +122,7 @@ describe("runChart", () => {
   });
 
   it("does not search when KV resolved the alias, even if the symbol is missing upstream", async () => {
-    await ENV.SYMBOLS.put(SYMBOLS_KEY, JSON.stringify([{ key: "LG", value: "003550.KS" }]));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "LG", value: "003550.KS" }]));
     const urls = stub(() => notFound);
     await expect(runChart({ ticker: "LG" }, ENV)).rejects.toThrow("찾지 못했습니다");
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/003550.KS"]);

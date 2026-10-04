@@ -18,7 +18,7 @@ export async function mutateAlias(namespace: DurableObjectNamespace, mutation: M
 export class AliasWriter {
   private pending: Promise<unknown> = Promise.resolve();
 
-  constructor(private state: DurableObjectState, private env: { SYMBOLS: KVNamespace }) {}
+  constructor(private state: DurableObjectState, private env: { KV: KVNamespace }) {}
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
     const result = this.pending.then(work);
@@ -31,7 +31,7 @@ export class AliasWriter {
     return this.enqueue(async () => {
       const storage = this.state.storage;
       const user = (await storage.get<SymbolEntry[]>(ALIASES_KEY))
-        ?? (await this.env.SYMBOLS.get<SymbolEntry[]>(ALIASES_KEY, "json")) ?? [];
+        ?? (await this.env.KV.get<SymbolEntry[]>(ALIASES_KEY, "json")) ?? [];
       const hit = user.find((entry) => entry.key === mutation.key);
       if (mutation.value === undefined && !hit) {
         return new Response(`'${mutation.key}' 별칭이 없습니다.`, { status: 404 });
@@ -66,7 +66,7 @@ export class AliasWriter {
     if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     const entries = (await storage.get<SymbolEntry[]>(ALIASES_KEY)) ?? [];
     await storage.put("nextWrite", Date.now() + 1100);
-    await this.env.SYMBOLS.put(ALIASES_KEY, JSON.stringify(entries));
+    await this.env.KV.put(ALIASES_KEY, JSON.stringify(entries));
     await storage.put("nextWrite", Date.now() + 1100);
     await storage.deleteAlarm();
   }
