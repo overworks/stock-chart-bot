@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
-import { getPrices } from "../src/core/market";
+import { configureKis, getPrices } from "../src/core/market";
 import { buildSvg } from "../src/core/chart";
 import { RANGE_CHOICES } from "../src/core/command";
 import { displayRule, scaleSeries } from "../src/core/display";
@@ -11,6 +11,7 @@ const cases = (process.argv[2] ?? "AAPL:1y,005930.KS:1m,AAPL:1d").split(",");
 await initWasm(readFileSync("wasm/resvg.wasm"));
 const fonts = ["fonts/NanumSquareR.ttf", "fonts/NanumSquareB.ttf"].map((f) => new Uint8Array(readFileSync(f)));
 mkdirSync(outDir, { recursive: true });
+configureKis(process.env.KIS_APP_KEY, process.env.KIS_APP_SECRET);
 
 for (const c of cases) {
   const [sym, range = "1d", style = "line"] = c.split(":");

@@ -82,7 +82,7 @@ src/
 │  ├─ command.ts       # 인자 검증/정규화
 │  ├─ symbols.ts       # 종목 검색 (KV 단일 키 + 메모리 캐시, Yahoo 검색 폴백)
 │  ├─ market.ts        # 시세 조회 파사드 (providers 순서대로 시도, 실패 시 다음 제공자)
-│  ├─ providers/       # 데이터 소스. upbit.ts (KRW-* 마켓), yahoo.ts (그 외)
+│  ├─ providers/       # 데이터 소스. upbit.ts (KRW-* 마켓), kis.ts (한국투자증권, .KS/.KQ), yahoo.ts (그 외)
 │  ├─ chart.ts         # SVG 생성
 │  ├─ render.ts        # resvg-wasm SVG→PNG (fonts/ 번들 폰트)
 │  ├─ store.ts         # R2 저장 + /charts/<key> 서빙 (URL만 받는 플랫폼용)
@@ -125,6 +125,8 @@ npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
 npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
+npx wrangler secret put KIS_APP_KEY               # 한국투자증권 Open API (없으면 국내 종목도 Yahoo 사용)
+npx wrangler secret put KIS_APP_SECRET
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
 npm run fetch:symbols                      # KRX 주식 + ETF/ETN + 업비트 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                       # KV 의 symbols:v1 키에 적재

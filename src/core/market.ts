@@ -1,13 +1,15 @@
+import { kis } from "./providers/kis";
 import { upbit } from "./providers/upbit";
 import { yahoo } from "./providers/yahoo";
 import type { ChartRequest } from "./types";
 import type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
+export { configureKis } from "./providers/kis";
 export { SymbolNotFoundError } from "./providers/types";
 export type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
 /** 심볼을 지원하는 제공자를 앞에서부터 시도하고 실패하면 다음으로 넘어간다. */
-export const PROVIDERS: readonly MarketProvider[] = [upbit, yahoo];
+export const PROVIDERS: readonly MarketProvider[] = [upbit, kis, yahoo];
 
 export async function getPrices(
   symbol: string,

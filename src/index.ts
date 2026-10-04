@@ -1,4 +1,5 @@
 export { AliasWriter } from "./core/alias-writer";
+import { configureKis } from "./core/market";
 import { serveChart } from "./core/store";
 import { handleDiscord } from "./platforms/discord";
 import { handleSlack } from "./platforms/slack";
@@ -6,6 +7,7 @@ import { handleSlack } from "./platforms/slack";
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(req.url);
+    configureKis(env.KIS_APP_KEY, env.KIS_APP_SECRET, env.KV);
 
     if (pathname === "/discord") return handleDiscord(req, env, ctx);
     if (pathname === "/slack") return handleSlack(req, env, ctx);

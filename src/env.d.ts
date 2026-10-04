@@ -14,6 +14,8 @@ interface Env {
   DISCORD_BOT_TOKEN: string;
   SLACK_SIGNING_SECRET: string;
   SLACK_ALIAS_ADMINS?: string;
+  KIS_APP_KEY?: string;
+  KIS_APP_SECRET?: string;
   KV: KVNamespace;
   ALIAS_WRITER: DurableObjectNamespace;
   CHARTS: R2Bucket;

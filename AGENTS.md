@@ -32,7 +32,7 @@ src/
 ├─ core/               # 플랫폼 의존성 없음
 │  ├─ command.ts       #   인자 검증/정규화
 │  ├─ market.ts        #   시세 조회 파사드 (supports 필터 후 PROVIDERS 순서대로 폴백)
-│  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, yahoo.ts: 그 외). 외부 API 호출은 여기에만
+│  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, kis.ts: .KS/.KQ, yahoo.ts: 그 외). 외부 API 호출은 여기에만
 │  ├─ chart.ts         #   SVG 생성
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
 │  ├─ aliases.ts       #   /alias add|remove|list (KV aliases:v1)
