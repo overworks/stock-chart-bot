@@ -21,8 +21,8 @@ function memoryKv() {
   return { kv, store, puts };
 }
 
-function provider(kv?: KVNamespace) {
-  return createKis(() => ({ appKey: "key", appSecret: "secret", kv }), () => NOW);
+function provider(kv?: KVNamespace, now = NOW) {
+  return createKis(() => ({ appKey: "key", appSecret: "secret", kv }), () => now);
 }
 
 type Handler = (url: URL, init: RequestInit) => { status?: number; body: unknown };
@@ -119,6 +119,7 @@ describe("kis provider", () => {
     const page = calls.find((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"))!;
     expect(page.url.searchParams.get("FID_INPUT_DATE_1")).toBe("20260904");
     expect(page.url.searchParams.get("FID_INPUT_HOUR_1")).toBe("100000");
+    expect(page.url.searchParams.get("FID_COND_MRKT_DIV_CODE")).toBe("UN");
     const at = (hm: string) => Date.parse(`2026-09-04T${hm}:00+09:00`) / 1000;
     expect(s.bars).toEqual([
       { t: at("09:00"), c: 102, o: 101, h: 103, l: 100, v: 2 },
@@ -126,6 +127,62 @@ describe("kis provider", () => {
     ]);
     expect(s.intraday).toBe(true);
     expect(s.previousClose).toBe(100);
+  });
+
+  it("shows today's pre-market before the daily row exists", async () => {
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 100), day("20260902", 90)]) };
+      const date = url.searchParams.get("FID_INPUT_DATE_1")!;
+      return { body: ok([minute(date, "081000", 103), minute(date, "080000", 101)]) };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-04T08:30:00+09:00")).getPrices("005930.KS", { ticker: "x", range: "1d" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages.map((c) => c.url.searchParams.get("FID_INPUT_DATE_1"))).toEqual(["20260904"]);
+    expect(pages[0].url.searchParams.get("FID_INPUT_HOUR_1")).toBe("083000");
+    expect(s.bars[0].t).toBe(Date.parse("2026-09-04T08:00:00+09:00") / 1000);
+    expect(s.previousClose).toBe(100);
+  });
+
+  it("uses the last session through the after-market on weekends", async () => {
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 105), day("20260903", 100)]) };
+      return { body: ok([minute("20260904", "195900", 106), minute("20260904", "160000", 105), minute("20260904", "090000", 101)]) };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-06T12:00:00+09:00")).getPrices("005930.KS", { ticker: "x", range: "1d" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages).toHaveLength(1);
+    expect(pages[0].url.searchParams.get("FID_INPUT_DATE_1")).toBe("20260904");
+    expect(pages[0].url.searchParams.get("FID_INPUT_HOUR_1")).toBe("200000");
+    expect(s.bars.at(-1)!.c).toBe(106);
+    expect(s.previousClose).toBe(100);
+  });
+
+  it("falls back to the KRX session when UN has no regular-hours bars", async () => {
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 105), day("20260903", 100)]) };
+      if (url.searchParams.get("FID_COND_MRKT_DIV_CODE") === "UN") return { body: ok([minute("20260904", "153000", 105)]) };
+      return { body: ok([minute("20260904", "153000", 105), minute("20260904", "090000", 101)]) };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-06T12:00:00+09:00")).getPrices("069500.KS", { ticker: "x", range: "1d" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages.map((c) => c.url.searchParams.get("FID_COND_MRKT_DIV_CODE"))).toEqual(["UN", "J"]);
+    expect(pages[1].url.searchParams.get("FID_INPUT_HOUR_1")).toBe("153000");
+    expect(s.bars).toHaveLength(2);
+  });
+
+  it("keeps 1w on the regular KRX session", async () => {
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 105), day("20260902", 100)]) };
+      const date = url.searchParams.get("FID_INPUT_DATE_1")!;
+      return { body: ok([minute(date, "100000", 104), minute(date, "090000", 101)]) };
+    });
+    await provider(undefined, Date.parse("2026-09-05T12:00:00+09:00")).getPrices("005930.KS", { ticker: "x", range: "1w" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages).toHaveLength(2);
+    for (const p of pages) {
+      expect(p.url.searchParams.get("FID_COND_MRKT_DIV_CODE")).toBe("J");
+      expect(p.url.searchParams.get("FID_INPUT_HOUR_1")).toBe("153000");
+    }
   });
 
   it("reports API errors and unknown symbols", async () => {

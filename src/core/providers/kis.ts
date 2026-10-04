@@ -10,9 +10,19 @@ const TOKEN_MARGIN = 3600;
 const DAILY_PAGE = 100;
 const MINUTE_PAGE = 120;
 const MAX_DAILY_PAGES = 20;
-const MAX_MINUTE_PAGES = 5;
+const MAX_MINUTE_PAGES = 7;
 const RATE_LIMITED = "EGW00201";
 const KST = 9 * 3600;
+
+interface Session {
+  market: string;
+  open: string;
+  close: string;
+}
+
+const REGULAR: Session = { market: "J", open: "090000", close: "153000" };
+/** KRX+NXT 통합. NXT 프리마켓(08:00~)부터 애프터마켓(~20:00)까지. */
+const EXTENDED: Session = { market: "UN", open: "080000", close: "200000" };
 
 export interface KisConfig {
   appKey: string;
@@ -116,14 +126,14 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     return { bars, name };
   }
 
-  async function minutes(cfg: KisConfig, code: string, date: string): Promise<ChartBar[]> {
+  async function minutes(cfg: KisConfig, code: string, date: string, session: Session): Promise<ChartBar[]> {
     const today = ymd(Math.floor(now() / 1000)) === date;
-    let hour = today ? hms(Math.floor(now() / 1000)) : "153000";
-    if (hour > "153000") hour = "153000";
+    let hour = today ? hms(Math.floor(now() / 1000)) : session.close;
+    if (hour > session.close) hour = session.close;
     const rows: Row[] = [];
     for (let page = 0; page < MAX_MINUTE_PAGES; page++) {
       const body = await call(cfg, MINUTE, "FHKST03010230", {
-        FID_COND_MRKT_DIV_CODE: "J",
+        FID_COND_MRKT_DIV_CODE: session.market,
         FID_INPUT_ISCD: code,
         FID_INPUT_HOUR_1: hour,
         FID_INPUT_DATE_1: date,
@@ -134,10 +144,17 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       const got = all.filter((r) => r.stck_bsop_date === date && /^\d{6}$/.test(r.stck_cntg_hour ?? ""));
       rows.push(...got);
       const earliest = got.map((r) => r.stck_cntg_hour!).sort()[0];
-      if (all.length < MINUTE_PAGE || got.length < all.length || !earliest || earliest <= "090000") break;
+      if (all.length < MINUTE_PAGE || got.length < all.length || !earliest || earliest <= session.open) break;
       hour = earliest;
     }
     return dedupe(rows.map((r) => toBar(r, dateSec(date) + clockSec(r.stck_cntg_hour!), r.stck_prpr, r.cntg_vol)));
+  }
+
+  // ETF·ETN은 NXT와 애프터마켓 대상이 아니라 UN으로는 종가 봉 하나만 온다.
+  async function extended(cfg: KisConfig, code: string, date: string): Promise<ChartBar[]> {
+    const bars = await minutes(cfg, code, date, EXTENDED);
+    if (bars.some((b) => hms(b.t) < "150000")) return bars;
+    return minutes(cfg, code, date, REGULAR);
   }
 
   const provider: MarketProvider = {
@@ -172,11 +189,21 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
           intraday = true;
           const recent = await daily(cfg, code, "D", ymd(Math.floor(now() / 1000) - 21 * 86_400), today);
           name = recent.name;
-          const days = recent.bars.slice(-plan.sessions);
-          if (!days.length) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
-          if (plan.sessions === 1) previousClose = recent.bars.at(-2)?.c;
-          bars = [];
-          for (const d of days) bars.push(...bucket(await minutes(cfg, code, ymd(d.t)), plan.minutes * 60));
+          const last = recent.bars.at(-1);
+          if (!last) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
+          if (plan.sessions === 1) {
+            // 장 시작 전 프리마켓이면 일봉에 오늘이 아직 없을 수 있다.
+            let date = ymd(last.t);
+            let raw: ChartBar[] = [];
+            if (date < today && tradingHours(Math.floor(now() / 1000))) raw = await extended(cfg, code, today);
+            if (raw.length) date = today;
+            else raw = await extended(cfg, code, date);
+            previousClose = recent.bars.filter((b) => b.t < dateSec(date)).at(-1)?.c;
+            bars = bucket(raw, plan.minutes * 60);
+          } else {
+            bars = [];
+            for (const d of recent.bars.slice(-plan.sessions)) bars.push(...bucket(await minutes(cfg, code, ymd(d.t), REGULAR), plan.minutes * 60));
+          }
         }
       }
       if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
@@ -265,6 +292,11 @@ function clockSec(h: string): number {
 
 function ymd(sec: number): string {
   return new Date((sec + KST) * 1000).toISOString().slice(0, 10).replaceAll("-", "");
+}
+
+function tradingHours(sec: number): boolean {
+  const weekday = new Date((sec + KST) * 1000).getUTCDay();
+  return weekday >= 1 && weekday <= 5 && hms(sec) >= EXTENDED.open;
 }
 
 function hms(sec: number): string {
