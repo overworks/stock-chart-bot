@@ -46,6 +46,7 @@ src/
 
 ## 반드시 지킬 규칙
 
+- 장기 작업은 시작 전에 계획을 먼저 세운다.
 - `src/core/**`에서 플랫폼 SDK/Discord 타입을 import 하지 않는다. 플랫폼 코드는
   `src/platforms/**`에만 둔다.
 - 새 플랫폼은 어댑터 파일 + `src/index.ts` 라우트 추가로 끝내고 core는 건드리지 않는다.
