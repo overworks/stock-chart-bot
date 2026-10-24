@@ -5,7 +5,7 @@ import { storeChart } from "../core/store";
 
 const TOLERANCE_SEC = 5 * 60;
 const USAGE =
-  "사용법: `/chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]` 또는 `/chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]` (종목을 먼저 씁니다)";
+  "사용법: `/stock-chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]` 또는 `/stock-chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]` (종목을 먼저 씁니다)";
 
 export async function handleSlack(
   req: Request,

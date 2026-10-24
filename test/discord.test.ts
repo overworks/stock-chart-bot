@@ -81,7 +81,7 @@ describe("discord adapter", () => {
     expect(await res.json()).toEqual({ type: 1 });
   });
 
-  it("autocompletes symbols from KV by prefix", async () => {
+  it.each(["stock-chart", "chart"])("autocompletes symbols from KV by prefix for /%s", async (name) => {
     await ENV.KV.put(
       SYMBOLS_KEY,
       JSON.stringify([
@@ -92,7 +92,7 @@ describe("discord adapter", () => {
     );
     const req = await signed({
       type: 4,
-      data: { name: "chart", options: [{ name: "ticker", value: "삼성", focused: true }] },
+      data: { name, options: [{ name: "ticker", value: "삼성", focused: true }] },
     });
     const res = await worker.fetch(req, ENV, createExecutionContext());
     const body = (await res.json()) as any;
@@ -100,23 +100,23 @@ describe("discord adapter", () => {
     expect(body.data.choices.map((c: any) => c.value)).toEqual(["005930.KS", "005935.KS"]);
   });
 
-  it("keeps KV autocomplete hits when the remote search returns garbage", async () => {
+  it.each(["stock-chart", "chart"])("keeps /%s KV autocomplete hits when the remote search returns garbage", async (name) => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SAMSUNG", value: "005930.KS" }]));
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>consent</html>", { status: 200 })));
-    const req = await signed({ type: 4, data: { name: "chart", options: [{ name: "ticker", value: "sa", focused: true }] } });
+    const req = await signed({ type: 4, data: { name, options: [{ name: "ticker", value: "sa", focused: true }] } });
     const res = await worker.fetch(req, ENV, createExecutionContext());
     expect(res.status).toBe(200);
     expect(((await res.json()) as any).data.choices.map((c: any) => c.value)).toEqual(["005930.KS"]);
   });
 
-  it("defers /chart, resolves the alias, renders a PNG and patches the original message", async () => {
+  it.each(["stock-chart", "chart"])("defers /%s, resolves the alias, renders a PNG and patches the original message", async (name) => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const req = await signed({
       type: 2,
       token: "interaction-token",
-      data: { name: "chart", options: [{ name: "ticker", value: "삼성전자" }, { name: "range", value: "1m" }] },
+      data: { name, options: [{ name: "ticker", value: "삼성전자" }, { name: "range", value: "1m" }] },
     });
     const res = await worker.fetch(req, ENV, ctx);
     expect(await res.json()).toEqual({ type: 5 });
@@ -141,10 +141,10 @@ describe("discord adapter", () => {
     expect(bytes.length).toBeGreaterThan(5000);
   });
 
-  it("reports upstream failures back to the user in Korean", async () => {
+  it.each(["stock-chart", "chart"])("reports /%s upstream failures back to the user in Korean", async (name) => {
     const calls = stubOutbound(500);
     const ctx = createExecutionContext();
-    const req = await signed({ type: 2, token: "tok", data: { name: "chart", options: [{ name: "ticker", value: "AAPL" }] } });
+    const req = await signed({ type: 2, token: "tok", data: { name, options: [{ name: "ticker", value: "AAPL" }] } });
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
@@ -213,10 +213,10 @@ describe("discord adapter", () => {
     expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([]);
   });
 
-  it("reports validation errors without calling upstream", async () => {
+  it.each(["stock-chart", "chart"])("reports /%s validation errors without calling upstream", async (name) => {
     const calls = stubOutbound();
     const ctx = createExecutionContext();
-    const req = await signed({ type: 2, token: "tok", data: { name: "chart", options: [{ name: "ticker", value: "AAPL" }, { name: "from", value: "2024-01-01" }] } });
+    const req = await signed({ type: 2, token: "tok", data: { name, options: [{ name: "ticker", value: "AAPL" }, { name: "from", value: "2024-01-01" }] } });
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
     expect(calls.some((c) => c.url.includes("yahoo"))).toBe(false);

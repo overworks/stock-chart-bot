@@ -19,7 +19,7 @@ async function sign(body: string, ts: string, secret = SECRET): Promise<string> 
 }
 
 async function slash(fields: Record<string, string>, opts: { ts?: string; secret?: string } = {}) {
-  const body = new URLSearchParams({ command: "/chart", response_url: "https://hooks.slack.test/resp", user_id: "U_USER", ...fields }).toString();
+  const body = new URLSearchParams({ command: "/stock-chart", response_url: "https://hooks.slack.test/resp", user_id: "U_USER", ...fields }).toString();
   const ts = opts.ts ?? String(Math.floor(Date.now() / 1000));
   return new Request("https://bot.test/slack", {
     method: "POST",
@@ -145,18 +145,18 @@ describe("slack adapter", () => {
     expect(res.status).toBe(401);
   });
 
-  it("replies with usage when no ticker is given", async () => {
-    const res = await worker.fetch(await slash({ text: "" }), ENV, createExecutionContext());
+  it.each(["/stock-chart", "/chart"])("replies with usage when no ticker is given for %s", async (command) => {
+    const res = await worker.fetch(await slash({ command, text: "" }), ENV, createExecutionContext());
     const body = (await res.json()) as any;
     expect(body.response_type).toBe("ephemeral");
-    expect(body.text).toContain("사용법");
+    expect(body.text).toContain("/stock-chart <종목>");
   });
 
-  it("acks, stores the PNG in R2, posts an image block, and serves the image", async () => {
+  it.each(["/stock-chart", "/chart"])("acks %s, stores the PNG in R2, posts an image block, and serves the image", async (command) => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
-    const res = await worker.fetch(await slash({ text: "삼성전자 1m" }), ENV, ctx);
+    const res = await worker.fetch(await slash({ command, text: "삼성전자 1m" }), ENV, ctx);
     expect(res.status).toBe(200);
     expect(((await res.json()) as any).response_type).toBe("ephemeral");
     await waitOnExecutionContext(ctx);
@@ -176,10 +176,10 @@ describe("slack adapter", () => {
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
-  it("reports failures as an ephemeral message", async () => {
+  it.each(["/stock-chart", "/chart"])("reports %s failures as an ephemeral message", async (command) => {
     const calls = stubOutbound(500);
     const ctx = createExecutionContext();
-    await worker.fetch(await slash({ text: "AAPL" }), ENV, ctx);
+    await worker.fetch(await slash({ command, text: "AAPL" }), ENV, ctx);
     await waitOnExecutionContext(ctx);
     const hook = calls.find((c) => c.url.startsWith("https://hooks.slack.test/"))!;
     const payload = JSON.parse(hook.init?.body as string);

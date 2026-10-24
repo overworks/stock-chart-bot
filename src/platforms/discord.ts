@@ -46,7 +46,7 @@ export async function handleDiscord(
   }
 
   // Slash command
-  if (interaction.type === 2 && name === "chart") {
+  if (interaction.type === 2 && (name === "stock-chart" || name === "chart")) {
     ctx.waitUntil(serveChart(interaction, args, env));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }

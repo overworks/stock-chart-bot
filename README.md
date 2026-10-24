@@ -8,16 +8,18 @@ Discord/Slack 슬래시 커맨드로 종목 주가 차트를 그려 주는 봇. 
 Discord:
 
 ```
-/chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>]
-/chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>]
+/stock-chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>]
+/stock-chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>]
 ```
 
 Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 
 ```
-/chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]
-/chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]
+/stock-chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]
+/stock-chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]
 ```
+
+기존 `/chart`도 호환성을 위해 같은 옵션과 동작으로 지원한다. 새 사용법은 `/stock-chart`를 기준으로 한다.
 
 - `range`를 생략하면 `1d`. `from`/`to`는 둘 다 넣어야 하며 `range`보다 우선한다.
 - `style`을 생략하면 종가 라인. `candle`은 봉차트. 둘 다 하단에 거래량이 붙는다.
@@ -144,8 +146,12 @@ DISCORD_APPLICATION_ID=<앱 ID> npm run register            # 글로벌 (전파 
 DISCORD_GUILD_ID=<서버 ID> DISCORD_APPLICATION_ID=<앱 ID> npm run register   # 특정 서버, 즉시
 ```
 
+`npm run register`는 `.dev.vars`와 `wrangler.jsonc`를 자동으로 읽지 않는다.
+위처럼 `.dev.vars`의 `DISCORD_BOT_TOKEN`을 환경변수로 불러오고,
+`wrangler.jsonc`에 설정한 앱의 `DISCORD_APPLICATION_ID`를 지정해야 한다.
+
 기존 설치도 Worker를 배포한 뒤 기존과 같은 등록 범위(글로벌 또는 특정 서버)로
-`npm run register`를 다시 실행한다. `/chart`, `/stock-alias`, 호환용 `/alias`가 함께 등록된다.
+`npm run register`를 다시 실행한다. `/stock-chart`, `/stock-alias`, 호환용 `/chart`, `/alias`가 함께 등록된다.
 
 마지막으로 Developer Portal → General Information → **Interactions Endpoint URL**에
 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, OAuth2 URL
@@ -156,8 +162,9 @@ Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 �
 [api.slack.com/apps](https://api.slack.com/apps)에서 앱을 만들고:
 
 1. Basic Information → **Signing Secret**을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
-2. Slash Commands → `/chart` 생성, Request URL은
+2. Slash Commands → `/stock-chart` 생성, Request URL은
    `https://stock-chart-bot.<subdomain>.workers.dev/slack`.
+   기존 `/chart`가 있으면 같은 Request URL로 유지한다.
 3. (선택) Slash Commands → `/stock-alias`도 같은 Request URL로 만들고, 별칭을 바꿀 사용자의
    Slack 멤버 ID를 쉼표로 이어 `SLACK_ALIAS_ADMINS` 시크릿에 넣는다. 없으면 `/stock-alias list`만 된다.
    기존 `/alias`가 있으면 같은 Request URL로 유지해 이전 명령도 계속 사용할 수 있게 한다.

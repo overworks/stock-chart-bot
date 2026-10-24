@@ -115,10 +115,12 @@ ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재�
 
 Discord `/stock-alias`와 호환용 `/alias`는 같은 옵션으로 기본 권한 제한 없이 등록하고,
 추가·삭제 권한은 어댑터에서 검사한다. 두 명령은 같은 별칭 처리와 저장소를 사용한다.
+Discord `/stock-chart`와 호환용 `/chart`도 같은 옵션과 차트 처리를 사용한다.
 기존 설치에 새 명령을 추가하려면 배포 후 기존과 같은 등록 범위로 `npm run register`를 다시 실행한다.
+등록 시 `/stock-chart`, `/chart`, `/stock-alias`, `/alias` 네 명령을 함께 유지한다.
 서버에서 별도로 설정한 커맨드 권한은 서버 관리자가 조정해야 한다.
-Slack은 앱 설정에 `/stock-alias`를 추가하고 기존 `/alias`도 같은 `/slack` Request URL로 유지한다.
-`/alias`는 추후 제거할 예정이므로 안내 문구와 새 사용 예시는 `/stock-alias`를 사용한다.
+Slack은 앱 설정에 `/stock-chart`와 `/stock-alias`를 추가하고 기존 `/chart`, `/alias`도 같은 `/slack` Request URL로 유지한다.
+안내 문구와 새 사용 예시는 `/stock-chart`와 `/stock-alias`를 사용한다. `/alias`는 추후 제거할 예정이다.
 
 업비트 직접 날짜 조회는 시작일·종료일을 포함해 최대 2,000일이다. 더 긴 기간은 `5y` 또는
 `max`를 사용한다. 초과 요청은 데이터를 자르지 않고 한국어 오류로 안내한다.

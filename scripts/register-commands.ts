@@ -37,46 +37,49 @@ const aliasCommand = {
   ],
 };
 
+const chartCommand = {
+  name: "stock-chart",
+  description: "종목 주가 차트를 그립니다",
+  options: [
+    {
+      type: 3,
+      name: "ticker",
+      description: "티커 또는 종목명 (예: 삼성전자, AAPL)",
+      required: true,
+      autocomplete: true,
+    },
+    {
+      type: 3,
+      name: "range",
+      description: "기간 (미입력 시 1d)",
+      required: false,
+      choices: RANGE_CHOICES.map((r) => ({ name: r, value: r })),
+    },
+    {
+      type: 3,
+      name: "style",
+      description: "차트 종류 (미입력 시 line)",
+      required: false,
+      choices: STYLE_CHOICES.map((s) => ({ name: s, value: s })),
+    },
+    {
+      type: 3,
+      name: "from",
+      description: "시작일 YYYY-MM-DD (range 대신 사용)",
+      required: false,
+    },
+    {
+      type: 3,
+      name: "to",
+      description: "종료일 YYYY-MM-DD",
+      required: false,
+    },
+  ],
+};
+
 const commands = [
-  {
-    name: "chart",
-    description: "종목 주가 차트를 그립니다",
-    options: [
-      {
-        type: 3,
-        name: "ticker",
-        description: "티커 또는 종목명 (예: 삼성전자, AAPL)",
-        required: true,
-        autocomplete: true,
-      },
-      {
-        type: 3,
-        name: "range",
-        description: "기간 (미입력 시 1d)",
-        required: false,
-        choices: RANGE_CHOICES.map((r) => ({ name: r, value: r })),
-      },
-      {
-        type: 3,
-        name: "style",
-        description: "차트 종류 (미입력 시 line)",
-        required: false,
-        choices: STYLE_CHOICES.map((s) => ({ name: s, value: s })),
-      },
-      {
-        type: 3,
-        name: "from",
-        description: "시작일 YYYY-MM-DD (range 대신 사용)",
-        required: false,
-      },
-      {
-        type: 3,
-        name: "to",
-        description: "종료일 YYYY-MM-DD",
-        required: false,
-      },
-    ],
-  },
+  chartCommand,
+  { ...chartCommand, name: "chart", description: "종목 주가 차트를 그립니다 (/stock-chart 사용 권장)" },
   aliasCommand,
   { ...aliasCommand, name: "alias", description: "종목 별칭을 관리합니다 (/stock-alias 사용 권장)" },
 ];
