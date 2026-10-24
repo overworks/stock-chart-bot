@@ -32,13 +32,14 @@ export async function handleDiscord(
   if (interaction.type === 1) return json({ type: 1 });
 
   const { name, action, args } = parseCommand(interaction.data);
+  const isAliasCommand = name === "stock-alias" || name === "alias";
 
   // Autocomplete
   if (interaction.type === 4) {
     const focused = focusedOption(interaction.data);
     const query = String(focused?.value ?? "");
     const choices =
-      name === "alias" && focused?.name === "alias"
+      isAliasCommand && focused?.name === "alias"
         ? await searchAliases(query, env.KV)
         : await searchSymbols(query, env.KV);
     return json({ type: 8, data: { choices } });
@@ -50,7 +51,7 @@ export async function handleDiscord(
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }
 
-  if (interaction.type === 2 && name === "alias") {
+  if (interaction.type === 2 && isAliasCommand) {
     if (action !== "list" && !canManage(interaction)) {
       return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }

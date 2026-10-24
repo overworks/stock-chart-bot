@@ -23,7 +23,8 @@ export async function handleSlack(
 
   const form = new URLSearchParams(body);
   const responseUrl = form.get("response_url") ?? "";
-  if (form.get("command") === "/alias") return handleAlias(form, responseUrl, env, ctx);
+  const command = form.get("command");
+  if (command === "/stock-alias" || command === "/alias") return handleAlias(form, responseUrl, env, ctx);
 
   const args = parseText(form.get("text") ?? "");
   if (!args.ticker || !responseUrl) return ephemeral(USAGE);

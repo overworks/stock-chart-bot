@@ -30,10 +30,13 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 별칭 관리 (Discord는 서버 관리 권한, Slack은 `SLACK_ALIAS_ADMINS`에 등록된 사용자만 변경 가능):
 
 ```
-/alias add <별칭> <종목명|심볼>     예: /alias add 삼전 삼성전자
-/alias remove <별칭>
-/alias list
+/stock-alias add <별칭> <종목명|심볼>     예: /stock-alias add 내삼전 삼성전자
+/stock-alias remove <별칭>
+/stock-alias list
 ```
+
+기존 `/alias add|remove|list`도 호환성을 위해 당분간 지원하며, 추후 제거할 예정이다.
+두 명령은 같은 별칭 데이터와 권한을 사용한다. 새 사용법은 `/stock-alias`를 기준으로 한다.
 
 ### 종목 입력
 
@@ -68,7 +71,7 @@ KRX 약칭과 해외 티커가 겹치면(`GS`, `DB`, `SK`) 자동완성에서 �
 
 별칭을 추가하는 방법은 둘이다.
 
-- 채팅에서 `/alias add 삼전 삼성전자`. 종목은 이름·심볼 어느 쪽이든 되고, 이름은 검색 첫
+- 채팅에서 `/stock-alias add 내삼전 삼성전자`. 종목은 이름·심볼 어느 쪽이든 되고, 이름은 검색 첫
   결과로 확정해 응답에 보여 준다. KV의 `aliases:v1`에 저장되며 주간 갱신에 영향받지 않는다.
 - 저장소의 `scripts/symbols.manual.json`을 편집해 push. 파일이 바뀌면 `refresh-symbols`
   워크플로가 자동으로 돌아 KV에 반영한다. 정식명은 따로 적을 필요 없다.
@@ -124,7 +127,7 @@ cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOK
 npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack을 쓸 때만
-npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 /alias 변경을 허용할 사용자 ID (쉼표 구분)
+npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack에서 별칭 변경을 허용할 사용자 ID (쉼표 구분)
 npx wrangler secret put KIS_APP_KEY               # 한국투자증권 Open API (없으면 국내 종목도 Yahoo 사용)
 npx wrangler secret put KIS_APP_SECRET
 npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
@@ -141,6 +144,9 @@ DISCORD_APPLICATION_ID=<앱 ID> npm run register            # 글로벌 (전파 
 DISCORD_GUILD_ID=<서버 ID> DISCORD_APPLICATION_ID=<앱 ID> npm run register   # 특정 서버, 즉시
 ```
 
+기존 설치도 Worker를 배포한 뒤 기존과 같은 등록 범위(글로벌 또는 특정 서버)로
+`npm run register`를 다시 실행한다. `/chart`, `/stock-alias`, 호환용 `/alias`가 함께 등록된다.
+
 마지막으로 Developer Portal → General Information → **Interactions Endpoint URL**에
 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, OAuth2 URL
 Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 만들어 서버에 추가한다.
@@ -152,8 +158,9 @@ Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 �
 1. Basic Information → **Signing Secret**을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
 2. Slash Commands → `/chart` 생성, Request URL은
    `https://stock-chart-bot.<subdomain>.workers.dev/slack`.
-3. (선택) Slash Commands → `/alias`도 같은 Request URL로 만들고, 별칭을 바꿀 사용자의
-   Slack 멤버 ID를 쉼표로 이어 `SLACK_ALIAS_ADMINS` 시크릿에 넣는다. 없으면 `/alias list`만 된다.
+3. (선택) Slash Commands → `/stock-alias`도 같은 Request URL로 만들고, 별칭을 바꿀 사용자의
+   Slack 멤버 ID를 쉼표로 이어 `SLACK_ALIAS_ADMINS` 시크릿에 넣는다. 없으면 `/stock-alias list`만 된다.
+   기존 `/alias`가 있으면 같은 Request URL로 유지해 이전 명령도 계속 사용할 수 있게 한다.
 4. 워크스페이스에 설치한다. 봇 토큰이나 추가 스코프는 필요 없다. 응답은 `response_url`로
    보내고, 이미지는 R2에 저장한 뒤 Worker의 `/charts/<key>` URL로 노출한다(7일 후 만료).
 

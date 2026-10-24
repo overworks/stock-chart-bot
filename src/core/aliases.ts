@@ -22,7 +22,7 @@ const MAX_ALIAS_LEN = 40;
 const LIST_LIMIT = 50;
 
 export const ALIAS_USAGE =
-  "사용법: `/alias add <별칭> <종목명|심볼>`, `/alias remove <별칭>`, `/alias list`";
+  "사용법: `/stock-alias add <별칭> <종목명|심볼>`, `/stock-alias remove <별칭>`, `/stock-alias list`";
 
 export async function listAliases(kv: KVNamespace): Promise<SymbolEntry[]> {
   return (await kv.get<SymbolEntry[]>(ALIASES_KEY, "json")) ?? [];
@@ -115,7 +115,7 @@ export async function runAlias(args: AliasArgs, env: { KV: KVNamespace; ALIAS_WR
   }
 }
 
-/** `/alias remove` 자동완성용 */
+/** `/stock-alias remove` 자동완성용 */
 export async function searchAliases(query: string, kv: KVNamespace): Promise<{ name: string; value: string }[]> {
   const q = query.trim().toLowerCase();
   const user = await listAliases(kv);

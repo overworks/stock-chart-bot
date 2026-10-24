@@ -35,7 +35,7 @@ src/
 │  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, kis.ts: .KS/.KQ, yahoo.ts: 그 외). 외부 API 호출은 여기에만
 │  ├─ chart.ts         #   SVG 생성
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키, 메모리 캐시) 검색 + Yahoo search 폴백
-│  ├─ aliases.ts       #   /alias add|remove|list (KV aliases:v1)
+│  ├─ aliases.ts       #   /stock-alias add|remove|list (/alias 호환, KV aliases:v1)
 │  ├─ render.ts        #   resvg-wasm SVG→PNG (fonts/ 번들 폰트 사용)
 │  ├─ store.ts         #   R2 저장/서빙 (URL 전용 플랫폼)
 │  └─ run.ts           #   오케스트레이션 (어댑터가 호출)
@@ -61,7 +61,7 @@ src/
 - `wasm/resvg.wasm`은 생성물이라 커밋하지 않는다. `fonts/*.ttf`는 서브셋 산출물이며 커밋한다.
 - 종목 별칭: `scripts/symbols.manual.json`(수동)과 KIND 상장법인·네이버 ETF/ETN·업비트 원화 마켓 목록을 합쳐 `scripts/symbols.json`을 만든다. 심볼당 정식명은 하나(KRX 회사명 우선, 없으면 수동 첫 항목)이고 나머지는 `alias: true`로 표시된다. 별칭은 검색·해석에만 쓰고 자동완성 표시명과 차트 제목은 정식명을 쓴다. `symbols.json`은 직접 편집하지 않는다. 실행 시 별칭은 정확 일치만 적용하고, Yahoo 심볼 형식 입력은 매핑하지 않는다. 미국 티커와 겹치는 짧은 영문 별칭(`USD`, `ETH` 등)은 넣지 않는다.
 - 종목 목록은 KV(바인딩 `KV`)의 단일 키 `symbols:v1`, 채팅으로 추가한 별칭은 `aliases:v1`에 JSON으로 저장한다. `loadSymbols`가 둘을 합친다. 자동완성에서 KV `list`를 쓰지 않는다(무료 플랜 list 한도 1,000회/일).
-- `/alias` 변경 권한: Discord는 `member.permissions`의 ADMINISTRATOR/MANAGE_GUILD, Slack은 `SLACK_ALIAS_ADMINS`(쉼표 구분 사용자 ID). `list`는 누구나.
+- `/stock-alias`(호환용 `/alias` 포함) 변경 권한: Discord는 `member.permissions`의 ADMINISTRATOR/MANAGE_GUILD, Slack은 `SLACK_ALIAS_ADMINS`(쉼표 구분 사용자 ID). `list`는 누구나. 두 명령은 같은 데이터와 처리를 공유하며, 안내는 `/stock-alias`를 기준으로 한다.
 - 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 workerd 안에서 실행한다. 외부 fetch는 `vi.stubGlobal("fetch", ...)`로 막는다.
 - 사용자 노출 메시지는 한국어. 2 spaces. 주석은 최소화.
 

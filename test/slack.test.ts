@@ -87,29 +87,44 @@ describe("parseAliasText", () => {
   });
 });
 
-describe("slack /alias", () => {
-  it("shows usage, lets anyone list, and blocks non-admins from changes", async () => {
+describe("slack alias commands", () => {
+  it.each(["/stock-alias", "/alias"])("shows usage, lets anyone list, and blocks non-admins from changes via %s", async (command) => {
     await ENV.KV.delete(ALIASES_KEY);
-    const usage = (await (await worker.fetch(await slash({ command: "/alias", text: "add" }), ENV, createExecutionContext())).json()) as any;
-    expect(usage.text).toContain("사용법");
-    const list = (await (await worker.fetch(await slash({ command: "/alias", text: "list" }), ENV, createExecutionContext())).json()) as any;
+    const calls = stubOutbound();
+    const usage = (await (await worker.fetch(await slash({ command, text: "add" }), ENV, createExecutionContext())).json()) as any;
+    expect(usage.text).toContain("/stock-alias add");
+    const list = (await (await worker.fetch(await slash({ command, text: "list" }), ENV, createExecutionContext())).json()) as any;
     expect(list).toEqual({ response_type: "ephemeral", text: "등록된 별칭이 없습니다." });
-    const denied = (await (await worker.fetch(await slash({ command: "/alias", text: "add 하닉 SK하이닉스" }), ENV, createExecutionContext())).json()) as any;
-    expect(denied.text).toContain("권한");
+    for (const text of ["add 하닉 SK하이닉스", "remove 하닉"]) {
+      const denied = (await (await worker.fetch(await slash({ command, text }), ENV, createExecutionContext())).json()) as any;
+      expect(denied.text).toContain("권한");
+    }
+    expect(calls).toHaveLength(0);
   });
 
-  it("lets admins add aliases and posts the result in channel", async () => {
+  it.each([["/stock-alias", "/alias"], ["/alias", "/stock-alias"]])("adds with %s, then lists and removes with %s", async (command, otherCommand) => {
     await ENV.KV.delete(ALIASES_KEY);
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
     const calls = stubOutbound();
     const ctx = createExecutionContext();
-    const res = await worker.fetch(await slash({ command: "/alias", text: "add 하닉 SK하이닉스", user_id: "U_OTHER" }), ENV, ctx);
+    const res = await worker.fetch(await slash({ command, text: "add 하닉 SK하이닉스", user_id: "U_OTHER" }), ENV, ctx);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("");
     await waitOnExecutionContext(ctx);
     const hook = calls.find((c) => c.url.startsWith("https://hooks.slack.test/"))!;
     expect(JSON.parse(hook.init?.body as string)).toEqual({ response_type: "in_channel", text: "✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)" });
     expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
+
+    const list = await worker.fetch(await slash({ command: otherCommand, text: "list" }), ENV, createExecutionContext());
+    expect(await list.json()).toEqual({ response_type: "ephemeral", text: "• 하닉 → SK하이닉스 (000660.KS)" });
+
+    const removeCtx = createExecutionContext();
+    const removed = await worker.fetch(await slash({ command: otherCommand, text: "remove 하닉", user_id: "U_OTHER" }), ENV, removeCtx);
+    expect(removed.status).toBe(200);
+    expect(await removed.text()).toBe("");
+    await waitOnExecutionContext(removeCtx);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string)).toEqual({ response_type: "in_channel", text: "🗑️ 별칭 삭제: 하닉 → 000660.KS" });
+    expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([]);
   });
 });
 

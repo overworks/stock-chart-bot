@@ -104,7 +104,7 @@ ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재�
 
 항목은 `{ key, value, alias? }`다. 심볼당 정식명은 하나이고(`alias`가 없는 항목), 별칭은
 검색·`resolveSymbol`에는 쓰이지만 자동완성 표시명과 차트 제목은 `byValue`의 정식명을 쓴다.
-채팅 `/alias`로 추가한 별칭은 KV `aliases:v1`에 따로 저장되어 `loadSymbols`가 시드 목록 뒤에
+채팅 `/stock-alias`(호환용 `/alias` 포함)로 추가한 별칭은 KV `aliases:v1`에 따로 저장되어 `loadSymbols`가 시드 목록 뒤에
 합치며, 주간 `symbols:v1` 갱신에 덮이지 않는다. 쓰기는 별칭 하나당 KV put 1회다.
 
 별칭 변경은 `ALIAS_WRITER`의 단일 Durable Object가 직렬화한다. 첫 변경 시 기존 KV 별칭을
@@ -113,9 +113,12 @@ ASCII 입력이 시세 조회에 실패하면 search 첫 결과로 한 번 재�
 재반영한다. KV 전파와 10분 메모리 캐시 때문에 다른 인스턴스의 검색 반영은 늦을 수 있다.
 `wrangler.jsonc`에 SQLite Durable Object 바인딩과 `v1` migration이 포함돼 있다.
 
-Discord `/alias`는 기본 권한 제한 없이 등록하고, 추가·삭제 권한은 어댑터에서 검사한다.
-기존 등록의 조회 권한을 해제하려면 배포와 함께 `npm run register`를 다시 실행한다.
+Discord `/stock-alias`와 호환용 `/alias`는 같은 옵션으로 기본 권한 제한 없이 등록하고,
+추가·삭제 권한은 어댑터에서 검사한다. 두 명령은 같은 별칭 처리와 저장소를 사용한다.
+기존 설치에 새 명령을 추가하려면 배포 후 기존과 같은 등록 범위로 `npm run register`를 다시 실행한다.
 서버에서 별도로 설정한 커맨드 권한은 서버 관리자가 조정해야 한다.
+Slack은 앱 설정에 `/stock-alias`를 추가하고 기존 `/alias`도 같은 `/slack` Request URL로 유지한다.
+`/alias`는 추후 제거할 예정이므로 안내 문구와 새 사용 예시는 `/stock-alias`를 사용한다.
 
 업비트 직접 날짜 조회는 시작일·종료일을 포함해 최대 2,000일이다. 더 긴 기간은 `5y` 또는
 `max`를 사용한다. 초과 요청은 데이터를 자르지 않고 한국어 오류로 안내한다.
