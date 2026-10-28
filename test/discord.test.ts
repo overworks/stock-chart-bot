@@ -5,6 +5,8 @@ import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols"
 import keypair from "./keypair.json" with { type: "json" };
 
 const ENV = env as unknown as Env;
+const CHART_NOTICE = "\n\n⚠️ `/chart` 명령은 지원 중단 예정입니다. `/stock-chart`를 사용해 주세요.";
+const ALIAS_NOTICE = "\n\n⚠️ `/alias` 명령은 지원 중단 예정입니다. `/stock-alias`를 사용해 주세요.";
 let privateKey: CryptoKey;
 
 beforeAll(async () => {
@@ -131,7 +133,7 @@ describe("discord adapter", () => {
     expect(patch.init?.method).toBe("PATCH");
     const form = patch.init?.body as FormData;
     const payload = JSON.parse(form.get("payload_json") as string);
-    expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m · 71,900 KRW ▲ +1,900 (+2.71%)");
+    expect(payload.content).toBe("**삼성전자 (005930.KS)** 1m · 71,900 KRW ▲ +1,900 (+2.71%)" + (name === "chart" ? CHART_NOTICE : ""));
     expect(payload.embeds[0].color).toBe(0xdc2626);
     expect(payload.embeds[0].footer.text).toBe("출처: Yahoo Finance");
     const file = form.get("files[0]") as File;
@@ -148,7 +150,7 @@ describe("discord adapter", () => {
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
-    expect(JSON.parse(patch.init?.body as string).content).toContain("시세 조회 실패 (500)");
+    expect(JSON.parse(patch.init?.body as string).content).toBe("⚠️ 시세 조회 실패 (500)" + (name === "chart" ? CHART_NOTICE : ""));
   });
 
   it.each(["stock-alias", "alias"])("rejects /%s add from members without manage-guild permission", async (name) => {
@@ -164,6 +166,7 @@ describe("discord adapter", () => {
     expect(body.type).toBe(4);
     expect(body.data.flags).toBe(64);
     expect(body.data.content).toContain("권한");
+    expect(body.data.content.includes(ALIAS_NOTICE)).toBe(name === "alias");
     expect(calls).toHaveLength(0);
   });
 
@@ -182,7 +185,7 @@ describe("discord adapter", () => {
     });
     expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
     await waitOnExecutionContext(ctx);
-    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)" + (name === "alias" ? ALIAS_NOTICE : ""));
     expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
 
     req = await signed({
@@ -203,14 +206,30 @@ describe("discord adapter", () => {
     req = await signed({ type: 2, token: "tok", member: { permissions: "0" }, data: { name: otherName, options: [{ type: 1, name: "list" }] } });
     expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
     await waitOnExecutionContext(ctx);
-    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("• 하닉 → SK하이닉스 (000660.KS)");
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("• 하닉 → SK하이닉스 (000660.KS)" + (otherName === "alias" ? ALIAS_NOTICE : ""));
 
     ctx = createExecutionContext();
     req = await signed({ type: 2, token: "tok", member: manager, data: { name: otherName, options: [{ type: 1, name: "remove", options: [{ name: "alias", value: "하닉" }] }] } });
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
-    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toContain("별칭 삭제");
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toBe("🗑️ 별칭 삭제: 하닉 → 000660.KS" + (otherName === "alias" ? ALIAS_NOTICE : ""));
     expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([]);
+  });
+
+  it.each(["stock-alias", "alias"])("reports /%s validation errors without calling upstream", async (name) => {
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const req = await signed({
+      type: 2,
+      token: "tok",
+      member: { permissions: String(1 << 5) },
+      data: { name, options: [{ type: 1, name: "add", options: [{ name: "alias", value: "KRW=X" }, { name: "target", value: "AAPL" }] }] },
+    });
+    expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
+    await waitOnExecutionContext(ctx);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain("discord.com/api");
+    expect(JSON.parse(calls[0].init?.body as string).content).toBe("⚠️ 심볼 형식(005930.KS, KRW=X 등)은 별칭으로 쓸 수 없습니다." + (name === "alias" ? ALIAS_NOTICE : ""));
   });
 
   it.each(["stock-chart", "chart"])("reports /%s validation errors without calling upstream", async (name) => {
@@ -221,6 +240,6 @@ describe("discord adapter", () => {
     await waitOnExecutionContext(ctx);
     expect(calls.some((c) => c.url.includes("yahoo"))).toBe(false);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
-    expect(JSON.parse(patch.init?.body as string).content).toContain("함께");
+    expect(JSON.parse(patch.init?.body as string).content).toBe("⚠️ 커스텀 기간은 시작일과 종료일을 함께 입력해 주세요." + (name === "chart" ? CHART_NOTICE : ""));
   });
 });
