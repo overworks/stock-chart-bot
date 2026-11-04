@@ -1,6 +1,8 @@
 import type { ChartBar, ChartStyle, TimeSpan } from "./types";
 
 export const FONT_FAMILY = "NanumSquare";
+/** 번들 굵은 폰트는 패밀리명이 'NanumSquare Bold'로 등록돼 있어 font-weight가 아닌 패밀리로 지정해야 한다. */
+export const FONT_BOLD = "NanumSquare Bold";
 
 export const COLOR = {
   up: "#dc2626",
@@ -37,13 +39,21 @@ export interface ChangeSummary {
   text: string;
 }
 
-const W = 900;
-const H = 560;
-const PAD = { l: 72, r: 24, t: 80, b: 62 };
+// 논리 좌표 600×448을 900px 폭으로 렌더링한다(1.5배). 축소 표시되는 메신저에서도 읽히도록 글자를 크게 잡는다.
+const W = 600;
+const H = 448;
+const M = 24;
+const PAD = { r: M, t: 142, b: 70 };
+const LABEL_GAP = 10;
+const FS = { title: 30, price: 36, change: 20, unit: 19, axis: 17, legend: 16, note: 15 } as const;
 const GRID = [0, 0.25, 0.5, 0.75, 1];
-const VOL_H = 80;
+const VOL_H = 56;
 const VOL_GAP = 12;
-const EXT_FILL = "#f3f4f6";
+const BAR_MAX = 8;
+const PLOT_FILL = "#f6f7f9";
+const EXT_FILL = "#e9ebef";
+const AXIS_COLOR = "#4b5563";
+const NOTE_COLOR = "#6b7280";
 
 export function summarizeChange(bars: ChartBar[], currency = "", reference?: number): ChangeSummary {
   const first = reference ?? bars[0].c;
@@ -51,10 +61,14 @@ export function summarizeChange(bars: ChartBar[], currency = "", reference?: num
   const diff = last - first;
   const pct = first === 0 ? 0 : (diff / first) * 100;
   const direction = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
-  const arrow = direction === "up" ? "▲" : direction === "down" ? "▼" : "-";
-  const sign = diff > 0 ? "+" : "";
-  const text = `${fmtPrice(last, currency)}${currency ? ` ${currency}` : ""} ${arrow} ${sign}${fmtPrice(diff, currency)} (${sign}${pct.toFixed(2)}%)`;
+  const text = `${fmtPrice(last, currency)}${currency ? ` ${currency}` : ""} ${changeText(diff, pct, currency)}`;
   return { first, last, diff, pct, direction, color: COLOR[direction], text };
+}
+
+function changeText(diff: number, pct: number, currency: string): string {
+  const arrow = diff > 0 ? "▲" : diff < 0 ? "▼" : "-";
+  const sign = diff > 0 ? "+" : "";
+  return `${arrow} ${sign}${fmtPrice(diff, currency)} (${sign}${pct.toFixed(2)}%)`;
 }
 
 export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {}): string {
@@ -76,7 +90,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     return fmtPrice(allInt ? Math.round(raw) : raw, currency);
   });
   // 1억 단위 원화(KRW-BTC)처럼 긴 눈금 라벨이 잘리지 않게 왼쪽 여백을 라벨 길이에 맞춘다.
-  const pad = { ...PAD, l: Math.max(PAD.l, 14 + Math.max(...yLabels.map((s) => s.length)) * 7) };
+  const pad = { ...PAD, l: Math.ceil(M + LABEL_GAP + Math.max(...yLabels.map((s) => textWidth(s, FS.axis)))) };
 
   const plotW = W - pad.l - pad.r;
   const volH = hasVolume ? VOL_H : 0;
@@ -91,7 +105,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const line = bars.map((b, i) => `${i === 0 ? "M" : "L"}${fmt(x(i))},${fmt(y(b.c))}`).join(" ");
   const area = `${line} L${fmt(x(bars.length - 1))},${pad.t + plotH} L${fmt(x(0))},${pad.t + plotH} Z`;
 
-  const bodyW = Math.max(1, Math.min(12, slot * 0.7));
+  const barW = Math.max(1, Math.min(BAR_MAX, slot * 0.7));
   const candles = candle
     ? bars
         .map((b, i) => {
@@ -104,7 +118,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
           const cx = x(i);
           return (
             `<line x1="${fmt(cx)}" y1="${fmt(y(h))}" x2="${fmt(cx)}" y2="${fmt(y(l))}" stroke="${color}" stroke-width="1"/>` +
-            `<rect x="${fmt(cx - bodyW / 2)}" y="${fmt(top)}" width="${fmt(bodyW)}" height="${fmt(Math.max(1, bottom - top))}" fill="${color}"/>`
+            `<rect x="${fmt(cx - barW / 2)}" y="${fmt(top)}" width="${fmt(barW)}" height="${fmt(Math.max(1, bottom - top))}" fill="${color}"/>`
           );
         })
         .join("")
@@ -123,11 +137,16 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     })
     .join("");
   const maLegend = mas
-    .map(({ p }, i) => `<text x="${pad.l + i * 62}" y="${pad.t - 8}" font-size="12" fill="${MA_COLOR[p]}">MA${p}</text>`)
+    .map(({ p }, i) => {
+      const lx = M + i * 80;
+      return (
+        `<rect x="${lx}" y="${H - 31}" width="14" height="3" fill="${MA_COLOR[p]}"/>` +
+        `<text x="${lx + 19}" y="${H - 24}" font-size="${FS.legend}" font-family="${FONT_BOLD}" fill="${MA_COLOR[p]}">MA${p}</text>`
+      );
+    })
     .join("");
 
   const maxVol = hasVolume ? Math.max(...bars.map((b) => b.v ?? 0)) || 1 : 1;
-  const volW = Math.max(1, Math.min(12, slot * 0.7));
   const volumes = hasVolume
     ? bars
         .map((b, i) => {
@@ -137,11 +156,11 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
           const color = b.c > prev ? COLOR.up : b.c < prev ? COLOR.down : COLOR.flat;
           const hgt = (v / maxVol) * volH;
           const cx = x(i);
-          return `<rect x="${fmt(cx - volW / 2)}" y="${fmt(volTop + volH - hgt)}" width="${fmt(volW)}" height="${fmt(hgt)}" fill="${color}" fill-opacity="0.45"/>`;
+          return `<rect x="${fmt(cx - barW / 2)}" y="${fmt(volTop + volH - hgt)}" width="${fmt(barW)}" height="${fmt(hgt)}" fill="${color}" fill-opacity="0.45"/>`;
         })
         .join("") +
       `<line x1="${pad.l}" y1="${fmt(volTop + volH)}" x2="${W - pad.r}" y2="${fmt(volTop + volH)}" stroke="#e5e7eb" stroke-width="1"/>` +
-      `<text x="${pad.l - 10}" y="${fmt(volTop + 12)}" text-anchor="end" font-size="11" fill="#9ca3af">${fmtVolume(maxVol)}</text>`
+      `<text x="${pad.l - LABEL_GAP}" y="${fmt(volTop + 13)}" text-anchor="end" font-size="${FS.note}" fill="${NOTE_COLOR}">${fmtVolume(maxVol)}</text>`
     : "";
 
   const gridLines = GRID
@@ -150,8 +169,8 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
       return (
         `<line x1="${pad.l}" y1="${fmt(gy)}" x2="${W - pad.r}" y2="${fmt(gy)}" ` +
         `stroke="#e5e7eb" stroke-width="1"/>` +
-        `<text x="${pad.l - 10}" y="${fmt(gy + 4)}" text-anchor="end" ` +
-        `font-size="12" fill="#6b7280">${yLabels[i]}</text>`
+        `<text x="${pad.l - LABEL_GAP}" y="${fmt(gy + 6)}" text-anchor="end" ` +
+        `font-size="${FS.axis}" fill="${AXIS_COLOR}">${yLabels[i]}</text>`
       );
     })
     .join("");
@@ -161,8 +180,8 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     .map((i) => {
       const anchor = i === 0 ? "start" : i === bars.length - 1 ? "end" : "middle";
       return (
-        `<text x="${fmt(x(i))}" y="${H - pad.b + 20}" text-anchor="${anchor}" ` +
-        `font-size="12" fill="#6b7280">${fmtDate(bars[i].t)}</text>`
+        `<text x="${fmt(x(i))}" y="${H - pad.b + 22}" text-anchor="${anchor}" ` +
+        `font-size="${FS.axis}" fill="${AXIS_COLOR}">${fmtDate(bars[i].t)}</text>`
       );
     })
     .join("");
@@ -174,44 +193,81 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const extShade = runs
     .map(({ from, to }) => `<rect x="${fmt(edge(from))}" y="${pad.t}" width="${fmt(edge(to + 1) - edge(from))}" height="${fmt(shadeBottom - pad.t)}" fill="${EXT_FILL}"/>`)
     .join("");
+  const plotFill = `<rect x="${pad.l}" y="${pad.t}" width="${fmt(plotW)}" height="${fmt(shadeBottom - pad.t)}" fill="${PLOT_FILL}"/>`;
   const extLabels = runs
-    .filter(({ from, to, label }) => edge(to + 1) - edge(from) >= 10 + label.length * 11)
-    .map(({ from, label }) => `<text x="${fmt(edge(from) + 6)}" y="${pad.t + 14}" font-size="11" fill="#6b7280" stroke="${EXT_FILL}" stroke-width="3" paint-order="stroke">${label}</text>`)
+    .filter(({ from, to, label }) => edge(to + 1) - edge(from) >= 12 + textWidth(label, FS.note))
+    .map(({ from, label }) => `<text x="${fmt(edge(from) + 6)}" y="${pad.t + 18}" font-size="${FS.note}" fill="${NOTE_COLOR}" stroke="${EXT_FILL}" stroke-width="4" paint-order="stroke">${label}</text>`)
     .join("");
 
   const referenceLine =
     reference !== undefined
       ? `<line x1="${pad.l}" y1="${fmt(y(reference))}" x2="${W - pad.r}" y2="${fmt(y(reference))}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>` +
-        `<text x="${W - pad.r}" y="${fmt(y(reference) - 5)}" text-anchor="end" font-size="11" fill="#6b7280" stroke="#ffffff" stroke-width="3" paint-order="stroke">${escapeXml(`전일 종가 ${fmtPrice(reference, currency)}`)}</text>`
+        `<text x="${W - pad.r}" y="${fmt(y(reference) - 6)}" text-anchor="end" font-size="${FS.note}" fill="${NOTE_COLOR}" stroke="${PLOT_FILL}" stroke-width="4" paint-order="stroke">${escapeXml(`전일 종가 ${fmtPrice(reference, currency)}`)}</text>`
       : "";
 
   const footer = source
-    ? `<text x="${W - pad.r}" y="${H - 14}" text-anchor="end" font-size="11" fill="#9ca3af">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
+    ? `<text x="${W - pad.r}" y="${H - 24}" text-anchor="end" font-size="${FS.note}" fill="${NOTE_COLOR}">${escapeXml(`${source} · ${footerTime(now)}`)}</text>`
     : "";
 
-  const sign = change.diff > 0 ? "+" : "";
-  const subtitle =
-    `${fmtDate(bars[0].t)} ~ ${fmtDate(bars[bars.length - 1].t)}` +
-    `  ·  ${sign}${fmtPrice(change.diff, currency)} (${sign}${change.pct.toFixed(2)}%)`;
+  const headW = W - 2 * M;
+  const heading = fitTitle(title, FS.title, headW);
+  const price = fmtPrice(change.last, currency);
+  const delta = changeText(change.diff, change.pct, currency);
+  // 가격 줄은 한 줄에 두고, 넘치면 세 요소를 같은 비율로 줄인다.
+  const priceW =
+    textWidth(price, FS.price) + (currency ? 6 + textWidth(currency, FS.unit) : 0) + 14 + textWidth(delta, FS.change);
+  const k = Math.min(1, headW / priceW);
+  const size = (n: number) => Math.floor(n * k);
+  const priceLine =
+    `<text x="${M}" y="90" font-family="${FONT_BOLD}" fill="${change.color}">` +
+    `<tspan font-size="${size(FS.price)}">${escapeXml(price)}</tspan>` +
+    (currency ? `<tspan dx="6" font-size="${size(FS.unit)}" font-family="${FONT_FAMILY}" fill="${NOTE_COLOR}">${escapeXml(currency)}</tspan>` : "") +
+    `<tspan dx="14" font-size="${size(FS.change)}">${escapeXml(delta)}</tspan>` +
+    `</text>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
+  ${plotFill}
   ${extShade}
-  <text x="${pad.l}" y="34" font-size="22" font-weight="700" fill="#111827">${escapeXml(title)}</text>
-  <text x="${pad.l}" y="58" font-size="14" fill="${change.color}">${escapeXml(subtitle)}</text>
-  <text x="${W - pad.r}" y="34" text-anchor="end" font-size="26" font-weight="700" fill="${change.color}">${escapeXml(fmtPrice(change.last, currency))}</text>
-  <text x="${W - pad.r}" y="58" text-anchor="end" font-size="14" fill="#6b7280">${escapeXml(currency)}</text>
+  <text x="${M}" y="46" font-size="${FS.title}" font-family="${FONT_BOLD}" fill="#111827">${escapeXml(heading)}</text>
+  ${priceLine}
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
   ${extLabels}
   ${referenceLine}
   ${maLines}
-  ${maLegend}
   ${volumes}
   ${xLabels}
+  ${maLegend}
   ${footer}
 </svg>`;
+}
+
+/** 너비를 넘는 제목은 이름 부분을 말줄임하고 "(심볼) · 기간" 꼬리는 남긴다. */
+function fitTitle(title: string, size: number, maxW: number): string {
+  if (textWidth(title, size) <= maxW) return title;
+  const cut = title.indexOf(" (");
+  const tail = cut > 0 ? title.slice(cut) : "";
+  const head = [...(cut > 0 ? title.slice(0, cut) : title)];
+  while (head.length > 1 && textWidth(`${head.join("").trimEnd()}...${tail}`, size) > maxW) head.pop();
+  return `${head.join("").trimEnd()}...${tail}`;
+}
+
+/** 번들 나눔스퀘어(굵게) 글리프 폭을 근사한 텍스트 폭. 넘치지 않도록 약간 넉넉하게 잡는다. */
+export function textWidth(s: string, size: number): number {
+  let em = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    if (c >= 0x1100) em += 0.91;
+    else if (c >= 0x30 && c <= 0x39) em += 0.61;
+    else if (c >= 0x41 && c <= 0x5a) em += 0.68;
+    else if (c >= 0x61 && c <= 0x7a) em += 0.56;
+    else if (" .,:;'()[]!|".includes(ch)) em += 0.3;
+    else if ("%&@".includes(ch)) em += 0.9;
+    else em += 0.5;
+  }
+  return em * size;
 }
 
 /** 정규장 밖의 연속된 봉 구간. 가까운 정규장이 앞이면 애프터마켓, 뒤면 프리마켓이다. */
@@ -284,7 +340,10 @@ function dateFormatter(timeZone: string, intraday: boolean): (epochSec: number) 
     day: "2-digit",
     ...(intraday ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
   });
-  return (epochSec) => f.format(new Date(epochSec * 1000));
+  return (epochSec) => {
+    const s = f.format(new Date(epochSec * 1000));
+    return intraday ? s.slice(5) : s;
+  };
 }
 
 function escapeXml(s: string): string {

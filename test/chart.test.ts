@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSvg, COLOR, extendedRuns, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
+import { buildSvg, COLOR, extendedRuns, FONT_BOLD, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
 import type { ChartBar } from "../src/core/types";
 
 const DAY = 86_400;
@@ -13,6 +13,19 @@ describe("buildSvg", () => {
     expect(svg).toContain(`font-family="${FONT_FAMILY}"`);
     expect(svg).toContain(">AAPL (1y)<");
     expect(svg).toContain('<path d="M');
+  });
+
+  it("draws the title and price line in the bold family", () => {
+    const svg = buildSvg(daily(5), "AAPL (1y)", { currency: "USD" });
+    expect(svg).toMatch(new RegExp(`font-family="${FONT_BOLD}" fill="#111827"[^>]*>AAPL \\(1y\\)<`));
+    expect(svg).toMatch(new RegExp(`font-family="${FONT_BOLD}" fill="${COLOR.up}"[^>]*><tspan font-size="36">104.00<`));
+    expect(svg).toContain(">▲ +4.00 (+4.00%)<");
+  });
+
+  it("shortens a long name but keeps the symbol and range", () => {
+    const svg = buildSvg(daily(3), "Taiwan Semiconductor Manufacturing Company Limited (TSM) · 1w");
+    expect(svg).toMatch(/>Taiwan Semiconductor [^<]*\.\.\. \(TSM\) · 1w</);
+    expect(svg).not.toContain("Company Limited");
   });
 
   it("escapes xml in the title", () => {
@@ -33,24 +46,24 @@ describe("buildSvg", () => {
     const start = Date.UTC(2024, 0, 2, 14, 30) / 1000;
     const bars = Array.from({ length: 5 }, (_, i) => ({ t: start + i * 1800, c: 10 + i }));
     const svg = buildSvg(bars, "t", { timeZone: "America/New_York" });
-    expect(svg).toContain(">2024-01-02 09:30<");
-    expect(svg).toContain(">2024-01-02 11:30<");
+    expect(svg).toContain(">01-02 09:30<");
+    expect(svg).toContain(">01-02 11:30<");
   });
 
   it("handles a flat series without NaN coordinates and uses the neutral color", () => {
     const bars = daily(4).map((b) => ({ ...b, c: 50 }));
     const svg = buildSvg(bars, "flat");
     expect(svg).not.toContain("NaN");
-    expect(svg).toContain(`stroke="${COLOR.flat}"`);
+    expect(svg).toContain(`stroke="${COLOR.flat}" stroke-width="2"`);
   });
 
   it("colors rising series red and falling series blue, and shows the last price", () => {
     const up = buildSvg(daily(5), "up", { currency: "KRW" });
-    expect(up).toContain(`stroke="${COLOR.up}"`);
+    expect(up).toContain(`stroke="${COLOR.up}" stroke-width="2"`);
     expect(up).toContain(">104<");
     expect(up).toContain("+4 (+4.00%)");
     const down = buildSvg(daily(5).map((b, i) => ({ t: b.t, c: 104 - i })), "down", { currency: "USD" });
-    expect(down).toContain(`stroke="${COLOR.down}"`);
+    expect(down).toContain(`stroke="${COLOR.down}" stroke-width="2"`);
     expect(down).toContain(">100.00<");
     expect(down).toContain("-4.00 (-3.85%)");
   });
@@ -69,7 +82,7 @@ describe("buildSvg candle + volume", () => {
 
   it("draws one wick and body per bar, colored by open/close", () => {
     const svg = buildSvg(ohlc(6), "c", { style: "candle", volume: true });
-    expect((svg.match(/<rect /g) ?? []).length).toBe(1 + 6 + 6);
+    expect((svg.match(/<rect /g) ?? []).length).toBe(2 + 6 + 6);
     const wicks = (svg.match(/<line [^>]*stroke="#(dc2626|2563eb|6b7280)"/g) ?? []).length;
     expect(wicks).toBe(6);
     expect(svg).toContain(`fill="${COLOR.up}"`);
@@ -92,7 +105,7 @@ describe("buildSvg candle + volume", () => {
   it("falls back to close when open/high/low are missing", () => {
     const svg = buildSvg(daily(5), "c", { style: "candle" });
     expect(svg).not.toContain("NaN");
-    expect((svg.match(/<rect /g) ?? []).length).toBe(1 + 5);
+    expect((svg.match(/<rect /g) ?? []).length).toBe(2 + 5);
   });
 });
 
@@ -153,26 +166,28 @@ describe("extended hours", () => {
 
   it("shades extended runs behind the series and labels wide ones", () => {
     const svg = buildSvg(bars, "t", { timeZone: "America/New_York", regularHours: regular });
-    expect(svg.match(/fill="#f3f4f6"\/>/g)).toHaveLength(2);
+    expect(svg.match(/fill="#e9ebef"\/>/g)).toHaveLength(2);
     expect(svg).toContain(">프리마켓<");
     expect(svg).toContain(">애프터마켓<");
-    expect(svg.indexOf('fill="#f3f4f6"/>')).toBeLessThan(svg.indexOf("<path"));
+    expect(svg.indexOf('fill="#e9ebef"/>')).toBeLessThan(svg.indexOf("<path"));
   });
 
   it("spans the whole plot when only pre-market bars exist", () => {
     const svg = buildSvg(bars.slice(0, 2), "t", { regularHours: regular });
-    expect(svg).toMatch(/<rect x="72\.00" y="80" width="804\.00" height="\d+\.\d+" fill="#f3f4f6"\/>/);
+    const [, x, w] = svg.match(/<rect x="([\d.]+)" y="142" width="([\d.]+)" height="[\d.]+" fill="#e9ebef"\/>/) ?? [];
+    expect(svg).toContain(`<line x1="${Number(x)}" `);
+    expect(Number(x) + Number(w)).toBe(576);
   });
 
   it("skips the label on runs too narrow to fit it", () => {
     const many = Array.from({ length: 200 }, (_, i) => ({ t: at("09:30") + i * 60, c: 100 }));
     const svg = buildSvg([...many, { t: at("16:05"), c: 100 }], "t", { regularHours: regular });
-    expect(svg.match(/fill="#f3f4f6"\/>/g)).toHaveLength(1);
+    expect(svg.match(/fill="#e9ebef"\/>/g)).toHaveLength(1);
     expect(svg).not.toContain("애프터마켓");
   });
 
   it("draws nothing without regular hours", () => {
-    expect(buildSvg(bars, "t")).not.toContain("#f3f4f6");
+    expect(buildSvg(bars, "t")).not.toContain("#e9ebef");
   });
 });
 
