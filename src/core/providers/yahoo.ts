@@ -1,4 +1,4 @@
-import type { ChartBar, ChartRequest } from "../types";
+import type { ChartBar, ChartRequest, TimeSpan } from "../types";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./types";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -69,6 +69,7 @@ export const yahoo: MarketProvider = {
       name: meta.shortName ?? meta.longName ?? undefined,
       previousClose: typeof prev === "number" && Number.isFinite(prev) ? prev : undefined,
       continuous: CONTINUOUS_TYPES.has(meta.instrumentType),
+      regularHours: prePost ? regularPeriods(meta.tradingPeriods) : undefined,
     };
   },
 
@@ -105,6 +106,17 @@ export const yahoo: MarketProvider = {
 function num(arr: unknown, i: number): number | undefined {
   const x = Array.isArray(arr) ? arr[i] : undefined;
   return typeof x === "number" && Number.isFinite(x) ? x : undefined;
+}
+
+// includePrePost 응답은 { pre, regular, post }, 시간외가 없는 시장은 [[{ start, end }]] 형태다.
+function regularPeriods(periods: any): TimeSpan[] | undefined {
+  const list = Array.isArray(periods) ? periods : periods?.regular;
+  if (!Array.isArray(list)) return undefined;
+  const spans = list
+    .flat()
+    .filter((p: any) => Number.isFinite(p?.start) && Number.isFinite(p?.end))
+    .map((p: any): TimeSpan => ({ start: p.start, end: p.end }));
+  return spans.length ? spans : undefined;
 }
 
 function day(sec: number, timeZone: string): string {

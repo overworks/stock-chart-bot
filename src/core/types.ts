@@ -19,6 +19,12 @@ export interface ChartBar {
   v?: number;
 }
 
+/** epoch 초 구간. 양끝을 포함한다. */
+export interface TimeSpan {
+  start: number;
+  end: number;
+}
+
 export interface OutgoingMessage {
   text: string;
   image?: { png: Uint8Array; filename: string };

@@ -1,4 +1,4 @@
-import type { ChartBar, ChartRequest } from "../types";
+import type { ChartBar, ChartRequest, TimeSpan } from "../types";
 
 export class SymbolNotFoundError extends Error {}
 
@@ -14,6 +14,8 @@ export interface PriceSeries {
   previousClose?: number;
   /** 24시간 거래 상품(환율, 암호화폐). 표시 타임존을 사용자 기준으로 바꾼다. */
   continuous?: boolean;
+  /** 정규장 구간. 있으면 그 밖의 봉을 프리마켓·애프터마켓으로 보고 차트에 음영을 넣는다. */
+  regularHours?: TimeSpan[];
 }
 
 export interface SymbolChoice {

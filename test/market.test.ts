@@ -76,6 +76,19 @@ describe("getPrices", () => {
       expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).previousClose).toBe(331.9);
     });
 
+    it("passes regular hours from either tradingPeriods shape on 1d only", async () => {
+      const span = { timezone: "EST", start: 1793802600, end: 1793826000, gmtoffset: -18000 };
+      const regularHours = [{ start: span.start, end: span.end }];
+      yahoo(body({ tradingPeriods: { pre: [[{ ...span, start: 1 }]], regular: [[span]], post: [[{ ...span, end: 2 }]] } }, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).regularHours).toEqual(regularHours);
+      yahoo(body({ tradingPeriods: [[span]] }, pre1104));
+      expect((await getPrices("^GSPC", { ticker: "^GSPC", range: "1d" })).regularHours).toEqual(regularHours);
+      yahoo(body({ tradingPeriods: [[span]] }, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).regularHours).toBeUndefined();
+      yahoo(body({}, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).regularHours).toBeUndefined();
+    });
+
     it("ignores the regular session time for other ranges", async () => {
       yahoo(body({ chartPreviousClose: 338.32, regularMarketPrice: 331.9, regularMarketTime: close1103 }, pre1104));
       expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).previousClose).toBe(338.32);

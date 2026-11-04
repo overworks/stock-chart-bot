@@ -1,4 +1,4 @@
-import type { ChartBar, ChartStyle } from "./types";
+import type { ChartBar, ChartStyle, TimeSpan } from "./types";
 
 export const FONT_FAMILY = "NanumSquare";
 
@@ -21,6 +21,8 @@ export interface ChartOptions {
   now?: Date;
   /** 분·시간봉 여부. 없으면 봉 간격으로 추정한다. */
   intraday?: boolean;
+  /** 정규장 구간. 주어지면 그 밖의 봉 구간에 프리마켓·애프터마켓 음영을 넣는다. */
+  regularHours?: TimeSpan[];
 }
 
 export interface ChangeSummary {
@@ -39,6 +41,7 @@ const PAD = { l: 72, r: 24, t: 80, b: 62 };
 const GRID = [0, 0.25, 0.5, 0.75, 1];
 const VOL_H = 80;
 const VOL_GAP = 12;
+const EXT_FILL = "#f3f4f6";
 
 export function summarizeChange(bars: ChartBar[], currency = "", reference?: number): ChangeSummary {
   const first = reference ?? bars[0].c;
@@ -162,6 +165,18 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
     })
     .join("");
 
+  // 봉 i-1과 i 사이 경계. 0과 n은 플롯 양끝.
+  const edge = (i: number) => (i <= 0 ? pad.l : i >= bars.length ? W - pad.r : (x(i - 1) + x(i)) / 2);
+  const runs = extendedRuns(bars, opts.regularHours);
+  const shadeBottom = hasVolume ? volTop + volH : pad.t + plotH;
+  const extShade = runs
+    .map(({ from, to }) => `<rect x="${fmt(edge(from))}" y="${pad.t}" width="${fmt(edge(to + 1) - edge(from))}" height="${fmt(shadeBottom - pad.t)}" fill="${EXT_FILL}"/>`)
+    .join("");
+  const extLabels = runs
+    .filter(({ from, to, label }) => edge(to + 1) - edge(from) >= 10 + label.length * 11)
+    .map(({ from, label }) => `<text x="${fmt(edge(from) + 6)}" y="${pad.t + 14}" font-size="11" fill="#6b7280" stroke="${EXT_FILL}" stroke-width="3" paint-order="stroke">${label}</text>`)
+    .join("");
+
   const referenceLine =
     reference !== undefined
       ? `<line x1="${pad.l}" y1="${fmt(y(reference))}" x2="${W - pad.r}" y2="${fmt(y(reference))}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 3"/>` +
@@ -179,6 +194,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${FONT_FAMILY}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
+  ${extShade}
   <text x="${pad.l}" y="34" font-size="22" font-weight="700" fill="#111827">${escapeXml(title)}</text>
   <text x="${pad.l}" y="58" font-size="14" fill="${change.color}">${escapeXml(subtitle)}</text>
   <text x="${W - pad.r}" y="34" text-anchor="end" font-size="26" font-weight="700" fill="${change.color}">${escapeXml(fmtPrice(change.last, currency))}</text>
@@ -186,6 +202,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`}
+  ${extLabels}
   ${referenceLine}
   ${maLines}
   ${maLegend}
@@ -193,6 +210,22 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${xLabels}
   ${footer}
 </svg>`;
+}
+
+/** 정규장 밖의 연속된 봉 구간. 가까운 정규장이 앞이면 애프터마켓, 뒤면 프리마켓이다. */
+export function extendedRuns(bars: ChartBar[], regular?: TimeSpan[]): { from: number; to: number; label: string }[] {
+  if (!regular?.length) return [];
+  const runs: { from: number; to: number; label: string }[] = [];
+  bars.forEach(({ t }, i) => {
+    if (regular.some((r) => r.start <= t && t <= r.end)) return;
+    const sinceClose = t - Math.max(...regular.filter((r) => r.end < t).map((r) => r.end));
+    const untilOpen = Math.min(...regular.filter((r) => r.start > t).map((r) => r.start)) - t;
+    const label = sinceClose < untilOpen ? "애프터마켓" : "프리마켓";
+    const last = runs.at(-1);
+    if (last && last.to === i - 1 && last.label === label) last.to = i;
+    else runs.push({ from: i, to: i, label });
+  });
+  return runs;
 }
 
 function fmt(n: number): string {

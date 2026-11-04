@@ -1,4 +1,4 @@
-import type { ChartBar, ChartRequest } from "../types";
+import type { ChartBar, ChartRequest, TimeSpan } from "../types";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "./types";
 
 const API = "https://openapi.koreainvestment.com:9443";
@@ -173,6 +173,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       let bars: ChartBar[];
       let name: string | undefined;
       let previousClose: number | undefined;
+      let regularHours: TimeSpan[] | undefined;
       let label: string;
       let intraday = false;
 
@@ -199,6 +200,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
             if (raw.length) date = today;
             else raw = await extended(cfg, code, date);
             previousClose = recent.bars.filter((b) => b.t < dateSec(date)).at(-1)?.c;
+            regularHours = [{ start: dateSec(date) + clockSec(REGULAR.open), end: dateSec(date) + clockSec(REGULAR.close) }];
             bars = bucket(raw, plan.minutes * 60);
           } else {
             bars = [];
@@ -207,7 +209,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
         }
       }
       if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
-      return { bars, label, intraday, timeZone: "Asia/Seoul", currency: "KRW", source: provider.name, name, previousClose } satisfies PriceSeries;
+      return { bars, label, intraday, timeZone: "Asia/Seoul", currency: "KRW", source: provider.name, name, previousClose, regularHours } satisfies PriceSeries;
     },
 
     // 종목 검색은 KV 목록과 Yahoo가 맡는다.

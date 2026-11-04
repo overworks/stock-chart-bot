@@ -127,6 +127,7 @@ describe("kis provider", () => {
     ]);
     expect(s.intraday).toBe(true);
     expect(s.previousClose).toBe(100);
+    expect(s.regularHours).toEqual([{ start: at("09:00"), end: at("15:30") }]);
   });
 
   it("shows today's pre-market before the daily row exists", async () => {

@@ -23,11 +23,11 @@ for (const c of cases) {
     let series = await getPrices(sym, { ticker: sym, range });
     const rule = displayRule(sym);
     if (rule) series = scaleSeries(series, rule.factor);
-    const { bars, label, currency, name, previousClose, source, intraday } = series;
+    const { bars, label, currency, name, previousClose, source, intraday, regularHours } = series;
     const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
     const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym}${rule ? `, ${rule.label}` : ""})` : sym);
     const reference = range === "1d" ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source, intraday });
+    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source, intraday, regularHours });
     const png = new Resvg(svg, {
       fitTo: { mode: "width", value: 900 },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },

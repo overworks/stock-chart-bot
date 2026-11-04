@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSvg, COLOR, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
+import { buildSvg, COLOR, extendedRuns, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
 import type { ChartBar } from "../src/core/types";
 
 const DAY = 86_400;
@@ -126,6 +126,52 @@ describe("moving averages", () => {
 
   it("refuses to draw fewer than two bars", () => {
     expect(() => buildSvg(daily(1), "x")).toThrow("부족");
+  });
+});
+
+describe("extended hours", () => {
+  // 2026-11-04 ET: 프리마켓 04:00~, 정규장 09:30~16:00, 애프터마켓 ~20:00
+  const at = (hm: string) => Date.parse(`2026-11-04T${hm}:00-05:00`) / 1000;
+  const regular = [{ start: at("09:30"), end: at("16:00") }];
+  const bars = ["04:00", "08:00", "09:30", "12:00", "16:00", "16:05", "19:55"].map((hm, i) => ({ t: at(hm), c: 100 + i }));
+
+  it("groups bars outside regular hours into labeled runs, keeping both session edges regular", () => {
+    expect(extendedRuns(bars, regular)).toEqual([
+      { from: 0, to: 1, label: "프리마켓" },
+      { from: 5, to: 6, label: "애프터마켓" },
+    ]);
+    expect(extendedRuns(bars)).toEqual([]);
+    expect(extendedRuns(bars.slice(2, 5), regular)).toEqual([]);
+  });
+
+  it("labels by the nearer regular session across days", () => {
+    const next = { start: regular[0].start + 86_400, end: regular[0].end + 86_400 };
+    const preNext = { t: at("04:00") + 86_400, c: 1 };
+    expect(extendedRuns([bars[5], preNext], [regular[0], next]).map((r) => r.label)).toEqual(["애프터마켓", "프리마켓"]);
+  });
+
+  it("shades extended runs behind the series and labels wide ones", () => {
+    const svg = buildSvg(bars, "t", { timeZone: "America/New_York", regularHours: regular });
+    expect(svg.match(/fill="#f3f4f6"\/>/g)).toHaveLength(2);
+    expect(svg).toContain(">프리마켓<");
+    expect(svg).toContain(">애프터마켓<");
+    expect(svg.indexOf('fill="#f3f4f6"/>')).toBeLessThan(svg.indexOf("<path"));
+  });
+
+  it("spans the whole plot when only pre-market bars exist", () => {
+    const svg = buildSvg(bars.slice(0, 2), "t", { regularHours: regular });
+    expect(svg).toMatch(/<rect x="72\.00" y="80" width="804\.00" height="\d+\.\d+" fill="#f3f4f6"\/>/);
+  });
+
+  it("skips the label on runs too narrow to fit it", () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({ t: at("09:30") + i * 60, c: 100 }));
+    const svg = buildSvg([...many, { t: at("16:05"), c: 100 }], "t", { regularHours: regular });
+    expect(svg.match(/fill="#f3f4f6"\/>/g)).toHaveLength(1);
+    expect(svg).not.toContain("애프터마켓");
+  });
+
+  it("draws nothing without regular hours", () => {
+    expect(buildSvg(bars, "t")).not.toContain("#f3f4f6");
   });
 });
 

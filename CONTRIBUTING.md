@@ -126,6 +126,7 @@ scripts/
 ### 5. 렌더링 및 이미지 전달 (`chart.ts`, `render.ts`, `store.ts`)
 
 - **SVG 생성 및 WASM 렌더링**: `chart.ts`가 차트 SVG 문자열을 생성하고, `render.ts`가 `@resvg/resvg-wasm`으로 PNG 바이트를 렌더링한다. Workers 환경에는 시스템 폰트가 없으므로 서브셋 폰트인 `fonts/NanumSquare{R,B}.ttf`를 번들해 사용한다. `wasm/resvg.wasm`은 `postinstall`(`npm run setup:wasm`)에서 생성되는 산출물이므로 커밋하지 않는다.
+- **시간외 구간 표시**: 제공자가 `PriceSeries.regularHours`(정규장 구간, 양끝 포함)를 주면 `chart.ts`의 `extendedRuns`가 그 밖의 연속된 봉을 묶어 회색 음영을 넣는다. 가까운 정규장이 앞에 있으면 `애프터마켓`, 뒤에 있으면 `프리마켓`으로 라벨을 붙이며, 구간이 라벨보다 좁으면 라벨을 생략한다. 현재는 한국투자증권과 Yahoo의 `1d`만 `regularHours`를 채운다.
 - **WASM 메모리 해제**: `Resvg` 인스턴스와 `render()` 결과(`RenderedImage`)는 JavaScript GC가 자동으로 해제하지 않으므로, 반드시 `try ... finally` 블록에서 `free()`를 호출해야 한다.
 - **이미지 전달 방식**:
   - 파일 업로드를 지원하는 플랫폼(Discord)은 `runChart`가 반환한 PNG 바이트를 multipart 응답으로 직접 첨부한다.
