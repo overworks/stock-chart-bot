@@ -2,7 +2,7 @@ import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import wasm from "../../wasm/resvg.wasm";
 import fontRegular from "../../fonts/NanumSquareR.ttf";
 import fontBold from "../../fonts/NanumSquareB.ttf";
-import { FONT_FAMILY } from "./chart";
+import { CHART_WIDTH, FONT_FAMILY } from "./chart";
 
 let ready: Promise<void> | null = null;
 
@@ -11,7 +11,7 @@ function ensureWasm(): Promise<void> {
   return ready;
 }
 
-export async function svgToPng(svg: string, width = 900): Promise<Uint8Array> {
+export async function svgToPng(svg: string, width = CHART_WIDTH): Promise<Uint8Array> {
   await ensureWasm();
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: width },

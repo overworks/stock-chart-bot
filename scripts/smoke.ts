@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import { configureKis, getPrices } from "../src/core/market";
-import { buildSvg } from "../src/core/chart";
+import { buildSvg, CHART_WIDTH } from "../src/core/chart";
 import { RANGE_CHOICES } from "../src/core/command";
 import { displayRule, scaleSeries } from "../src/core/display";
 
@@ -31,7 +31,7 @@ for (const c of cases) {
     const reference = range === "1d" ? previousClose : undefined;
     const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style, volume, reference, source, intraday, regularHours });
     const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: 900 },
+      fitTo: { mode: "width", value: CHART_WIDTH },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },
     }).render().asPng();
     const out = `${outDir}/${sym}-${range}${style === "candle" ? "-candle" : ""}${volume ? "-volume" : ""}.png`;

@@ -18,13 +18,13 @@ describe("buildSvg", () => {
   it("draws the title and price line in the bold family", () => {
     const svg = buildSvg(daily(5), "AAPL (1y)", { currency: "USD" });
     expect(svg).toMatch(new RegExp(`font-family="${FONT_BOLD}" fill="#111827"[^>]*>AAPL \\(1y\\)<`));
-    expect(svg).toMatch(new RegExp(`font-family="${FONT_BOLD}" fill="${COLOR.up}"[^>]*><tspan font-size="36">104.00<`));
+    expect(svg).toMatch(new RegExp(`text-anchor="end" font-family="${FONT_BOLD}" fill="${COLOR.up}"><tspan font-size="56">104.00<`));
     expect(svg).toContain(">▲ +4.00 (+4.00%)<");
   });
 
-  it("shortens a long name but keeps the symbol and range", () => {
+  it("shrinks then shortens a long name but keeps the symbol and range", () => {
     const svg = buildSvg(daily(3), "Taiwan Semiconductor Manufacturing Company Limited (TSM) · 1w");
-    expect(svg).toMatch(/>Taiwan Semiconductor [^<]*\.\.\. \(TSM\) · 1w</);
+    expect(svg).toMatch(/font-size="38"[^>]*>Taiwan Semiconductor[^<]*\.\.\. \(TSM\) · 1w</);
     expect(svg).not.toContain("Company Limited");
   });
 
@@ -54,16 +54,16 @@ describe("buildSvg", () => {
     const bars = daily(4).map((b) => ({ ...b, c: 50 }));
     const svg = buildSvg(bars, "flat");
     expect(svg).not.toContain("NaN");
-    expect(svg).toContain(`stroke="${COLOR.flat}" stroke-width="2"`);
+    expect(svg).toContain(`stroke="${COLOR.flat}" stroke-width="3"`);
   });
 
   it("colors rising series red and falling series blue, and shows the last price", () => {
     const up = buildSvg(daily(5), "up", { currency: "KRW" });
-    expect(up).toContain(`stroke="${COLOR.up}" stroke-width="2"`);
+    expect(up).toContain(`stroke="${COLOR.up}" stroke-width="3"`);
     expect(up).toContain(">104<");
     expect(up).toContain("+4 (+4.00%)");
     const down = buildSvg(daily(5).map((b, i) => ({ t: b.t, c: 104 - i })), "down", { currency: "USD" });
-    expect(down).toContain(`stroke="${COLOR.down}" stroke-width="2"`);
+    expect(down).toContain(`stroke="${COLOR.down}" stroke-width="3"`);
     expect(down).toContain(">100.00<");
     expect(down).toContain("-4.00 (-3.85%)");
   });
@@ -94,6 +94,12 @@ describe("buildSvg candle + volume", () => {
     const svg = buildSvg(ohlc(3), "c", { style: "candle", currency: "KRW" });
     expect(svg).toContain(">106<");
     expect(svg).toContain(">97<");
+  });
+
+  it("uses three price ticks when the volume panel is shown", () => {
+    const grid = /stroke="#e5e7eb" stroke-width="1"\/>/g;
+    expect(buildSvg(ohlc(4), "v", { volume: true }).match(grid)).toHaveLength(3 + 1);
+    expect(buildSvg(ohlc(4), "v").match(grid)).toHaveLength(5);
   });
 
   it("adds a volume panel only when requested and volume data exists", () => {
@@ -174,9 +180,9 @@ describe("extended hours", () => {
 
   it("spans the whole plot when only pre-market bars exist", () => {
     const svg = buildSvg(bars.slice(0, 2), "t", { regularHours: regular });
-    const [, x, w] = svg.match(/<rect x="([\d.]+)" y="142" width="([\d.]+)" height="[\d.]+" fill="#e9ebef"\/>/) ?? [];
+    const [, x, w] = svg.match(/<rect x="([\d.]+)" y="184" width="([\d.]+)" height="[\d.]+" fill="#e9ebef"\/>/) ?? [];
     expect(svg).toContain(`<line x1="${Number(x)}" `);
-    expect(Number(x) + Number(w)).toBe(576);
+    expect(Number(x) + Number(w)).toBe(924);
   });
 
   it("skips the label on runs too narrow to fit it", () => {
@@ -200,7 +206,7 @@ describe("summarizeChange", () => {
   it("draws a dashed previous-close line with a label and widens the axis to include it", () => {
     const bars = [{ t: 1, c: 100 }, { t: 2, c: 101 }, { t: 3, c: 102 }];
     const svg = buildSvg(bars, "T", { reference: 110, currency: "KRW" });
-    expect(svg).toContain('stroke-dasharray="4 3"');
+    expect(svg).toContain('stroke-dasharray="6 4"');
     expect(svg).toContain("전일 종가 110");
     expect(svg).toContain(">110<");
     expect(svg).toContain(">100<");
