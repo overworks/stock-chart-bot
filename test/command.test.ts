@@ -12,11 +12,11 @@ describe("parseChartArgs", () => {
   });
 
   it("defaults range to 1d", () => {
-    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1d", style: "line" });
+    expect(parseChartArgs({ ticker: "AAPL" })).toEqual({ ticker: "AAPL", range: "1d", style: "line", volume: false });
   });
 
   it("trims ticker and keeps a valid range", () => {
-    expect(parseChartArgs({ ticker: " 삼성전자 ", range: "1m" })).toEqual({ ticker: "삼성전자", range: "1m", style: "line" });
+    expect(parseChartArgs({ ticker: " 삼성전자 ", range: "1m" })).toEqual({ ticker: "삼성전자", range: "1m", style: "line", volume: false });
   });
 
   it("falls back to 1d for an unknown range", () => {
@@ -26,6 +26,16 @@ describe("parseChartArgs", () => {
   it("accepts candle style and falls back to line for unknown styles", () => {
     expect(parseChartArgs({ ticker: "AAPL", style: "candle" }).style).toBe("candle");
     expect(parseChartArgs({ ticker: "AAPL", style: "bars" }).style).toBe("line");
+  });
+
+  it("shows volume only when explicitly enabled by a Discord boolean or a text flag", () => {
+    const on = (volume: unknown) => parseChartArgs({ ticker: "AAPL", volume } as Record<string, string | undefined>).volume;
+    expect(on(undefined)).toBe(false);
+    expect(on(true)).toBe(true);
+    expect(on(false)).toBe(false);
+    expect(on("true")).toBe(true);
+    expect(on("yes")).toBe(false);
+    expect(parseChartArgs({ ticker: "AAPL", from: "2024-01-01", to: "2024-06-30", volume: "true" }).volume).toBe(true);
   });
 
   it("rejects a missing ticker", () => {
@@ -39,6 +49,7 @@ describe("parseChartArgs", () => {
       from: "2024-01-01",
       to: "2024-06-30",
       style: "line",
+      volume: false,
     });
   });
 

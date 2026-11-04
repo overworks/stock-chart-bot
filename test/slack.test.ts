@@ -65,6 +65,9 @@ describe("parseText", () => {
     expect(parseText("AAPL 1m candle")).toEqual({ ticker: "AAPL", range: "1m", style: "candle" });
     expect(parseText("sk candle 3M 하이닉스")).toEqual({ ticker: "sk 하이닉스", range: "3m", style: "candle" });
     expect(parseText("AAPL 2024-01-01 2024-06-30")).toEqual({ ticker: "AAPL", from: "2024-01-01", to: "2024-06-30" });
+    expect(parseText("AAPL volume 1y")).toEqual({ ticker: "AAPL", range: "1y", volume: "true" });
+    expect(parseText("삼성전자 거래량 candle")).toEqual({ ticker: "삼성전자", style: "candle", volume: "true" });
+    expect(parseText("거래량")).toEqual({ ticker: "거래량" });
     expect(parseText("   ")).toEqual({ ticker: "" });
   });
 

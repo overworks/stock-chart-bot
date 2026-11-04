@@ -39,7 +39,7 @@ export async function runChart(
   const name = (await symbolName(symbol, env.KV)) ?? series.name;
   const title = buildTitle(symbol, name, rule?.label);
   const reference = req.range === "1d" && !req.from ? previousClose : undefined;
-  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, reference, source, intraday, regularHours });
+  const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, volume: req.volume, reference, source, intraday, regularHours });
   const png = await svgToPng(svg);
   const change = summarizeChange(bars, currency, reference);
 

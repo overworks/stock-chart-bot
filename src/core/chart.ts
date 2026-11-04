@@ -21,6 +21,8 @@ export interface ChartOptions {
   now?: Date;
   /** 분·시간봉 여부. 없으면 봉 간격으로 추정한다. */
   intraday?: boolean;
+  /** 하단 거래량 막대. 기본은 그리지 않는다. */
+  volume?: boolean;
   /** 정규장 구간. 주어지면 그 밖의 봉 구간에 프리마켓·애프터마켓 음영을 넣는다. */
   regularHours?: TimeSpan[];
 }
@@ -59,7 +61,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const { timeZone = "UTC", currency = "", style = "line", reference, source, now = new Date() } = opts;
   if (bars.length < 2) throw new Error("차트를 그리기에 데이터가 부족합니다.");
   const candle = style === "candle";
-  const hasVolume = bars.some((b) => (b.v ?? 0) > 0);
+  const hasVolume = !!opts.volume && bars.some((b) => (b.v ?? 0) > 0);
   const change = summarizeChange(bars, currency, reference);
 
   const lows = candle ? bars.map((b) => b.l ?? b.c) : bars.map((b) => b.c);

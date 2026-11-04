@@ -1,5 +1,5 @@
 import { ALIAS_USAGE, runAlias } from "../core/aliases";
-import { RANGE_CHOICES, STYLE_CHOICES } from "../core/command";
+import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
 
@@ -71,7 +71,7 @@ function isAliasAdmin(userId: string | null, admins: string | undefined): boolea
   return admins.split(",").map((s) => s.trim()).filter(Boolean).includes(userId);
 }
 
-/** 첫 토큰은 항상 종목. 이후 토큰 중 기간·스타일·날짜는 옵션, 나머지는 종목명에 이어 붙인다. */
+/** 첫 토큰은 항상 종목. 이후 토큰 중 기간·스타일·거래량·날짜는 옵션, 나머지는 종목명에 이어 붙인다. */
 export function parseText(text: string): Record<string, string | undefined> {
   const tokens = unescapeSlack(text).trim().split(/\s+/).filter(Boolean);
   const args: Record<string, string | undefined> = {};
@@ -80,6 +80,7 @@ export function parseText(text: string): Record<string, string | undefined> {
     const low = tok.toLowerCase();
     if ((RANGE_CHOICES as readonly string[]).includes(low) && !args.range) args.range = low;
     else if ((STYLE_CHOICES as readonly string[]).includes(low) && !args.style) args.style = low;
+    else if ((VOLUME_KEYWORDS as readonly string[]).includes(low) && !args.volume) args.volume = "true";
     else if (/^\d{4}-\d{2}-\d{2}$/.test(tok) && !args.from) args.from = tok;
     else if (/^\d{4}-\d{2}-\d{2}$/.test(tok) && !args.to) args.to = tok;
     else rest.push(tok);

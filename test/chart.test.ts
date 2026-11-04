@@ -68,7 +68,7 @@ describe("buildSvg candle + volume", () => {
     }));
 
   it("draws one wick and body per bar, colored by open/close", () => {
-    const svg = buildSvg(ohlc(6), "c", { style: "candle" });
+    const svg = buildSvg(ohlc(6), "c", { style: "candle", volume: true });
     expect((svg.match(/<rect /g) ?? []).length).toBe(1 + 6 + 6);
     const wicks = (svg.match(/<line [^>]*stroke="#(dc2626|2563eb|6b7280)"/g) ?? []).length;
     expect(wicks).toBe(6);
@@ -83,9 +83,10 @@ describe("buildSvg candle + volume", () => {
     expect(svg).toContain(">97<");
   });
 
-  it("adds a volume panel only when volume data exists", () => {
-    expect(buildSvg(ohlc(4), "v")).toContain(">4K<");
-    expect(buildSvg(daily(4), "v")).not.toContain("fill-opacity=\"0.45\"");
+  it("adds a volume panel only when requested and volume data exists", () => {
+    expect(buildSvg(ohlc(4), "v", { volume: true })).toContain(">4K<");
+    expect(buildSvg(ohlc(4), "v")).not.toContain("fill-opacity=\"0.45\"");
+    expect(buildSvg(daily(4), "v", { volume: true })).not.toContain("fill-opacity=\"0.45\"");
   });
 
   it("falls back to close when open/high/low are missing", () => {

@@ -70,6 +70,12 @@ const chartCommand = {
       choices: STYLE_CHOICES.map((s) => ({ name: s, value: s })),
     },
     {
+      type: 5,
+      name: "volume",
+      description: "거래량 표시 (미입력 시 표시 안 함)",
+      required: false,
+    },
+    {
       type: 3,
       name: "from",
       description: "시작일 YYYY-MM-DD (range 대신 사용)",

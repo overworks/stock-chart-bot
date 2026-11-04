@@ -14,7 +14,9 @@ mkdirSync(outDir, { recursive: true });
 configureKis(process.env.KIS_APP_KEY, process.env.KIS_APP_SECRET);
 
 for (const c of cases) {
-  const [sym, range = "1d", style = "line"] = c.split(":");
+  const [sym, range = "1d", ...flags] = c.split(":");
+  const style = flags.includes("candle") ? "candle" : "line";
+  const volume = flags.includes("volume");
   if (!(RANGE_CHOICES as readonly string[]).includes(range)) {
     console.log(`FAIL ${sym} ${range}: 알 수 없는 range`);
     continue;
@@ -27,12 +29,12 @@ for (const c of cases) {
     const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
     const title = process.env.TITLE ?? (name && name !== sym ? `${name} (${sym}${rule ? `, ${rule.label}` : ""})` : sym);
     const reference = range === "1d" ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: style as "line" | "candle", reference, source, intraday, regularHours });
+    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style, volume, reference, source, intraday, regularHours });
     const png = new Resvg(svg, {
       fitTo: { mode: "width", value: 900 },
       font: { fontBuffers: fonts, defaultFontFamily: "NanumSquare", loadSystemFonts: false },
     }).render().asPng();
-    const out = `${outDir}/${sym}-${range}${style === "candle" ? "-candle" : ""}.png`;
+    const out = `${outDir}/${sym}-${range}${style === "candle" ? "-candle" : ""}${volume ? "-volume" : ""}.png`;
     writeFileSync(out, png);
     console.log(`OK   ${sym} ${range} bars=${bars.length} png=${png.length}B -> ${out}`);
   } catch (e) {

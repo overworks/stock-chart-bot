@@ -10,21 +10,22 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립적인 `core`와 �
 **Discord**
 
 ```
-/stock-chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>]
-/stock-chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>]
+/stock-chart ticker:<종목> [range:<1d|1w|1m|3m|6m|1y|5y|max>] [style:<line|candle>] [volume:<True|False>]
+/stock-chart ticker:<종목> from:<YYYY-MM-DD> to:<YYYY-MM-DD> [style:<line|candle>] [volume:<True|False>]
 ```
 
 **Slack** (자동완성 없음 — 종목을 맨 앞에 쓰고 나머지 옵션은 순서 무관)
 
 ```
-/stock-chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle]
-/stock-chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]
+/stock-chart <종목> [1d|1w|1m|3m|6m|1y|5y|max] [candle] [volume|거래량]
+/stock-chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle] [volume|거래량]
 ```
 
 **옵션 및 차트 표시 규칙**
 
 - `range`를 생략하면 기본값은 `1d`다. `from`과 `to`는 반드시 함께 입력해야 하며, 지정하면 `range`보다 우선한다.
-- `style`을 생략하면 종가 선 차트(`line`), `candle`을 지정하면 봉 차트를 그린다. 두 스타일 모두 하단에 거래량을 함께 표시한다.
+- `style`을 생략하면 종가 선 차트(`line`), `candle`을 지정하면 봉 차트를 그린다.
+- 거래량은 기본적으로 표시하지 않는다. Discord에서 `volume:True`, Slack에서 `volume` 또는 `거래량`을 붙이면 차트 하단에 거래량 막대를 함께 그린다.
 - 차트 제목은 `삼성전자 (005930.KS)`처럼 정식 종목명과 심볼을 함께 표기하며, 내부 목록에 없는 해외 종목 등은 시세 제공자의 종목명을 사용한다.
 - 상단에는 최근가와 등락폭(금액·등락률)을 표시한다. `1d`는 전일 종가 대비(차트에 전일 종가 점선 표시), 그 외 기간은 조회 구간 첫 봉 종가 대비로 계산하며 상승은 빨간색, 하락은 파란색으로 나타낸다.
 - `1d`(5분봉)와 `1w`(30분봉)는 장중 차트이므로 가로축에 거래소 현지 시각을 표시한다. 환율·암호화폐처럼 24시간 거래되는 상품은 한국 시각(KST) 기준으로 표시한다.

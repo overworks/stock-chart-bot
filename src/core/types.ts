@@ -8,6 +8,8 @@ export interface ChartRequest {
   from?: string;
   to?: string;
   style?: ChartStyle;
+  /** 하단 거래량 막대. 기본은 표시하지 않는다. */
+  volume?: boolean;
 }
 
 export interface ChartBar {

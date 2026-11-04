@@ -13,6 +13,9 @@ export type RangeChoice = (typeof RANGE_CHOICES)[number];
 
 export const STYLE_CHOICES = ["line", "candle"] as const;
 
+/** Slack 텍스트에서 거래량 표시를 켜는 단어. */
+export const VOLUME_KEYWORDS = ["volume", "거래량"] as const;
+
 export function parseChartArgs(
   args: Record<string, string | undefined>,
 ): import("./types").ChartRequest {
@@ -25,6 +28,8 @@ export function parseChartArgs(
   const style = (STYLE_CHOICES as readonly string[]).includes(args.style?.trim() ?? "")
     ? (args.style!.trim() as import("./types").ChartStyle)
     : "line";
+  // Discord는 boolean, Slack 등 텍스트 플랫폼은 "true" 문자열로 넘긴다.
+  const volume = String(args.volume ?? "").trim().toLowerCase() === "true";
 
   if ((from && !to) || (!from && to)) {
     throw new Error("커스텀 기간은 시작일과 종료일을 함께 입력해 주세요.");
@@ -43,7 +48,7 @@ export function parseChartArgs(
     if (start >= end) {
       throw new Error("시작일은 종료일보다 앞서야 합니다.");
     }
-    return { ticker, from, to, style };
+    return { ticker, from, to, style, volume };
   }
 
   return {
@@ -52,5 +57,6 @@ export function parseChartArgs(
       ? range
       : "1d",
     style,
+    volume,
   };
 }
