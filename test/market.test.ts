@@ -44,18 +44,42 @@ describe("getPrices", () => {
   });
 
   it.each([
-    ["1d", "1d", "5m"],
-    ["1w", "5d", "30m"],
-    ["3m", "3mo", "1d"],
-    ["6m", "6mo", "1d"],
-    ["5y", "5y", "1wk"],
-    ["max", "max", "1mo"],
-  ])("range %s -> yahoo %s/%s", async (range, yRange, interval) => {
+    ["1d", "1d", "5m", "true"],
+    ["1w", "5d", "30m", null],
+    ["3m", "3mo", "1d", null],
+    ["6m", "6mo", "1d", null],
+    ["5y", "5y", "1wk", null],
+    ["max", "max", "1mo", null],
+  ])("range %s -> yahoo %s/%s (includePrePost %s)", async (range, yRange, interval, prePost) => {
     const fn = yahoo(ok);
     await getPrices("AAPL", { ticker: "AAPL", range });
     const url = fn.url();
     expect(url.searchParams.get("range")).toBe(yRange);
     expect(url.searchParams.get("interval")).toBe(interval);
+    expect(url.searchParams.get("includePrePost")).toBe(prePost);
+  });
+
+  describe("1d previous close with extended hours", () => {
+    // 2026-11-03 16:00 ET 정규장 마감, 2026-11-04 04:00·04:05 ET 프리마켓
+    const close1103 = 1793739600;
+    const pre1104 = [1793782800, 1793783100];
+    const meta = { exchangeTimezoneName: "America/New_York", currency: "USD", instrumentType: "EQUITY" };
+    const body = (m: object, timestamp: number[]) => ({ chart: { result: [{ meta: { ...meta, ...m }, timestamp, indicators: { quote: [{ close: [335, 337.82] }] } }] } });
+
+    it("uses the last regular close during pre-market", async () => {
+      yahoo(body({ chartPreviousClose: 338.32, previousClose: 338.32, regularMarketPrice: 331.9, regularMarketTime: close1103 }, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).previousClose).toBe(331.9);
+    });
+
+    it("keeps Yahoo's previous close once the regular session has traded", async () => {
+      yahoo(body({ chartPreviousClose: 331.9, regularMarketPrice: 336, regularMarketTime: pre1104[1] + 6 * 3600 }, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).previousClose).toBe(331.9);
+    });
+
+    it("ignores the regular session time for other ranges", async () => {
+      yahoo(body({ chartPreviousClose: 338.32, regularMarketPrice: 331.9, regularMarketTime: close1103 }, pre1104));
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).previousClose).toBe(338.32);
+    });
   });
 
   it("uses period1/period2 for custom periods", async () => {

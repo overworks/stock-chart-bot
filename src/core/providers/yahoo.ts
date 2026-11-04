@@ -8,8 +8,9 @@ const MAX_SEARCH = 25;
 const QUOTE_TYPES = new Set(["EQUITY", "ETF", "INDEX", "MUTUALFUND", "CRYPTOCURRENCY", "CURRENCY", "FUTURE"]);
 const CONTINUOUS_TYPES = new Set(["CRYPTOCURRENCY", "CURRENCY"]);
 
-const RANGE: Record<string, { range: string; interval: string }> = {
-  "1d": { range: "1d", interval: "5m" },
+/** prePost: 미국 주식의 프리마켓(04:00~)·애프터마켓(~20:00 ET) 봉을 포함한다. 그 외 시장은 응답이 같다. */
+const RANGE: Record<string, { range: string; interval: string; prePost?: boolean }> = {
+  "1d": { range: "1d", interval: "5m", prePost: true },
   "1w": { range: "5d", interval: "30m" },
   "1m": { range: "1mo", interval: "1d" },
   "3m": { range: "3mo", interval: "1d" },
@@ -23,7 +24,7 @@ export const yahoo: MarketProvider = {
   name: "Yahoo Finance",
 
   async getPrices(symbol, req) {
-    const { url, label, intraday } = buildUrl(symbol, req);
+    const { url, label, intraday, prePost } = buildUrl(symbol, req);
     const res = await fetch(url, {
       headers: { "User-Agent": UA },
       cf: { cacheTtl: 300, cacheEverything: true },
@@ -52,12 +53,17 @@ export const yahoo: MarketProvider = {
     if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
 
     const meta = result.meta ?? {};
-    const prev = meta.chartPreviousClose ?? meta.previousClose;
+    const timeZone: string = meta.exchangeTimezoneName ?? "UTC";
+    let prev = meta.chartPreviousClose ?? meta.previousClose;
+    // 프리마켓에는 오늘 봉만 오는데 chartPreviousClose는 직전 정규장의 전일 종가로 남아 있다.
+    if (prePost && typeof meta.regularMarketTime === "number" && day(bars[bars.length - 1].t, timeZone) > day(meta.regularMarketTime, timeZone)) {
+      prev = meta.regularMarketPrice;
+    }
     return {
       bars,
       label,
       intraday,
-      timeZone: meta.exchangeTimezoneName ?? "UTC",
+      timeZone,
       currency: meta.currency ?? "",
       source: yahoo.name,
       name: meta.shortName ?? meta.longName ?? undefined,
@@ -101,14 +107,19 @@ function num(arr: unknown, i: number): number | undefined {
   return typeof x === "number" && Number.isFinite(x) ? x : undefined;
 }
 
+function day(sec: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(sec * 1000));
+}
+
 function buildUrl(symbol: string, req: ChartRequest) {
   const sym = encodeURIComponent(symbol);
   if (req.from && req.to) {
     const p1 = Math.floor(Date.parse(req.from) / 1000);
     const p2 = Math.floor(Date.parse(req.to) / 1000) + 86_400;
-    return { url: `${CHART}/${sym}?period1=${p1}&period2=${p2}&interval=1d`, label: `${req.from} ~ ${req.to}`, intraday: false };
+    return { url: `${CHART}/${sym}?period1=${p1}&period2=${p2}&interval=1d`, label: `${req.from} ~ ${req.to}`, intraday: false, prePost: false };
   }
   const label = req.range ?? "1d";
-  const { range, interval } = RANGE[label] ?? RANGE["1d"];
-  return { url: `${CHART}/${sym}?range=${range}&interval=${interval}`, label, intraday: /^\d+[mh]$/.test(interval) };
+  const { range, interval, prePost = false } = RANGE[label] ?? RANGE["1d"];
+  const extra = prePost ? "&includePrePost=true" : "";
+  return { url: `${CHART}/${sym}?range=${range}&interval=${interval}${extra}`, label, intraday: /^\d+[mh]$/.test(interval), prePost };
 }
