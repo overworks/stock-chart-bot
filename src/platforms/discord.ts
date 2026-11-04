@@ -2,7 +2,6 @@ import { verifyKey } from "discord-interactions";
 import { runAlias, searchAliases } from "../core/aliases";
 import { runChart } from "../core/run";
 import { searchSymbols } from "../core/symbols";
-import { appendDeprecationNotice } from "./deprecation";
 
 const API = "https://discord.com/api/v10";
 const ADMINISTRATOR = 1n << 3n;
@@ -33,7 +32,7 @@ export async function handleDiscord(
   if (interaction.type === 1) return json({ type: 1 });
 
   const { name, action, args } = parseCommand(interaction.data);
-  const isAliasCommand = name === "stock-alias" || name === "alias";
+  const isAliasCommand = name === "stock-alias";
 
   // Autocomplete
   if (interaction.type === 4) {
@@ -47,14 +46,14 @@ export async function handleDiscord(
   }
 
   // Slash command
-  if (interaction.type === 2 && (name === "stock-chart" || name === "chart")) {
+  if (interaction.type === 2 && name === "stock-chart") {
     ctx.waitUntil(serveChart(interaction, args, env));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }
 
   if (interaction.type === 2 && isAliasCommand) {
     if (action !== "list" && !canManage(interaction)) {
-      return json({ type: 4, data: { content: appendDeprecationNotice(name, "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다."), flags: 64 } });
+      return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }
     ctx.waitUntil(serveAlias(interaction, { action, ...args }, env));
     return json({ type: 5 });
@@ -98,7 +97,7 @@ async function serveAlias(interaction: any, args: Record<string, string | undefi
   } catch (err) {
     content = `⚠️ ${(err as Error).message}`;
   }
-  await patchOriginal(interaction, env, { content: appendDeprecationNotice(interaction.data.name, content) });
+  await patchOriginal(interaction, env, { content });
 }
 
 async function serveChart(
@@ -113,7 +112,7 @@ async function serveChart(
     form.append(
       "payload_json",
       JSON.stringify({
-        content: appendDeprecationNotice(interaction.data.name, result.text),
+        content: result.text,
         embeds: [
           {
             image: { url: "attachment://chart.png" },
@@ -131,7 +130,7 @@ async function serveChart(
     }
     await fetch(endpoint, { method: "PATCH", body: form });
   } catch (err) {
-    await patchOriginal(interaction, env, { content: appendDeprecationNotice(interaction.data.name, `⚠️ ${(err as Error).message}`) });
+    await patchOriginal(interaction, env, { content: `⚠️ ${(err as Error).message}` });
   }
 }
 

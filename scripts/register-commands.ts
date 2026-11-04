@@ -84,12 +84,7 @@ const chartCommand = {
   ],
 };
 
-const commands = [
-  chartCommand,
-  { ...chartCommand, name: "chart", description: "종목 주가 차트를 그립니다 (/stock-chart 사용 권장)" },
-  aliasCommand,
-  { ...aliasCommand, name: "alias", description: "종목 별칭을 관리합니다 (/stock-alias 사용 권장)" },
-];
+const commands = [chartCommand, aliasCommand];
 
 const url = guildId
   ? `${API}/applications/${appId}/guilds/${guildId}/commands`

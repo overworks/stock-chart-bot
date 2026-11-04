@@ -19,8 +19,6 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 /stock-chart <종목> <YYYY-MM-DD> <YYYY-MM-DD> [candle]
 ```
 
-기존 `/chart`도 호환성을 위해 같은 옵션과 동작으로 지원한다. 새 사용법은 `/stock-chart`를 기준으로 한다.
-
 - `range`를 생략하면 `1d`. `from`/`to`는 둘 다 넣어야 하며 `range`보다 우선한다.
 - `style`을 생략하면 종가 라인. `candle`은 봉차트. 둘 다 하단에 거래량이 붙는다.
 - `1d`, `1w`는 분봉 기반이라 x축에 거래소 현지 시각이 표시된다.
@@ -37,8 +35,7 @@ Slack (자동완성 없음, 종목을 먼저 쓰고 옵션은 순서 무관):
 /stock-alias list
 ```
 
-기존 `/alias add|remove|list`도 호환성을 위해 당분간 지원하며, 추후 제거할 예정이다.
-두 명령은 같은 별칭 데이터와 권한을 사용한다. 새 사용법은 `/stock-alias`를 기준으로 한다.
+기존 `/chart`, `/alias` 명령은 제거되었다. `/stock-chart`, `/stock-alias`를 사용한다.
 
 ### 종목 입력
 
@@ -151,7 +148,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register # 특정 서버, 즉시
 이미 지정한 환경변수가 파일보다 우선하며, `.dev.vars` 없이 환경변수만으로도 실행할 수 있다.
 
 기존 설치도 Worker를 배포한 뒤 기존과 같은 등록 범위(글로벌 또는 특정 서버)로
-`npm run register`를 다시 실행한다. `/stock-chart`, `/stock-alias`, 호환용 `/chart`, `/alias`가 함께 등록된다.
+`npm run register`를 다시 실행한다. `/stock-chart`, `/stock-alias`만 등록되며, 이전에 등록된 `/chart`, `/alias`는 제거된다.
 
 마지막으로 Developer Portal → General Information → **Interactions Endpoint URL**에
 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, OAuth2 URL
@@ -164,10 +161,10 @@ Generator에서 `applications.commands` + `bot` 스코프로 초대 링크를 �
 1. Basic Information → **Signing Secret**을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
 2. Slash Commands → `/stock-chart` 생성, Request URL은
    `https://stock-chart-bot.<subdomain>.workers.dev/slack`.
-   기존 `/chart`가 있으면 같은 Request URL로 유지한다.
+   기존 `/chart`가 있으면 삭제한다(더 이상 처리하지 않는다).
 3. (선택) Slash Commands → `/stock-alias`도 같은 Request URL로 만들고, 별칭을 바꿀 사용자의
    Slack 멤버 ID를 쉼표로 이어 `SLACK_ALIAS_ADMINS` 시크릿에 넣는다. 없으면 `/stock-alias list`만 된다.
-   기존 `/alias`가 있으면 같은 Request URL로 유지해 이전 명령도 계속 사용할 수 있게 한다.
+   기존 `/alias`가 있으면 삭제한다.
 4. 워크스페이스에 설치한다. 봇 토큰이나 추가 스코프는 필요 없다. 응답은 `response_url`로
    보내고, 이미지는 R2에 저장한 뒤 Worker의 `/charts/<key>` URL로 노출한다(7일 후 만료).
 
