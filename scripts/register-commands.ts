@@ -1,6 +1,13 @@
+import { loadEnvFile } from "node:process";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
 
 const API = "https://discord.com/api/v10";
+
+try {
+  loadEnvFile(new URL("../.dev.vars", import.meta.url));
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+}
 
 const appId = process.env.DISCORD_APPLICATION_ID;
 const botToken = process.env.DISCORD_BOT_TOKEN;
@@ -8,7 +15,7 @@ const guildId = process.env.DISCORD_GUILD_ID;
 
 if (!appId || !botToken) {
   console.error(
-    "DISCORD_APPLICATION_ID 와 DISCORD_BOT_TOKEN 환경변수가 필요합니다.",
+    ".dev.vars 또는 환경변수에 DISCORD_APPLICATION_ID 와 DISCORD_BOT_TOKEN을 설정해 주세요.",
   );
   process.exit(1);
 }

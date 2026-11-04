@@ -118,7 +118,7 @@ npm install                                # postinstall에서 wasm/resvg.wasm �
 npx wrangler login
 npx wrangler kv namespace create stock-chart-bot --binding KV   # 출력된 id를 wrangler.jsonc에 반영
 npx wrangler r2 bucket create stock-chart-bot-charts
-cp .dev.vars.example .dev.vars             # DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, SLACK_SIGNING_SECRET
+cp .dev.vars.example .dev.vars             # DISCORD_APPLICATION_ID, DISCORD_PUBLIC_KEY, DISCORD_BOT_TOKEN, SLACK_SIGNING_SECRET
 ```
 
 `wrangler.jsonc`의 `DISCORD_APPLICATION_ID`를 자기 앱 ID로 바꾼다.
@@ -141,14 +141,14 @@ npm run seed:symbols                       # KV 의 symbols:v1 키에 적재
 
 ```bash
 npm run deploy
-set -a; . ./.dev.vars; set +a
-DISCORD_APPLICATION_ID=<앱 ID> npm run register            # 글로벌 (전파 최대 1시간)
-DISCORD_GUILD_ID=<서버 ID> DISCORD_APPLICATION_ID=<앱 ID> npm run register   # 특정 서버, 즉시
+npm run register                          # 글로벌 (전파 최대 1시간)
+DISCORD_GUILD_ID=<서버 ID> npm run register # 특정 서버, 즉시
 ```
 
-`npm run register`는 `.dev.vars`와 `wrangler.jsonc`를 자동으로 읽지 않는다.
-위처럼 `.dev.vars`의 `DISCORD_BOT_TOKEN`을 환경변수로 불러오고,
-`wrangler.jsonc`에 설정한 앱의 `DISCORD_APPLICATION_ID`를 지정해야 한다.
+`npm run register`는 프로젝트 루트의 `.dev.vars`를 자동으로 읽는다.
+파일에 `DISCORD_APPLICATION_ID`와 `DISCORD_BOT_TOKEN`을 설정하면 별도로 불러올 필요가 없다.
+앱 ID는 `wrangler.jsonc`의 `DISCORD_APPLICATION_ID`와 같은 값으로 설정한다.
+이미 지정한 환경변수가 파일보다 우선하며, `.dev.vars` 없이 환경변수만으로도 실행할 수 있다.
 
 기존 설치도 Worker를 배포한 뒤 기존과 같은 등록 범위(글로벌 또는 특정 서버)로
 `npm run register`를 다시 실행한다. `/stock-chart`, `/stock-alias`, 호환용 `/chart`, `/alias`가 함께 등록된다.

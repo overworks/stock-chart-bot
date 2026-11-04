@@ -8,7 +8,7 @@
 
 ## 요구 사항
 
-- Node.js 20+
+- Node.js 20.12+ (CI는 Node.js 22 사용)
 - npm
 - Cloudflare 계정 및 Wrangler 로그인 (`npx wrangler login`)
 
@@ -34,7 +34,7 @@ npm run smoke -- "AAPL:1d,005930.KS:1m"   # Yahoo 조회 → PNG 로컬 확인 (
 npm run fetch:symbols # KIND 상장법인 + 네이버 ETF/ETN + 업비트 원화 마켓 + symbols.manual.json → scripts/symbols.json
 npm run seed:symbols  # scripts/symbols.json 을 KV SYMBOLS 에 적재
 npm run deploy       # 운영 배포
-npm run register     # Discord 슬래시 커맨드 등록
+npm run register     # .dev.vars를 자동으로 읽어 Discord 슬래시 커맨드 등록
 ```
 
 Wrangler 빌드가 깨지지 않는지 확인하려면:
