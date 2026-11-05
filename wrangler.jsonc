@@ -8,9 +8,14 @@
     { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true },
     { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }
   ],
-  "observability": { "enabled": true },
-  "vars": {
-    "DISCORD_APPLICATION_ID": "1545454333120741386"
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
+    }
   },
   "kv_namespaces": [
     { "binding": "KV", "id": "536161eca4ca4abcbdf454cd8f252b36" }

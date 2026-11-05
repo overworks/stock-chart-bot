@@ -20,7 +20,7 @@ npx wrangler r2 bucket create stock-chart-bot-charts
 cp .dev.vars.example .dev.vars             # 로컬 개발용 시크릿 입력
 ```
 
-새로운 Cloudflare 계정에 배포할 때는 `wrangler.jsonc`의 `DISCORD_APPLICATION_ID`와 KV 네임스페이스 `id`를 해당 계정의 값으로 교체한다.
+새로운 Cloudflare 계정에 배포할 때는 `wrangler.jsonc`의 KV 네임스페이스 `id`를 해당 계정의 값으로 교체하고, `DISCORD_APPLICATION_ID`는 `npx wrangler secret put`으로 등록한다.
 
 ## 개발 워크플로
 

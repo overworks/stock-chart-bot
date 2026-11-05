@@ -92,11 +92,12 @@ npx wrangler r2 bucket create stock-chart-bot-charts
 cp .dev.vars.example .dev.vars             # 로컬 개발 및 커맨드 등록용 환경변수 입력
 ```
 
-`wrangler.jsonc`의 `DISCORD_APPLICATION_ID`와 KV 네임스페이스 `id`를 자신의 값으로 변경한다.
+`wrangler.jsonc`의 KV 네임스페이스 `id`를 자신의 값으로 변경한다.
 
 ### 2. 시크릿 등록 및 종목 데이터 적재
 
 ```bash
+npx wrangler secret put DISCORD_APPLICATION_ID
 npx wrangler secret put DISCORD_PUBLIC_KEY
 npx wrangler secret put DISCORD_BOT_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET      # Slack 연동 시
