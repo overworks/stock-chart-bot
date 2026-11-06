@@ -5,6 +5,11 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립적인 `core`와 �
 
 ## 사용법
 
+### 도움말 (`/stock-help`)
+
+Discord와 Slack에서 인자 없이 `/stock-help`를 실행하면 차트 조회 문법·옵션·기본값, 종목 입력 예시, 별칭 관리법과 변경 권한을 한 메시지로 안내한다.
+누구나 사용할 수 있으며, 각 플랫폼에 맞춘 도움말을 실행한 사용자에게만 즉시 보여 준다.
+
 ### 차트 조회 (`/stock-chart`)
 
 **Discord**
@@ -68,7 +73,7 @@ Cloudflare Workers 엣지에서 동작하며, 플랫폼 중립적인 `core`와 �
   2. **수동 별칭 파일**: 저장소의 `scripts/symbols.manual.json`을 수정해 `main`에 push하면 `refresh-symbols` 워크플로가 자동으로 실행되어 KV에 반영한다.
 
 > [!NOTE]
-> 이전 버전의 `/chart`, `/alias` 명령은 제거되었다. `/stock-chart`와 `/stock-alias`만 사용한다.
+> 이전 버전의 `/chart`, `/alias` 명령은 제거되었다. `/stock-chart`, `/stock-alias`, `/stock-help`를 사용한다.
 
 ## 데이터 출처
 
@@ -118,7 +123,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 ```
 
 - `npm run register`는 프로젝트 루트의 `.dev.vars`에서 `DISCORD_APPLICATION_ID`와 `DISCORD_BOT_TOKEN`을 자동으로 읽는다(환경변수를 직접 지정하면 환경변수가 우선한다).
-- 등록 시 `/stock-chart`, `/stock-alias` 두 명령으로 전체 덮어쓰기되므로, 이전에 등록된 구버전 명령(`/chart`, `/alias`)도 함께 정리된다.
+- 등록 시 `/stock-chart`, `/stock-alias`, `/stock-help` 세 명령으로 전체 덮어쓰기되므로, 이전에 등록된 구버전 명령(`/chart`, `/alias`)도 함께 정리된다.
 - Discord Developer Portal → **General Information** → **Interactions Endpoint URL**에 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, **OAuth2 URL Generator**에서 `applications.commands`와 `bot` 스코프로 초대 링크를 만들어 서버에 봇을 추가한다.
 
 ### 4. Slack 연동 (선택)
@@ -126,9 +131,11 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 [api.slack.com/apps](https://api.slack.com/apps)에서 앱을 생성한 뒤 다음 순서로 설정한다.
 
 1. **Basic Information** → **Signing Secret** 값을 `SLACK_SIGNING_SECRET` 시크릿으로 등록한다.
-2. **Slash Commands**에서 `/stock-chart`(필수)와 `/stock-alias`(선택)를 생성하고, Request URL을 모두 `https://stock-chart-bot.<subdomain>.workers.dev/slack`으로 설정한다.
+2. **Slash Commands**에서 `/stock-chart`, `/stock-help`, `/stock-alias`(별칭 관리 사용 시)를 생성하고, Request URL을 모두 `https://stock-chart-bot.<subdomain>.workers.dev/slack`으로 설정한다. `/stock-help`의 설명은 “봇 사용법을 안내합니다”로 입력하고, 인자가 없으므로 Usage Hint는 비워 둔다.
 3. Slack에서 별칭 추가·삭제를 허용할 사용자의 멤버 ID를 쉼표로 구분해 `SLACK_ALIAS_ADMINS` 시크릿에 등록한다(미설정 시 `/stock-alias list`만 가능).
-4. 워크스페이스에 앱을 설치한다. 별도의 봇 토큰이나 OAuth 스코프는 필요하지 않다. 응답은 `response_url`로 전송하며, 차트 이미지는 R2에 저장한 뒤 `/charts/<key>` URL로 서빙한다(7일 후 자동 만료).
+4. 워크스페이스에 앱을 설치한다. 별도의 봇 토큰이나 OAuth 스코프는 필요하지 않다. 도움말은 요청에 즉시 응답하고, 차트 결과는 `response_url`로 전송한다. 차트 이미지는 R2에 저장한 뒤 `/charts/<key>` URL로 서빙한다(7일 후 자동 만료).
+
+기존 설치에 `/stock-help`를 추가할 때는 Worker 배포 → Discord `npm run register` 재실행 → Slack 앱에 `/stock-help` 생성 순서로 적용한다.
 
 ### 5. CI/CD 및 종목 목록 자동 갱신
 

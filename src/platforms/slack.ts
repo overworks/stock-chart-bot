@@ -2,6 +2,7 @@ import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
+import { helpText } from "./help";
 
 const TOLERANCE_SEC = 5 * 60;
 const USAGE =
@@ -24,6 +25,7 @@ export async function handleSlack(
   const form = new URLSearchParams(body);
   const responseUrl = form.get("response_url") ?? "";
   const command = form.get("command");
+  if (command === "/stock-help") return ephemeral(helpText("slack"));
   if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx);
   if (command !== "/stock-chart") return ephemeral("알 수 없는 명령입니다.");
 

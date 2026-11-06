@@ -1,6 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../src/core/command";
 import { parseAliasText, parseText } from "../src/platforms/slack";
 import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 
@@ -161,6 +162,40 @@ describe("slack adapter", () => {
     const req = await slash({ text: "AAPL" });
     const res = await worker.fetch(req, { ...ENV, SLACK_SIGNING_SECRET: undefined as unknown as string }, createExecutionContext());
     expect(res.status).toBe(401);
+  });
+
+  it("immediately replies to /stock-help privately without storage, a response URL or outbound requests", async () => {
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const req = await slash({ command: "/stock-help", text: "", response_url: "" });
+    const res = await worker.fetch(req, { SLACK_SIGNING_SECRET: SECRET } as Env, ctx);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.response_type).toBe("ephemeral");
+    const text: string = body.text;
+    expect(text).toContain("/stock-help");
+    expect(text).toContain("/stock-chart 삼성전자");
+    expect(text).toContain("/stock-chart AAPL 1m candle volume");
+    expect(text).toContain("/stock-chart AAPL 2024-01-01 2024-06-30");
+    expect(text).toContain("기본 숨김");
+    expect(text).toContain("기간 옵션보다 우선");
+    for (const choice of [...RANGE_CHOICES, ...STYLE_CHOICES, ...VOLUME_KEYWORDS]) expect(text).toContain(`\`${choice}\``);
+    expect(text).toContain("종목을 맨 앞");
+    expect(text).not.toContain("ticker:");
+    expect(text).toContain("/stock-alias add 내삼전 삼성전자");
+    expect(text).toContain("/stock-alias remove 내삼전");
+    expect(text).toContain("/stock-alias list");
+    expect(text).toContain("관리자가 허용한 사용자");
+    await waitOnExecutionContext(ctx);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects /stock-help with an invalid signature", async () => {
+    const calls = stubOutbound();
+    const req = await slash({ command: "/stock-help", text: "" }, { secret: "wrong" });
+    const res = await worker.fetch(req, ENV, createExecutionContext());
+    expect(res.status).toBe(401);
+    expect(calls).toHaveLength(0);
   });
 
   it.each([["/chart", "AAPL"], ["/alias", "list"]])("treats the removed %s command as unknown", async (command, text) => {

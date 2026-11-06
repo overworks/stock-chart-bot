@@ -1,6 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
+import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
 import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 import keypair from "./keypair.json" with { type: "json" };
 
@@ -79,6 +80,41 @@ describe("discord adapter", () => {
     const res = await worker.fetch(await signed({ type: 1 }), ENV, createExecutionContext());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ type: 1 });
+  });
+
+  it("immediately replies to /stock-help privately without storage or outbound requests", async () => {
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const req = await signed({ type: 2, member: { permissions: "0" }, data: { name: "stock-help" } });
+    const res = await worker.fetch(req, { DISCORD_PUBLIC_KEY: ENV.DISCORD_PUBLIC_KEY } as Env, ctx);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.type).toBe(4);
+    expect(body.data.flags).toBe(64);
+    const content: string = body.data.content;
+    expect(content.length).toBeLessThanOrEqual(2000);
+    expect(content).toContain("/stock-help");
+    expect(content).toContain("/stock-chart ticker:삼성전자");
+    expect(content).toContain("range:1m style:candle volume:True");
+    expect(content).toContain("from:2024-01-01 to:2024-06-30");
+    expect(content).toContain("기본 숨김");
+    expect(content).toContain("기간 옵션보다 우선");
+    for (const choice of [...RANGE_CHOICES, ...STYLE_CHOICES]) expect(content).toContain(`\`${choice}\``);
+    expect(content).toContain("자동완성");
+    expect(content).toContain("/stock-alias add alias:내삼전 target:삼성전자");
+    expect(content).toContain("/stock-alias remove alias:내삼전");
+    expect(content).toContain("/stock-alias list");
+    expect(content).toContain("서버 관리");
+    await waitOnExecutionContext(ctx);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects /stock-help with an invalid signature", async () => {
+    const calls = stubOutbound();
+    const req = await signed({ type: 2, data: { name: "stock-help" } }, { badSig: true });
+    const res = await worker.fetch(req, ENV, createExecutionContext());
+    expect(res.status).toBe(401);
+    expect(calls).toHaveLength(0);
   });
 
   it("autocompletes symbols from KV by prefix for /stock-chart", async () => {

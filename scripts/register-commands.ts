@@ -90,7 +90,12 @@ const chartCommand = {
   ],
 };
 
-const commands = [chartCommand, aliasCommand];
+const helpCommand = {
+  name: "stock-help",
+  description: "봇 사용법을 안내합니다",
+};
+
+const commands = [chartCommand, aliasCommand, helpCommand];
 
 const url = guildId
   ? `${API}/applications/${appId}/guilds/${guildId}/commands`

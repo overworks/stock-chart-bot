@@ -2,6 +2,7 @@ import { verifyKey } from "discord-interactions";
 import { runAlias, searchAliases } from "../core/aliases";
 import { runChart } from "../core/run";
 import { searchSymbols } from "../core/symbols";
+import { helpText } from "./help";
 
 const API = "https://discord.com/api/v10";
 const ADMINISTRATOR = 1n << 3n;
@@ -46,6 +47,10 @@ export async function handleDiscord(
   }
 
   // Slash command
+  if (interaction.type === 2 && name === "stock-help") {
+    return json({ type: 4, data: { content: helpText("discord"), flags: 64 } });
+  }
+
   if (interaction.type === 2 && name === "stock-chart") {
     ctx.waitUntil(serveChart(interaction, args, env));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE

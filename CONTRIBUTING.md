@@ -76,7 +76,8 @@ src/
 │  └─ run.ts             #   차트 생성 오케스트레이션 (runChart)
 └─ platforms/            # 메신저 플랫폼별 어댑터
    ├─ discord.ts         #   Ed25519 서명 검증, 자동완성, deferred 응답, multipart 파일 업로드
-   └─ slack.ts           #   HMAC-SHA256 서명 검증, 즉시 ack, R2 URL 기반 response_url 전송
+   ├─ slack.ts           #   HMAC-SHA256 서명 검증, 즉시 ack, R2 URL 기반 response_url 전송
+   └─ help.ts            #   /stock-help 공통 문구 및 플랫폼별 사용 예시
 scripts/
 ├─ fetch-krx-symbols.ts  # KIND + 네이버 ETF/ETN + 업비트 + 수동 별칭 병합 스크립트
 ├─ symbols.manual.json   # 수동 관리 별칭 목록 (원본)
@@ -93,6 +94,7 @@ scripts/
 - 인자 검증, 종목 검색, 시세 조회, 차트 SVG 생성, PNG 렌더링 등 플랫폼과 무관한 로직은 모두 `core`에 둔다.
 - 서명 검증, 플랫폼별 요청/응답 포맷 변환, 3초 이내 초기 응답(ack/deferred), 파일 첨부 또는 이미지 URL 전달은 `src/platforms/<platform>.ts`에서 처리한다.
 - 서명 검증은 반드시 파싱 전의 **원본 요청 문자열(`await req.text()`)**로 수행한다.
+- `/stock-help`는 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`). `platforms/help.ts`의 순수 함수가 기존 옵션 상수와 플랫폼별 예시로 안내를 구성하며, 외부 호출이나 저장소 접근은 하지 않는다. Discord 도움말 본문은 2,000자 이내로 유지한다.
 
 ### 2. 데이터 소스 (`src/core/providers/`)
 
