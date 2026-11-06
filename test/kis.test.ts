@@ -171,6 +171,31 @@ describe("kis provider", () => {
     expect(s.bars).toHaveLength(2);
   });
 
+  it.each([
+    ["one current bar mixed with old history", ["100000"]],
+    ["current bars in a single five-minute bucket", ["100100", "100000"]],
+  ])("retries KRX before Yahoo when UN has %s", async (_label, hours) => {
+    const calls = stub((url) => {
+      if (url.hostname === "query1.finance.yahoo.com") {
+        return { body: { chart: { result: [{ timestamp: [1, 2], indicators: { quote: [{ close: [1, 2] }] } }] } } };
+      }
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 105), day("20260903", 100)], "LG씨엔에스") };
+      if (url.searchParams.get("FID_COND_MRKT_DIV_CODE") === "UN") {
+        const current = hours.map((hour) => minute("20260904", hour, 105));
+        const old = Array.from({ length: 120 - current.length }, () => minute("20260630", "195900", 90));
+        return { body: ok([...current, ...old], "LG씨엔에스") };
+      }
+      return { body: ok([minute("20260904", "100000", 105), minute("20260904", "090000", 101)], "LG씨엔에스") };
+    });
+    const s = await getPrices("064400.KS", { ticker: "LG씨엔에스", range: "1d" }, [provider(undefined, Date.parse("2026-09-04T10:01:00+09:00")), yahoo]);
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages.map((c) => c.url.searchParams.get("FID_COND_MRKT_DIV_CODE"))).toEqual(["UN", "J"]);
+    expect(calls.some((c) => c.url.hostname.endsWith("finance.yahoo.com"))).toBe(false);
+    expect(s.source).toBe("한국투자증권");
+    expect(s.bars.map((b) => b.c)).toEqual([101, 105]);
+    expect(s.previousClose).toBe(100);
+  });
+
   it("keeps 1w on the regular KRX session", async () => {
     const calls = stub((url) => {
       if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 105), day("20260902", 100)]) };

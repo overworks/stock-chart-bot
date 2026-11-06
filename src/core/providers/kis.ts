@@ -211,10 +211,10 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     return dedupe(rows.map((r) => toBar(r, dateSec(date) + clockSec(r.stck_cntg_hour!), STOCK_MINUTE_FIELDS)));
   }
 
-  // ETF·ETN은 NXT와 애프터마켓 대상이 아니라 UN으로는 종가 봉 하나만 온다.
-  async function extended(cfg: KisConfig, code: string, date: string): Promise<ChartBar[]> {
+  // UN에 당일 봉이 부족하거나 장중 봉이 없으면 KRX 시세로 재조회한다.
+  async function extended(cfg: KisConfig, code: string, date: string, size: number): Promise<ChartBar[]> {
     const bars = await minutes(cfg, code, date, EXTENDED);
-    if (bars.some((b) => hms(b.t) < "150000")) return bars;
+    if (bucket(bars, size).length >= 2 && bars.some((b) => hms(b.t) < "150000")) return bars;
     return minutes(cfg, code, date, REGULAR);
   }
 
@@ -262,9 +262,9 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
             // 장 시작 전 프리마켓이면 일봉에 오늘이 아직 없을 수 있다.
             let date = ymd(last.t);
             let raw: ChartBar[] = [];
-            if (date < today && tradingHours(Math.floor(now() / 1000))) raw = await extended(cfg, code, today);
+            if (date < today && tradingHours(Math.floor(now() / 1000))) raw = await extended(cfg, code, today, plan.minutes * 60);
             if (raw.length) date = today;
-            else raw = await extended(cfg, code, date);
+            else raw = await extended(cfg, code, date, plan.minutes * 60);
             previousClose = recent.bars.filter((b) => b.t < dateSec(date)).at(-1)?.c;
             regularHours = [{ start: dateSec(date) + clockSec(REGULAR.open), end: dateSec(date) + clockSec(REGULAR.close) }];
             bars = bucket(raw, plan.minutes * 60);
