@@ -203,6 +203,107 @@ describe("kis provider", () => {
   });
 });
 
+function indexDay(date: string, close: number) {
+  return { stck_bsop_date: date, bstp_nmix_prpr: String(close), bstp_nmix_oprc: String(close - 1), bstp_nmix_hgpr: String(close + 1), bstp_nmix_lwpr: String(close - 2), acml_vol: "10" };
+}
+
+function indexMinute(date: string, hour: string, price: number) {
+  return { stck_bsop_date: date, stck_cntg_hour: hour, bstp_nmix_prpr: String(price), bstp_nmix_oprc: String(price), bstp_nmix_hgpr: String(price + 1), bstp_nmix_lwpr: String(price - 1), cntg_vol: "1" };
+}
+
+describe("kis domestic indices", () => {
+  const kst = (date: string, hm: string) => Date.parse(`${date}T${hm}:00+09:00`) / 1000;
+
+  it("claims KOSPI, KOSDAQ and KOSPI200 only", () => {
+    const p = provider();
+    for (const s of ["^KS11", "^KQ11", "^KS200"]) expect(p.supports!(s)).toBe(true);
+    expect(p.supports!("^GSPC")).toBe(false);
+    expect(p.supports!("constructor")).toBe(false);
+    expect(createKis(() => undefined).supports!("^KS11")).toBe(false);
+  });
+
+  it("maps index daily rows from the sector API", async () => {
+    const calls = stub(() => ({ body: ok([indexDay("20260904", 3105.5), indexDay("20260903", 3100)], "종합") }));
+    const s = await provider().getPrices("^KS11", { ticker: "x", range: "1m" });
+    const chart = calls[1];
+    expect(chart.url.pathname).toBe("/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice");
+    expect((chart.init.headers as Record<string, string>).tr_id).toBe("FHKUP03500100");
+    expect(chart.url.searchParams.get("FID_COND_MRKT_DIV_CODE")).toBe("U");
+    expect(chart.url.searchParams.get("FID_INPUT_ISCD")).toBe("0001");
+    expect(chart.url.searchParams.has("FID_ORG_ADJ_PRC")).toBe(false);
+    expect(s.bars).toEqual([
+      { t: Date.parse("2026-09-03") / 1000, c: 3100, o: 3099, h: 3101, l: 3098, v: 10 },
+      { t: Date.parse("2026-09-04") / 1000, c: 3105.5, o: 3104.5, h: 3106.5, l: 3103.5, v: 10 },
+    ]);
+    expect(s).toMatchObject({ intraday: false, timeZone: "Asia/Seoul", currency: "KRW", source: "한국투자증권", name: "종합" });
+  });
+
+  it("pages index daily rows 50 at a time", async () => {
+    const ymd = (i: number) => new Date(Date.parse("2026-09-04") - i * 86_400_000).toISOString().slice(0, 10).replaceAll("-", "");
+    const first = Array.from({ length: 50 }, (_, i) => indexDay(ymd(i), 100));
+    const calls = stub((url) => ({
+      body: ok(url.searchParams.get("FID_INPUT_DATE_2") === "20260904" ? first : [indexDay("20260701", 90)]),
+    }));
+    const s = await provider().getPrices("^KQ11", { ticker: "x", from: "2026-07-01", to: "2026-09-04" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("indexchartprice"));
+    expect(pages).toHaveLength(2);
+    expect(pages[0].url.searchParams.get("FID_INPUT_ISCD")).toBe("1001");
+    expect(pages[1].url.searchParams.get("FID_INPUT_DATE_2")).toBe(ymd(50));
+    expect(s.bars[0].c).toBe(90);
+  });
+
+  it("builds 1d from the latest session's 5-minute index bars", async () => {
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-indexchartprice")) return { body: ok([indexDay("20260904", 105), indexDay("20260903", 100)]) };
+      return {
+        body: ok([indexMinute("20260904", "090500", 104), indexMinute("20260904", "090000", 102), indexMinute("20260903", "999999", 1), indexMinute("20260903", "153000", 100)], "종합"),
+      };
+    });
+    const s = await provider().getPrices("^KS200", { ticker: "x", range: "1d" });
+    const minute = calls.find((c) => c.url.pathname.endsWith("inquire-time-indexchartprice"))!;
+    expect((minute.init.headers as Record<string, string>).tr_id).toBe("FHKUP03500200");
+    expect(Object.fromEntries(minute.url.searchParams)).toEqual({
+      FID_COND_MRKT_DIV_CODE: "U",
+      FID_ETC_CLS_CODE: "1",
+      FID_INPUT_ISCD: "2001",
+      FID_INPUT_HOUR_1: "300",
+      FID_PW_DATA_INCU_YN: "Y",
+    });
+    expect(s.bars).toEqual([
+      { t: kst("2026-09-04", "09:00"), c: 102, o: 102, h: 103, l: 101, v: 1 },
+      { t: kst("2026-09-04", "09:05"), c: 104, o: 104, h: 105, l: 103, v: 1 },
+    ]);
+    expect(s).toMatchObject({ intraday: true, previousClose: 100, name: "종합" });
+    expect(s.regularHours).toBeUndefined();
+  });
+
+  it("builds 1w from the last five sessions of 30-minute index bars", async () => {
+    const dates = ["20260828", "20260831", "20260901", "20260902", "20260903", "20260904"];
+    const calls = stub(() => ({ body: ok(dates.flatMap((d, i) => [indexMinute(d, "100000", 100 + i), indexMinute(d, "090000", 100 + i)]).reverse()) }));
+    const s = await provider(undefined, Date.parse("2026-09-05T12:00:00+09:00")).getPrices("^KS11", { ticker: "x", range: "1w" });
+    expect(calls.filter((c) => c.url.pathname.endsWith("inquire-daily-indexchartprice"))).toHaveLength(0);
+    expect(calls.find((c) => c.url.pathname.endsWith("inquire-time-indexchartprice"))!.url.searchParams.get("FID_INPUT_HOUR_1")).toBe("1800");
+    expect(s.bars).toHaveLength(10);
+    expect(s.bars[0].t).toBe(kst("2026-08-31", "09:00"));
+    expect(s.bars.at(-1)!.t).toBe(kst("2026-09-04", "10:00"));
+  });
+
+  it("falls back to Yahoo when KIS has too few sessions or fails", async () => {
+    const yahooBody = { chart: { result: [{ meta: { currency: "KRW" }, timestamp: [1, 2], indicators: { quote: [{ close: [1, 2] }] } }] } };
+    stub((url) => {
+      if (url.hostname === "openapi.koreainvestment.com") return { body: ok([indexMinute("20260904", "100000", 101), indexMinute("20260904", "090000", 100)]) };
+      return { body: yahooBody };
+    });
+    expect((await getPrices("^KS11", { ticker: "x", range: "1w" }, [provider(), yahoo])).source).toBe("Yahoo Finance");
+
+    stub((url) => {
+      if (url.hostname === "openapi.koreainvestment.com") return { status: 500, body: { rt_cd: "1", msg1: "서버 오류" } };
+      return { body: yahooBody };
+    });
+    expect((await getPrices("^KQ11", { ticker: "x", range: "1m" }, [provider(), yahoo])).source).toBe("Yahoo Finance");
+  });
+});
+
 describe("configureKis", () => {
   afterEach(() => configureKis(undefined, undefined));
 

@@ -2,12 +2,17 @@ import type { ChartBar, ChartRequest, TimeSpan } from "../types";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "./types";
 
 const API = "https://openapi.koreainvestment.com:9443";
-const DAILY = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
 const MINUTE = "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice";
+const INDEX_MINUTE = "/uapi/domestic-stock/v1/quotations/inquire-time-indexchartprice";
 const SYMBOL = /^([0-9A-Z]{6})\.(KS|KQ)$/;
+/** Yahoo 지수 심볼 → 한국투자증권 업종코드 */
+const INDEX = new Map([
+  ["^KS11", "0001"],
+  ["^KQ11", "1001"],
+  ["^KS200", "2001"],
+]);
 const TOKEN_KEY = "kis:token:v1";
 const TOKEN_MARGIN = 3600;
-const DAILY_PAGE = 100;
 const MINUTE_PAGE = 120;
 const MAX_DAILY_PAGES = 20;
 const MAX_MINUTE_PAGES = 7;
@@ -47,6 +52,41 @@ interface Body {
   output2?: Row[];
 }
 
+interface Fields {
+  c: string;
+  o: string;
+  h: string;
+  l: string;
+  v: string;
+}
+
+interface DailyApi {
+  path: string;
+  trId: string;
+  params: Record<string, string>;
+  page: number;
+  fields: Fields;
+}
+
+const STOCK_DAILY: DailyApi = {
+  path: "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+  trId: "FHKST03010100",
+  params: { FID_COND_MRKT_DIV_CODE: "J", FID_ORG_ADJ_PRC: "0" },
+  page: 100,
+  fields: { c: "stck_clpr", o: "stck_oprc", h: "stck_hgpr", l: "stck_lwpr", v: "acml_vol" },
+};
+
+const INDEX_DAILY: DailyApi = {
+  path: "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice",
+  trId: "FHKUP03500100",
+  params: { FID_COND_MRKT_DIV_CODE: "U" },
+  page: 50,
+  fields: { c: "bstp_nmix_prpr", o: "bstp_nmix_oprc", h: "bstp_nmix_hgpr", l: "bstp_nmix_lwpr", v: "acml_vol" },
+};
+
+const STOCK_MINUTE_FIELDS: Fields = { ...STOCK_DAILY.fields, c: "stck_prpr", v: "cntg_vol" };
+const INDEX_MINUTE_FIELDS: Fields = { ...INDEX_DAILY.fields, v: "cntg_vol" };
+
 const RANGE: Record<string, { period: "D" | "W" | "M"; days: number } | { minutes: number; sessions: number }> = {
   "1d": { minutes: 5, sessions: 1 },
   "1w": { minutes: 30, sessions: 5 },
@@ -58,7 +98,7 @@ const RANGE: Record<string, { period: "D" | "W" | "M"; days: number } | { minute
   max: { period: "M", days: 0 },
 };
 
-/** 한국투자증권 Open API. KRX 종목(.KS/.KQ)만 맡고 앱키가 없으면 건너뛴다. */
+/** 한국투자증권 Open API. KRX 종목(.KS/.KQ)과 국내 지수(^KS11 등)를 맡고 앱키가 없으면 건너뛴다. */
 export function createKis(config: () => KisConfig | undefined, now: () => number = Date.now): MarketProvider {
   let cached: Token | undefined;
   let pending: Promise<Token> | undefined;
@@ -100,30 +140,51 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     }
   }
 
-  async function daily(cfg: KisConfig, code: string, period: "D" | "W" | "M", from: string, to: string) {
+  async function daily(cfg: KisConfig, api: DailyApi, code: string, period: "D" | "W" | "M", from: string, to: string) {
     const rows: Row[] = [];
     let name: string | undefined;
     let end = to;
     for (let page = 0; ; page++) {
       if (page === MAX_DAILY_PAGES) throw new Error("한국투자증권 조회 기간이 너무 깁니다.");
-      const body = await call(cfg, DAILY, "FHKST03010100", {
-        FID_COND_MRKT_DIV_CODE: "J",
+      const body = await call(cfg, api.path, api.trId, {
+        ...api.params,
         FID_INPUT_ISCD: code,
         FID_INPUT_DATE_1: from,
         FID_INPUT_DATE_2: end,
         FID_PERIOD_DIV_CODE: period,
-        FID_ORG_ADJ_PRC: "0",
       });
       name ??= body.output1?.hts_kor_isnm?.trim() || undefined;
       const got = (body.output2 ?? []).filter((r) => /^\d{8}$/.test(r.stck_bsop_date ?? ""));
       rows.push(...got);
       const last = got.at(-1)?.stck_bsop_date;
-      if (got.length < DAILY_PAGE || !last || last <= from) break;
+      if (got.length < api.page || !last || last <= from) break;
       end = ymd(dateSec(last) - 86_400);
     }
     if (!rows.length && !name) throw new SymbolNotFoundError(`'${code}' 시세를 한국투자증권에서 찾지 못했습니다.`);
-    const bars = dedupe(rows.map((r) => toBar(r, dateSec(r.stck_bsop_date!), r.stck_clpr, r.acml_vol)));
+    const bars = dedupe(rows.map((r) => toBar(r, dateSec(r.stck_bsop_date!), api.fields)));
     return { bars, name };
+  }
+
+  // 업종 분봉은 날짜를 지정할 수 없고 최근 102개 봉만 온다. 5분봉이면 1세션, 30분봉이면 7세션쯤 된다.
+  async function indexIntraday(cfg: KisConfig, symbol: string, code: string, plan: { minutes: number; sessions: number }, today: string) {
+    const [body, recent] = await Promise.all([
+      call(cfg, INDEX_MINUTE, "FHKUP03500200", {
+        FID_COND_MRKT_DIV_CODE: "U",
+        FID_ETC_CLS_CODE: "1",
+        FID_INPUT_ISCD: code,
+        FID_INPUT_HOUR_1: String(plan.minutes * 60),
+        FID_PW_DATA_INCU_YN: "Y",
+      }),
+      plan.sessions === 1 ? daily(cfg, INDEX_DAILY, code, "D", ymd(Math.floor(now() / 1000) - 21 * 86_400), today) : undefined,
+    ]);
+    const rows = (body.output2 ?? []).filter((r) => /^\d{8}$/.test(r.stck_bsop_date ?? "") && /^([01]\d|2[0-3])\d{4}$/.test(r.stck_cntg_hour ?? ""));
+    const dates = [...new Set(rows.map((r) => r.stck_bsop_date!))].sort().slice(-plan.sessions);
+    if (dates.length < plan.sessions) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
+    const bars = dedupe(
+      rows.filter((r) => dates.includes(r.stck_bsop_date!)).map((r) => toBar(r, dateSec(r.stck_bsop_date!) + clockSec(r.stck_cntg_hour!), INDEX_MINUTE_FIELDS)),
+    );
+    const previousClose = recent?.bars.filter((b) => b.t < dateSec(dates[0])).at(-1)?.c;
+    return { bars, previousClose, name: body.output1?.hts_kor_isnm?.trim() || recent?.name };
   }
 
   async function minutes(cfg: KisConfig, code: string, date: string, session: Session): Promise<ChartBar[]> {
@@ -147,7 +208,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       if (all.length < MINUTE_PAGE || got.length < all.length || !earliest || earliest <= session.open) break;
       hour = earliest;
     }
-    return dedupe(rows.map((r) => toBar(r, dateSec(date) + clockSec(r.stck_cntg_hour!), r.stck_prpr, r.cntg_vol)));
+    return dedupe(rows.map((r) => toBar(r, dateSec(date) + clockSec(r.stck_cntg_hour!), STOCK_MINUTE_FIELDS)));
   }
 
   // ETF·ETN은 NXT와 애프터마켓 대상이 아니라 UN으로는 종가 봉 하나만 온다.
@@ -161,13 +222,15 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     name: "한국투자증권",
 
     supports(symbol) {
-      return SYMBOL.test(symbol) && config() !== undefined;
+      return (SYMBOL.test(symbol) || INDEX.has(symbol)) && config() !== undefined;
     },
 
     async getPrices(symbol, req: ChartRequest) {
       const cfg = config();
-      const code = SYMBOL.exec(symbol)?.[1];
+      const index = INDEX.get(symbol);
+      const code = index ?? SYMBOL.exec(symbol)?.[1];
       if (!cfg || !code) throw new Error("한국투자증권 설정이 없습니다.");
+      const api = index ? INDEX_DAILY : STOCK_DAILY;
       const today = ymd(Math.floor(now() / 1000));
 
       let bars: ChartBar[];
@@ -179,16 +242,19 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
 
       if (req.from && req.to) {
         label = `${req.from} ~ ${req.to}`;
-        ({ bars, name } = await daily(cfg, code, "D", req.from.replaceAll("-", ""), req.to.replaceAll("-", "")));
+        ({ bars, name } = await daily(cfg, api, code, "D", req.from.replaceAll("-", ""), req.to.replaceAll("-", "")));
       } else {
         label = req.range ?? "1d";
         const plan = RANGE[label] ?? RANGE["1d"];
         if ("period" in plan) {
           const from = plan.period === "M" ? "19800101" : ymd(Math.floor(now() / 1000) - plan.days * 86_400);
-          ({ bars, name } = await daily(cfg, code, plan.period, from, today));
+          ({ bars, name } = await daily(cfg, api, code, plan.period, from, today));
+        } else if (index) {
+          intraday = true;
+          ({ bars, name, previousClose } = await indexIntraday(cfg, symbol, code, plan, today));
         } else {
           intraday = true;
-          const recent = await daily(cfg, code, "D", ymd(Math.floor(now() / 1000) - 21 * 86_400), today);
+          const recent = await daily(cfg, STOCK_DAILY, code, "D", ymd(Math.floor(now() / 1000) - 21 * 86_400), today);
           name = recent.name;
           const last = recent.bars.at(-1);
           if (!last) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
@@ -248,10 +314,10 @@ export function configureKis(appKey: string | undefined, appSecret: string | und
 
 export const kis = createKis(() => current);
 
-function toBar(r: Row, t: number, close: string | undefined, volume: string | undefined): ChartBar | undefined {
-  const c = num(close);
+function toBar(r: Row, t: number, f: Fields): ChartBar | undefined {
+  const c = num(r[f.c]);
   if (c === undefined || c === 0) return undefined;
-  return { t, c, o: num(r.stck_oprc), h: num(r.stck_hgpr), l: num(r.stck_lwpr), v: num(volume) };
+  return { t, c, o: num(r[f.o]), h: num(r[f.h]), l: num(r[f.l]), v: num(r[f.v]) };
 }
 
 function dedupe(bars: (ChartBar | undefined)[]): ChartBar[] {

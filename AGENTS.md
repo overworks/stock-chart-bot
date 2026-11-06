@@ -33,7 +33,7 @@ src/
 │  ├─ types.ts         #   공통 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts       #   인자 검증·정규화
 │  ├─ market.ts        #   시세 조회·검색 파사드 (supports 필터 후 PROVIDERS 순서대로 폴백)
-│  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, kis.ts: .KS/.KQ, yahoo.ts: 그 외)
+│  ├─ providers/       #   MarketProvider 구현체 (upbit.ts: KRW-*, kis.ts: .KS/.KQ, ^KS11/^KQ11/^KS200, yahoo.ts: 그 외)
 │  ├─ symbols.ts       #   종목 목록(KV 단일 키 + 메모리 캐시) 검색 및 Yahoo 검색 폴백
 │  ├─ aliases.ts       #   /stock-alias add|remove|list 비즈니스 로직
 │  ├─ alias-writer.ts  #   별칭 변경 직렬화 및 KV 복제를 담당하는 SQLite Durable Object
