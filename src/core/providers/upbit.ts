@@ -1,4 +1,5 @@
 import type { ChartBar, ChartRequest } from "../types";
+import { errorMessage, logEvent } from "../log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./types";
 
 const API = "https://api.upbit.com/v1";
@@ -66,9 +67,13 @@ export const upbit: MarketProvider = {
     let markets: { market: string; korean_name: string }[];
     try {
       const res = await fetch(`${API}/market/all?is_details=false`, { cf: { cacheTtl: 3600, cacheEverything: true } } as RequestInit);
-      if (!res.ok) return [];
+      if (!res.ok) {
+        logEvent("warn", "search_failed", { provider: "upbit", status: res.status });
+        return [];
+      }
       markets = await res.json();
-    } catch {
+    } catch (err) {
+      logEvent("warn", "search_failed", { provider: "upbit", error: errorMessage(err) });
       return [];
     }
     if (!Array.isArray(markets)) return [];

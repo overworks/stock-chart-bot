@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildTitle, runChart } from "../src/core/run";
 import { resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
+import { captureLogs } from "./logs";
 
 const ENV = env as unknown as Env;
 
@@ -35,6 +36,7 @@ function stub(handler: (url: URL) => unknown) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   resetSymbolCache();
 });
 
@@ -102,6 +104,7 @@ describe("runChart", () => {
   });
 
   it("falls back to Yahoo search when an ASCII ticker is unknown", async () => {
+    const logs = captureLogs();
     const urls = stub((u) => {
       if (u.pathname.endsWith("/chart/hynix")) return notFound;
       if (u.pathname.endsWith("/finance/search")) return { quotes: [{ symbol: "000660.KS", shortname: "SK hynix", quoteType: "EQUITY" }] };
@@ -114,6 +117,23 @@ describe("runChart", () => {
       "/v8/finance/chart/000660.KS",
     ]);
     expect(msg.text).toBe("**000660.KS** 1y · 109 KRW ▲ +9 (+9.00%)");
+    expect(logs("chart_served")).toEqual([expect.objectContaining({ ticker: "hynix", symbol: "000660.KS", resolved: "search" })]);
+  });
+
+  it("logs why a chart failed and reserves the error level for upstream faults", async () => {
+    const logs = captureLogs();
+    await expect(runChart({ ticker: " " }, ENV)).rejects.toThrow("종목");
+    await expect(runChart({ ticker: "AAPL", from: "2026-01-01" }, ENV)).rejects.toThrow("함께");
+    stub((u) => (u.pathname.endsWith("/finance/search") ? { quotes: [] } : notFound));
+    await expect(runChart({ ticker: "zzzz" }, ENV)).rejects.toThrow("찾지 못했습니다");
+    stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
+    await expect(runChart({ ticker: "AAPL", range: "1m" }, ENV)).rejects.toThrow("부족");
+    expect(logs("chart_failed").map((e) => [e.level, e.reason, e.ticker])).toEqual([
+      ["warn", "invalid_args", " "],
+      ["warn", "invalid_args", "AAPL"],
+      ["warn", "not_found", "zzzz"],
+      ["error", "upstream", "AAPL"],
+    ]);
   });
 
   it("surfaces the original error when search finds nothing", async () => {

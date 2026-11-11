@@ -2,10 +2,12 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { expect, it, vi } from "vitest";
 import { AliasWriter } from "../src/core/alias-writer";
 import { ALIASES_KEY } from "../src/core/symbols";
+import { captureLogs } from "./logs";
 
 it("recovers durable aliases after a failed KV write and a new instance", async () => {
   const namespace = (env as unknown as Env).ALIAS_WRITER;
   const stub = namespace.get(namespace.newUniqueId());
+  const logs = captureLogs();
   await runInDurableObject(stub, async (_, state) => {
     const get = vi.fn().mockResolvedValue([{ key: "기존", value: "AAPL" }]);
     const put = vi.fn().mockRejectedValue(new Error("KV unavailable"));
@@ -15,6 +17,7 @@ it("recovers durable aliases after a failed KV write and a new instance", async 
       method: "POST", body: JSON.stringify({ key: "추가", value: "MSFT" }),
     }));
     expect(response.status).toBe(503);
+    expect(logs("alias_publish_deferred")).toEqual([{ level: "warn", message: "alias_publish_deferred", error: "KV unavailable" }]);
     const expected = [{ key: "기존", value: "AAPL" }, { key: "추가", value: "MSFT" }];
     expect(await state.storage.get(ALIASES_KEY)).toEqual(expected);
     expect(await state.storage.getAlarm()).not.toBeNull();
@@ -31,4 +34,5 @@ it("recovers durable aliases after a failed KV write and a new instance", async 
     expect(JSON.parse(put.mock.calls.at(-1)![1])).toEqual([...expected, { key: "후속", value: "GOOG" }]);
     expect(get).toHaveBeenCalledTimes(1);
   });
+  vi.restoreAllMocks();
 });

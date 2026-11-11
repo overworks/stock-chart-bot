@@ -1,5 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../types";
-import { logEvent } from "../log";
+import { errorMessage, logEvent } from "../log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "./types";
 
 const API = "https://openapi.koreainvestment.com:9443";
@@ -131,6 +131,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       } catch {
         throw new Error(`시세 조회 실패 (${res.status})`);
       }
+      if (body.msg_cd === RATE_LIMITED) logEvent("warn", "kis_rate_limited", { trId, attempt });
       if (body.msg_cd === RATE_LIMITED && attempt === 0) {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
@@ -227,6 +228,7 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
   async function extended(cfg: KisConfig, code: string, date: string, size: number): Promise<ChartBar[]> {
     const bars = await minutes(cfg, code, date, EXTENDED);
     if (bucket(bars, size).length >= 2 && bars.some((b) => hms(b.t) < "150000")) return bars;
+    logEvent("log", "market_fallback", { provider: "kis", code, date, bars: bars.length });
     return minutes(cfg, code, date, REGULAR);
   }
 
@@ -307,7 +309,10 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
   return provider;
 
   async function loadToken(cfg: KisConfig, nowSec: number): Promise<Token> {
-    const stored = await cfg.kv?.get<Token>(TOKEN_KEY, "json").catch(() => null);
+    const stored = await cfg.kv?.get<Token>(TOKEN_KEY, "json").catch((err) => {
+      logEvent("warn", "kis_token_cache_failed", { op: "get", error: errorMessage(err) });
+      return null;
+    });
     if (stored && stored.expiresAt - TOKEN_MARGIN > nowSec) return stored;
     const res = await fetch(`${API}/oauth2/tokenP`, {
       method: "POST",
@@ -321,7 +326,10 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       throw new Error(`한국투자증권 인증 실패 (${json?.error_description ?? json?.msg1 ?? res.status})`);
     }
     const fresh = { token: access, expiresAt: nowSec + ttl };
-    await cfg.kv?.put(TOKEN_KEY, JSON.stringify(fresh), { expirationTtl: Math.max(60, ttl - TOKEN_MARGIN) }).catch(() => undefined);
+    logEvent("log", "kis_token_issued", { ttl });
+    await cfg.kv?.put(TOKEN_KEY, JSON.stringify(fresh), { expirationTtl: Math.max(60, ttl - TOKEN_MARGIN) }).catch((err) => {
+      logEvent("warn", "kis_token_cache_failed", { op: "put", error: errorMessage(err) });
+    });
     return fresh;
   }
 }

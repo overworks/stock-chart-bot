@@ -2,6 +2,7 @@ import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addAlias, listAliases, removeAlias, runAlias, searchAliases } from "../src/core/aliases";
 import { ALIASES_KEY, resetSymbolCache, resolveSymbol, searchSymbols, symbolName, SYMBOLS_KEY } from "../src/core/symbols";
+import { captureLogs } from "./logs";
 
 const KV = (env as unknown as Env).KV;
 const WRITER = (env as unknown as Env).ALIAS_WRITER;
@@ -45,7 +46,10 @@ beforeEach(async () => {
     ]),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("seeded aliases", () => {
   it("match in search but display the canonical name", async () => {
@@ -127,6 +131,7 @@ describe("user aliases", () => {
   });
 
   it("runAlias formats add/remove/list and autocompletes aliases", async () => {
+    const logs = captureLogs();
     stub(() => ({ quotes: [] }));
     expect(await runAlias({ action: "list" }, { KV, ALIAS_WRITER: WRITER })).toBe("등록된 별칭이 없습니다.");
     expect(await runAlias({ action: "add", alias: "하닉", target: "SK하이닉스" }, { KV, ALIAS_WRITER: WRITER })).toBe("✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)");
@@ -135,5 +140,9 @@ describe("user aliases", () => {
     expect(await searchAliases("zz", KV)).toEqual([]);
     expect(await runAlias({ action: "remove", alias: "하닉" }, { KV, ALIAS_WRITER: WRITER })).toBe("🗑️ 별칭 삭제: 하닉 → 000660.KS");
     await expect(runAlias({ action: "bogus" }, { KV, ALIAS_WRITER: WRITER })).rejects.toThrow("사용법");
+    expect(logs("alias_changed")).toEqual([
+      { level: "log", message: "alias_changed", action: "add", alias: "하닉", symbol: "000660.KS" },
+      { level: "log", message: "alias_changed", action: "remove", alias: "하닉", symbol: "000660.KS" },
+    ]);
   });
 });

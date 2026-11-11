@@ -1,12 +1,12 @@
-import { logEvent } from "./log";
+import { errorMessage, logEvent } from "./log";
 import { kis } from "./providers/kis";
 import { upbit } from "./providers/upbit";
 import { yahoo } from "./providers/yahoo";
 import type { ChartRequest } from "./types";
-import type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
+import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./providers/types";
 
 export { configureKis } from "./providers/kis";
-export { SymbolNotFoundError } from "./providers/types";
+export { SymbolNotFoundError };
 export type { MarketProvider, PriceSeries, SymbolChoice } from "./providers/types";
 
 /** 심볼을 지원하는 제공자를 앞에서부터 시도하고 실패하면 다음으로 넘어간다. */
@@ -25,7 +25,7 @@ export async function getPrices(
       return series;
     } catch (err) {
       firstError ??= err;
-      logEvent("warn", "provider_failed", { provider: p.name, symbol, range: req.range, from: req.from, to: req.to, error: err instanceof Error ? err.message : String(err) });
+      logEvent("warn", "provider_failed", { provider: p.name, symbol, range: req.range, from: req.from, to: req.to, notFound: err instanceof SymbolNotFoundError || undefined, error: errorMessage(err) });
     }
   }
   throw firstError ?? new Error("사용 가능한 시세 제공자가 없습니다.");
@@ -39,8 +39,8 @@ export async function searchRemote(
     try {
       const hits = await p.search(query);
       if (hits.length) return hits;
-    } catch {
-      continue;
+    } catch (err) {
+      logEvent("warn", "search_failed", { provider: p.name, error: errorMessage(err) });
     }
   }
   return [];

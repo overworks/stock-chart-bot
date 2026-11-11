@@ -4,12 +4,14 @@ import worker from "../src/index";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../src/core/command";
 import { parseAliasText, parseText } from "../src/platforms/slack";
 import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
+import { captureLogs } from "./logs";
 
 const ENV = env as unknown as Env;
 const SECRET = "test-signing-secret";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   resetSymbolCache();
 });
 
@@ -94,6 +96,7 @@ describe("parseAliasText", () => {
 describe("slack alias commands", () => {
   it("shows usage, lets anyone list, and blocks non-admins from changes via /stock-alias", async () => {
     await ENV.KV.delete(ALIASES_KEY);
+    const logs = captureLogs();
     const calls = stubOutbound();
     const usage = (await (await worker.fetch(await slash({ command: "/stock-alias", text: "add" }), ENV, createExecutionContext())).json()) as any;
     expect(usage.text).toContain("/stock-alias add");
@@ -104,6 +107,9 @@ describe("slack alias commands", () => {
       expect(denied.text).toContain("권한");
     }
     expect(calls).toHaveLength(0);
+    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "slack", command: "stock-alias", action: "list", outcome: "ok" })]);
+    expect(logs("alias_denied").map((e) => e.action)).toEqual(["add", "remove"]);
+    expect(JSON.stringify(logs("alias_denied"))).not.toContain("U_USER");
   });
 
   it("adds, then lists and removes with /stock-alias", async () => {
@@ -216,6 +222,7 @@ describe("slack adapter", () => {
 
   it("acks /stock-chart, stores the PNG in R2, posts an image block, and serves the image", async () => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    const logs = captureLogs();
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const res = await worker.fetch(await slash({ command: "/stock-chart", text: "삼성전자 1m" }), ENV, ctx);
@@ -236,6 +243,7 @@ describe("slack adapter", () => {
     expect(img.headers.get("content-type")).toBe("image/png");
     const bytes = new Uint8Array(await img.arrayBuffer());
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "slack", command: "stock-chart", outcome: "ok", status: 200 })]);
   });
 
   it("reports /stock-chart failures as an ephemeral message", async () => {
@@ -247,6 +255,32 @@ describe("slack adapter", () => {
     const payload = JSON.parse(hook.init?.body as string);
     expect(payload.response_type).toBe("ephemeral");
     expect(payload.text).toBe("⚠️ 시세 조회 실패 (500)");
+  });
+
+  it("logs the outcome of /stock-chart, including a rejected response_url", async () => {
+    const logs = captureLogs();
+    stubOutbound(500);
+    let ctx = createExecutionContext();
+    await worker.fetch(await slash({ command: "/stock-chart", text: "AAPL" }), ENV, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "warn", outcome: "failed", error: "시세 조회 실패 (500)" })]);
+
+    const posts: any[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes("finance.yahoo.com")) return new Response(JSON.stringify(yahooBody));
+        posts.push(JSON.parse(init?.body as string));
+        if (posts.length === 1) return new Response("invalid_blocks", { status: 400 });
+        throw new Error("network down");
+      }),
+    );
+    ctx = createExecutionContext();
+    await worker.fetch(await slash({ command: "/stock-chart", text: "AAPL 1m" }), ENV, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(logs("command_done").at(-1)).toMatchObject({ level: "error", outcome: "delivery_failed", status: 400, detail: "invalid_blocks", fallback: "failed" });
+    expect(posts.map((p) => p.response_type)).toEqual(["in_channel", "ephemeral"]);
+    expect(posts[1].text).toBe("⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   });
 });
 

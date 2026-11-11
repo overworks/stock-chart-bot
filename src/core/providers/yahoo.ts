@@ -1,5 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../types";
-import { logEvent } from "../log";
+import { errorMessage, logEvent } from "../log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./types";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -77,10 +77,14 @@ export const yahoo: MarketProvider = {
         headers: { "User-Agent": UA },
         cf: { cacheTtl: 3600, cacheEverything: true },
       } as RequestInit);
-    } catch {
+    } catch (err) {
+      logEvent("warn", "search_failed", { provider: "yahoo", error: errorMessage(err) });
       return [];
     }
-    if (!res.ok) return [];
+    if (!res.ok) {
+      logEvent("warn", "search_failed", { provider: "yahoo", status: res.status });
+      return [];
+    }
 
     let json: any;
     try {

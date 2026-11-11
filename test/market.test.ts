@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPrices, searchRemote, SymbolNotFoundError, type MarketProvider } from "../src/core/market";
+import { captureLogs } from "./logs";
 
 function yahoo(body: unknown, status = 200) {
   const fn = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));
@@ -19,7 +20,10 @@ const ok = {
   },
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("getPrices", () => {
   it("maps user ranges to Yahoo range/interval and drops null closes", async () => {
@@ -268,5 +272,14 @@ describe("1d fallback to the previous session", () => {
     const failing: MarketProvider = { name: "A", getPrices: async () => { throw new Error("시세 조회 실패 (503)"); }, search: async () => [] };
     await expect(getPrices("X", { ticker: "X", range: "1m" }, [failing])).rejects.toThrow("503");
     expect(JSON.parse(warn.mock.calls[0]![0])).toEqual({ message: "provider_failed", provider: "A", symbol: "X", range: "1m", error: "시세 조회 실패 (503)" });
+  });
+
+  it("marks unknown symbols and logs search providers that throw", async () => {
+    const logs = captureLogs();
+    const missing: MarketProvider = { name: "A", getPrices: async () => { throw new SymbolNotFoundError("없음"); }, search: async () => { throw new Error("boom"); } };
+    await expect(getPrices("X", { ticker: "X", range: "1m" }, [missing])).rejects.toBeInstanceOf(SymbolNotFoundError);
+    expect(logs("provider_failed")).toEqual([expect.objectContaining({ level: "warn", provider: "A", notFound: true })]);
+    expect(await searchRemote("x", [missing])).toEqual([]);
+    expect(logs("search_failed")).toEqual([{ level: "warn", message: "search_failed", provider: "A", error: "boom" }]);
   });
 });

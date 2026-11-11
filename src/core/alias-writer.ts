@@ -1,3 +1,4 @@
+import { errorMessage, logEvent } from "./log";
 import { ALIASES_KEY, type SymbolEntry } from "./symbols";
 
 interface Mutation {
@@ -45,7 +46,8 @@ export class AliasWriter {
       });
       try {
         await this.publish();
-      } catch {
+      } catch (err) {
+        logEvent("warn", "alias_publish_deferred", { error: errorMessage(err) });
         return new Response("별칭 변경은 저장됐지만 검색 반영이 지연되고 있습니다. 자동으로 재시도합니다.", { status: 503 });
       }
       return Response.json(entry);
@@ -55,7 +57,12 @@ export class AliasWriter {
   async alarm(): Promise<void> {
     await this.enqueue(async () => {
       await this.state.storage.setAlarm(Date.now() + 60_000);
-      await this.publish();
+      try {
+        await this.publish();
+      } catch (err) {
+        logEvent("error", "alias_publish_failed", { error: errorMessage(err) });
+        throw err;
+      }
     });
   }
 

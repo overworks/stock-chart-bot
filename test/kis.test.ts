@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { configureKis, createKis, kis } from "../src/core/providers/kis";
 import { yahoo } from "../src/core/providers/yahoo";
 import { getPrices, SymbolNotFoundError } from "../src/core/market";
+import { captureLogs } from "./logs";
 
 const NOW = Date.parse("2026-09-04T01:00:00Z"); // 10:00 KST
 
@@ -52,7 +53,13 @@ function minute(date: string, hour: string, price: number) {
 
 const ok = (output2: unknown[], name = "삼성전자") => ({ rt_cd: "0", msg_cd: "MCA00000", msg1: "정상처리", output1: { hts_kor_isnm: name }, output2 });
 
-afterEach(() => vi.unstubAllGlobals());
+const events = (spy: { mock: { calls: unknown[][] } }, message: string) =>
+  spy.mock.calls.map((c) => JSON.parse(String(c[0]))).filter((e) => e.message === message);
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("kis provider", () => {
   it("only claims KRX symbols when credentials are configured", () => {
@@ -85,6 +92,7 @@ describe("kis provider", () => {
 
   it("issues the token once and caches it in memory and KV", async () => {
     const { kv, puts } = memoryKv();
+    const logs = captureLogs();
     const calls = stub(() => ({ body: ok([day("20260904", 105), day("20260903", 100)]) }));
     const p = provider(kv);
     await p.getPrices("005930.KS", { ticker: "x", range: "1m" });
@@ -95,6 +103,26 @@ describe("kis provider", () => {
     const again = stub(() => ({ body: ok([day("20260904", 105), day("20260903", 100)]) }));
     await provider(kv).getPrices("005930.KS", { ticker: "x", range: "1m" });
     expect(again.filter((c) => c.url.pathname === "/oauth2/tokenP")).toHaveLength(0);
+    expect(logs("kis_token_issued")).toEqual([{ level: "log", message: "kis_token_issued", ttl: 86_400 }]);
+    expect(JSON.stringify(logs("kis_token_issued"))).not.toContain("tok\"");
+  });
+
+  it("logs token cache failures and rate-limit retries", async () => {
+    const logs = captureLogs();
+    const kv = { get: async () => { throw new Error("KV down"); }, put: async () => { throw new Error("KV down"); } } as unknown as KVNamespace;
+    let limited = true;
+    stub(() => {
+      if (!limited) return { body: ok([day("20260904", 105), day("20260903", 100)]) };
+      limited = false;
+      return { status: 500, body: { rt_cd: "1", msg_cd: "EGW00201", msg1: "초당 거래건수를 초과하였습니다." } };
+    });
+    const s = await provider(kv).getPrices("005930.KS", { ticker: "x", range: "1m" });
+    expect(s.bars).toHaveLength(2);
+    expect(logs("kis_token_cache_failed").map((e) => [e.level, e.op, e.error])).toEqual([
+      ["warn", "get", "KV down"],
+      ["warn", "put", "KV down"],
+    ]);
+    expect(logs("kis_rate_limited")).toEqual([{ level: "warn", message: "kis_rate_limited", trId: "FHKST03010100", attempt: 0 }]);
   });
 
   it("pages daily rows backwards until the start date", async () => {
@@ -159,6 +187,7 @@ describe("kis provider", () => {
   });
 
   it("falls back to the KRX session when UN has no regular-hours bars", async () => {
+    const logs = captureLogs();
     const calls = stub((url) => {
       if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 105), day("20260903", 100)]) };
       if (url.searchParams.get("FID_COND_MRKT_DIV_CODE") === "UN") return { body: ok([minute("20260904", "153000", 105)]) };
@@ -169,6 +198,7 @@ describe("kis provider", () => {
     expect(pages.map((c) => c.url.searchParams.get("FID_COND_MRKT_DIV_CODE"))).toEqual(["UN", "J"]);
     expect(pages[1].url.searchParams.get("FID_INPUT_HOUR_1")).toBe("153000");
     expect(s.bars).toHaveLength(2);
+    expect(logs("market_fallback")).toEqual([expect.objectContaining({ level: "log", provider: "kis", code: "069500", date: "20260904" })]);
   });
 
   it.each([
@@ -218,7 +248,7 @@ describe("kis provider", () => {
     ]);
     expect(s.previousClose).toBe(90);
     expect(s.regularHours).toEqual([{ start: at("09:00"), end: at("15:30") }]);
-    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "session_fallback", provider: "kis", symbol: "005930.KS", bars: 1, session: "20260903", ok: true }]);
+    expect(events(log, "session_fallback")).toEqual([{ message: "session_fallback", provider: "kis", symbol: "005930.KS", bars: 1, session: "20260903", ok: true }]);
     log.mockRestore();
   });
 
@@ -234,7 +264,7 @@ describe("kis provider", () => {
     expect(s.bars.map((b) => b.c)).toEqual([95, 100]);
     expect(s.bars[0].t).toBe(Date.parse("2026-09-03T09:00:00+09:00") / 1000);
     expect(s.previousClose).toBe(90);
-    expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ message: "session_fallback", session: "20260903", ok: true });
+    expect(events(log, "session_fallback")[0]).toMatchObject({ session: "20260903", ok: true });
     log.mockRestore();
   });
 
@@ -368,7 +398,7 @@ describe("kis domestic indices", () => {
       [kst("2026-09-03", "15:30"), 100],
     ]);
     expect(s.previousClose).toBe(90);
-    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "session_fallback", provider: "kis", symbol: "^KS11", bars: 1, session: "20260903", ok: true }]);
+    expect(events(log, "session_fallback")).toEqual([{ message: "session_fallback", provider: "kis", symbol: "^KS11", bars: 1, session: "20260903", ok: true }]);
     log.mockRestore();
   });
 

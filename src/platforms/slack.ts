@@ -1,8 +1,10 @@
 import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
+import { errorMessage, logEvent } from "../core/log";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
 import { helpText } from "./help";
+import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
 
 const TOLERANCE_SEC = 5 * 60;
 const USAGE =
@@ -40,20 +42,26 @@ export async function handleSlack(
 async function handleAlias(form: URLSearchParams, responseUrl: string, env: Env, ctx: ExecutionContext): Promise<Response> {
   const args = parseAliasText(form.get("text") ?? "");
   if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
+  const report = { platform: "slack" as const, command: "stock-alias", action: args.action, started: Date.now() };
   if (args.action === "list") {
     try {
-      return ephemeral(await runAlias(args, env));
+      const text = await runAlias(args, env);
+      await reportCommand(report);
+      return ephemeral(text);
     } catch (err) {
-      return ephemeral(`⚠️ ${(err as Error).message}`);
+      await reportCommand({ ...report, error: err });
+      return ephemeral(`⚠️ ${errorMessage(err)}`);
     }
   }
   if (!isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
+    logEvent("warn", "alias_denied", { platform: "slack", action: args.action });
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
   ctx.waitUntil(
-    runAlias(args, env)
-      .then((text) => post(responseUrl, { response_type: "in_channel", text }))
-      .catch((err) => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${(err as Error).message}` })),
+    runAlias(args, env).then(
+      (text) => reportCommand(report, () => post(responseUrl, { response_type: "in_channel", text })),
+      (err) => reportCommand({ ...report, error: err }, () => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` })),
+    ),
   );
   return new Response("", { status: 200 });
 }
@@ -97,6 +105,9 @@ async function serveChart(
   args: Record<string, string | undefined>,
   env: Env,
 ): Promise<void> {
+  const started = Date.now();
+  let error: unknown;
+  let payload: unknown;
   try {
     const result = await runChart(args, env);
     const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text: toMrkdwn(result.text) } }];
@@ -105,10 +116,16 @@ async function serveChart(
       blocks.push({ type: "image", image_url: `${origin}/${key}`, alt_text: stripMarkdown(result.text) });
     }
     if (result.source) blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `출처: ${result.source}` }] });
-    await post(responseUrl, { response_type: "in_channel", text: stripMarkdown(result.text), blocks });
+    payload = { response_type: "in_channel", text: stripMarkdown(result.text), blocks };
   } catch (err) {
-    await post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${(err as Error).message}` });
+    error = err;
+    payload = { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` };
   }
+  await reportCommand(
+    { platform: "slack", command: "stock-chart", started, error },
+    () => post(responseUrl, payload),
+    error === undefined ? () => post(responseUrl, { response_type: "ephemeral", text: DELIVERY_FAILED_TEXT }) : undefined,
+  );
 }
 
 function unescapeSlack(s: string): string {

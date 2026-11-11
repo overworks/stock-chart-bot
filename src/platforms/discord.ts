@@ -1,8 +1,10 @@
 import { verifyKey } from "discord-interactions";
 import { runAlias, searchAliases } from "../core/aliases";
+import { errorMessage, logEvent } from "../core/log";
 import { runChart } from "../core/run";
 import { searchSymbols } from "../core/symbols";
 import { helpText } from "./help";
+import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
 
 const API = "https://discord.com/api/v10";
 const ADMINISTRATOR = 1n << 3n;
@@ -58,6 +60,7 @@ export async function handleDiscord(
 
   if (interaction.type === 2 && isAliasCommand) {
     if (action !== "list" && !canManage(interaction)) {
+      logEvent("warn", "alias_denied", { platform: "discord", action });
       return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }
     ctx.waitUntil(serveAlias(interaction, { action, ...args }, env));
@@ -96,13 +99,18 @@ function canManage(interaction: any): boolean {
 }
 
 async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env): Promise<void> {
+  const started = Date.now();
   let content: string;
+  let error: unknown;
   try {
     content = await runAlias(args, env);
   } catch (err) {
-    content = `⚠️ ${(err as Error).message}`;
+    error = err;
+    content = `⚠️ ${errorMessage(err)}`;
   }
-  await patchOriginal(interaction, env, { content });
+  await reportCommand({ platform: "discord", command: "stock-alias", action: args.action, started, error }, () =>
+    patchOriginal(interaction, env, { content }),
+  );
 }
 
 async function serveChart(
@@ -111,6 +119,10 @@ async function serveChart(
   env: Env,
 ): Promise<void> {
   const endpoint = `${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
+  const started = Date.now();
+  let error: unknown;
+  let send: () => Promise<Response>;
+  let fallback: (() => Promise<Response>) | undefined;
   try {
     const result = await runChart(args, env);
     const form = new FormData();
@@ -133,10 +145,13 @@ async function serveChart(
         new File([result.image.png], result.image.filename, { type: "image/png" }),
       );
     }
-    await fetch(endpoint, { method: "PATCH", body: form });
+    send = () => fetch(endpoint, { method: "PATCH", body: form });
+    fallback = () => patchOriginal(interaction, env, { content: DELIVERY_FAILED_TEXT });
   } catch (err) {
-    await patchOriginal(interaction, env, { content: `⚠️ ${(err as Error).message}` });
+    error = err;
+    send = () => patchOriginal(interaction, env, { content: `⚠️ ${errorMessage(err)}` });
   }
+  await reportCommand({ platform: "discord", command: "stock-chart", started, error }, send, fallback);
 }
 
 function patchOriginal(interaction: any, env: Env, payload: unknown): Promise<Response> {

@@ -1,11 +1,12 @@
+import { tracing } from "cloudflare:workers";
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
 import { displayRule, scaleSeries } from "./display";
-import { logEvent } from "./log";
+import { errorMessage, logEvent } from "./log";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
-import type { OutgoingMessage } from "./types";
+import type { ChartRequest, OutgoingMessage } from "./types";
 
 export interface CoreEnv {
   KV: KVNamespace;
@@ -13,50 +14,72 @@ export interface CoreEnv {
 
 const DISPLAY_TZ = "Asia/Seoul";
 
-export async function runChart(
+export function runChart(
   args: Record<string, string | undefined>,
   env: CoreEnv,
 ): Promise<OutgoingMessage> {
-  const req = parseChartArgs(args);
-  let symbol = req.ticker;
-  try {
-    symbol = await resolveSymbol(req.ticker, env.KV);
-
-    let series: PriceSeries;
+  return tracing.enterSpan("chart", async (span) => {
+    const started = Date.now();
+    let req: ChartRequest | undefined;
+    let symbol = (args.ticker ?? "").trim();
+    let resolved: "direct" | "alias" | "search" = "direct";
     try {
-      series = await getPrices(symbol, req);
+      const parsed = (req = parseChartArgs(args));
+      symbol = await tracing.enterSpan("chart.resolve", () => resolveSymbol(parsed.ticker, env.KV));
+      if (symbol !== parsed.ticker) resolved = "alias";
+
+      let series = await tracing.enterSpan("chart.prices", async (): Promise<PriceSeries> => {
+        try {
+          return await getPrices(symbol, parsed);
+        } catch (err) {
+          // 별칭으로 해석되지 않은 영문 입력이 '없는 심볼'일 때만 검색으로 한 번 더 시도한다.
+          if (!(err instanceof SymbolNotFoundError) || resolved !== "direct" || !isAsciiQuery(symbol)) throw err;
+          const hit = (await searchRemote(symbol))[0];
+          if (!hit) throw err;
+          symbol = hit.value;
+          resolved = "search";
+          return getPrices(symbol, parsed);
+        }
+      });
+
+      const rule = displayRule(symbol);
+      if (rule) series = scaleSeries(series, rule.factor);
+      const { bars, label, currency, previousClose, source, intraday, regularHours } = series;
+      const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
+      const name = (await symbolName(symbol, env.KV)) ?? series.name;
+      const title = buildTitle(symbol, name, rule?.label);
+      const reference = parsed.range === "1d" && !parsed.from ? previousClose : undefined;
+      const png = await tracing.enterSpan("chart.render", () =>
+        svgToPng(buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: parsed.style, volume: parsed.volume, reference, source, intraday, regularHours })),
+      );
+      const change = summarizeChange(bars, currency, reference);
+
+      span.setAttributes({ "chart.ticker": parsed.ticker, "chart.symbol": symbol, "chart.range": label, "chart.source": source, "chart.bars": bars.length, "chart.resolved": resolved });
+      logEvent("log", "chart_served", {
+        ticker: parsed.ticker,
+        symbol,
+        range: label,
+        source,
+        bars: bars.length,
+        lastBar: new Date(bars[bars.length - 1].t * 1000).toISOString(),
+        resolved,
+        ms: Date.now() - started,
+        pngBytes: png.length,
+      });
+      return {
+        text: `**${title}** ${label} · ${change.text}`,
+        image: { png, filename: "chart.png" },
+        color: change.color,
+        source,
+      };
     } catch (err) {
-      // 별칭으로 해석되지 않은 영문 입력이 '없는 심볼'일 때만 검색으로 한 번 더 시도한다.
-      const unresolved = symbol === req.ticker.trim();
-      if (!(err instanceof SymbolNotFoundError) || !unresolved || !isAsciiQuery(symbol)) throw err;
-      const hit = (await searchRemote(symbol))[0];
-      if (!hit) throw err;
-      symbol = hit.value;
-      series = await getPrices(symbol, req);
+      const reason = !req ? "invalid_args" : err instanceof SymbolNotFoundError ? "not_found" : "upstream";
+      const { ticker, range, from, to } = req ?? args;
+      span.setAttributes({ "chart.ticker": ticker, "chart.symbol": symbol, "chart.failed": reason });
+      logEvent(reason === "upstream" ? "error" : "warn", "chart_failed", { ticker, symbol, range, from, to, reason, error: errorMessage(err), ms: Date.now() - started });
+      throw err;
     }
-
-    const rule = displayRule(symbol);
-    if (rule) series = scaleSeries(series, rule.factor);
-    const { bars, label, currency, previousClose, source, intraday, regularHours } = series;
-    const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
-    const name = (await symbolName(symbol, env.KV)) ?? series.name;
-    const title = buildTitle(symbol, name, rule?.label);
-    const reference = req.range === "1d" && !req.from ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: req.style, volume: req.volume, reference, source, intraday, regularHours });
-    const png = await svgToPng(svg);
-    const change = summarizeChange(bars, currency, reference);
-
-    logEvent("log", "chart_served", { ticker: req.ticker, symbol, range: label, source, bars: bars.length, lastBar: new Date(bars[bars.length - 1].t * 1000).toISOString() });
-    return {
-      text: `**${title}** ${label} · ${change.text}`,
-      image: { png, filename: "chart.png" },
-      color: change.color,
-      source,
-    };
-  } catch (err) {
-    logEvent("error", "chart_failed", { ticker: req.ticker, symbol, range: req.range, from: req.from, to: req.to, error: err instanceof Error ? err.message : String(err) });
-    throw err;
-  }
+  });
 }
 
 /** "삼성전자 (005930.KS)", "JPY/KRW (JPYKRW=X, 100엔)", "JPYKRW=X (100엔)", "AAPL" */

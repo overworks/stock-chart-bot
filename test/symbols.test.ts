@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSymbolCache, resolveSymbol, searchSymbols, SYMBOLS_KEY } from "../src/core/symbols";
 import { yahoo } from "../src/core/providers/yahoo";
+import { captureLogs } from "./logs";
 
 const KV = (env as unknown as Env).KV;
 
@@ -34,7 +35,10 @@ beforeEach(async () => {
     ]),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("searchSymbols", () => {
   it("returns nothing for an empty query without touching the network", async () => {
@@ -92,9 +96,11 @@ describe("searchSymbols", () => {
   it("returns an empty list when the KV key is missing", async () => {
     resetSymbolCache();
     await KV.delete(SYMBOLS_KEY);
+    const logs = captureLogs();
     stubYahoo({ quotes: [] });
     expect(await searchSymbols("삼성", KV)).toEqual([]);
     expect(await resolveSymbol("삼성전자", KV)).toBe("삼성전자");
+    expect(logs("symbols_missing")).toEqual([{ level: "error", message: "symbols_missing", key: SYMBOLS_KEY }]);
   });
 
   it("skips the fallback for single-character ASCII queries", async () => {
@@ -134,9 +140,14 @@ describe("resolveSymbol", () => {
 
 describe("yahoo.search", () => {
   it("returns an empty list on http errors or network failures", async () => {
+    const logs = captureLogs();
     stubYahoo({}, 500);
     expect(await yahoo.search("aapl")).toEqual([]);
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("boom"); }));
     expect(await yahoo.search("aapl")).toEqual([]);
+    expect(logs("search_failed")).toEqual([
+      { level: "warn", message: "search_failed", provider: "yahoo", status: 500 },
+      { level: "warn", message: "search_failed", provider: "yahoo", error: "boom" },
+    ]);
   });
 });

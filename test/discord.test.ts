@@ -4,6 +4,7 @@ import worker from "../src/index";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
 import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
 import keypair from "./keypair.json" with { type: "json" };
+import { captureLogs } from "./logs";
 
 const ENV = env as unknown as Env;
 let privateKey: CryptoKey;
@@ -14,6 +15,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   resetSymbolCache();
 });
 
@@ -147,6 +149,7 @@ describe("discord adapter", () => {
 
   it("defers /stock-chart, resolves the alias, renders a PNG and patches the original message", async () => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    const logs = captureLogs();
     const calls = stubOutbound();
     const ctx = createExecutionContext();
     const req = await signed({
@@ -175,9 +178,13 @@ describe("discord adapter", () => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     expect([...bytes.slice(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     expect(bytes.length).toBeGreaterThan(5000);
+
+    expect(logs("chart_served")).toEqual([expect.objectContaining({ level: "log", symbol: "005930.KS", resolved: "alias", pngBytes: bytes.length })]);
+    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "discord", command: "stock-chart", outcome: "ok", status: 200 })]);
   });
 
   it("reports /stock-chart upstream failures back to the user in Korean", async () => {
+    const logs = captureLogs();
     const calls = stubOutbound(500);
     const ctx = createExecutionContext();
     const req = await signed({ type: 2, token: "tok", data: { name: "stock-chart", options: [{ name: "ticker", value: "AAPL" }] } });
@@ -185,9 +192,39 @@ describe("discord adapter", () => {
     await waitOnExecutionContext(ctx);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
     expect(JSON.parse(patch.init?.body as string).content).toBe("⚠️ 시세 조회 실패 (500)");
+    expect(logs("chart_failed")).toEqual([expect.objectContaining({ level: "error", reason: "upstream" })]);
+    expect(logs("command_done")).toEqual([
+      expect.objectContaining({ level: "warn", command: "stock-chart", outcome: "failed", status: 200, error: "시세 조회 실패 (500)" }),
+    ]);
+  });
+
+  it("logs a delivery failure when Discord rejects the follow-up", async () => {
+    const logs = captureLogs();
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes("finance.yahoo.com")) return new Response(JSON.stringify(yahooBody));
+        patches.push(init?.body);
+        return init?.body instanceof FormData
+          ? new Response(JSON.stringify({ message: "Request entity too large", code: 40005 }), { status: 413 })
+          : new Response("{}");
+      }),
+    );
+    const ctx = createExecutionContext();
+    const req = await signed({ type: 2, token: "tok", data: { name: "stock-chart", options: [{ name: "ticker", value: "AAPL" }, { name: "range", value: "1m" }] } });
+    await worker.fetch(req, ENV, ctx);
+    await waitOnExecutionContext(ctx);
+    const [done] = logs("command_done");
+    expect(done).toMatchObject({ level: "error", platform: "discord", outcome: "delivery_failed", status: 413, fallback: "sent" });
+    expect(done.detail).toContain("Request entity too large");
+    expect(patches).toHaveLength(2);
+    expect(JSON.parse(patches[1] as string).content).toBe("⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    expect(JSON.stringify(done)).not.toContain("tok");
   });
 
   it("rejects /stock-alias add from members without manage-guild permission", async () => {
+    const logs = captureLogs();
     const calls = stubOutbound();
     const req = await signed({
       type: 2,
@@ -201,6 +238,7 @@ describe("discord adapter", () => {
     expect(body.data.flags).toBe(64);
     expect(body.data.content).toContain("권한");
     expect(calls).toHaveLength(0);
+    expect(logs("alias_denied")).toEqual([{ level: "warn", message: "alias_denied", platform: "discord", action: "add" }]);
   });
 
   it("adds and autocompletes, then lists and removes with /stock-alias", async () => {
