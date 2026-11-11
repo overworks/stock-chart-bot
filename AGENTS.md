@@ -41,6 +41,7 @@ src/
 │  ├─ chart.ts         #   SVG 차트 생성 및 등락 요약
 │  ├─ render.ts        #   resvg-wasm SVG→PNG 변환 (fonts/ 번들 폰트 사용)
 │  ├─ store.ts         #   R2 이미지 저장·서빙 (URL 전용 플랫폼용)
+│  ├─ log.ts           #   구조화 로그 (Workers Observability용 JSON 한 줄)
 │  └─ run.ts           #   차트 생성 오케스트레이션 (어댑터가 호출)
 └─ platforms/
    ├─ discord.ts       #   Ed25519 서명 검증, 자동완성, deferred 응답, multipart 업로드

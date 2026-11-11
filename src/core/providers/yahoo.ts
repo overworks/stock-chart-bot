@@ -1,4 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../types";
+import { logEvent } from "../log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./types";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -25,40 +26,35 @@ export const yahoo: MarketProvider = {
 
   async getPrices(symbol, req) {
     const { url, label, intraday, prePost } = buildUrl(symbol, req);
-    const res = await fetch(url, {
-      headers: { "User-Agent": UA },
-      cf: { cacheTtl: 300, cacheEverything: true },
-    } as RequestInit);
-    // 모르는 심볼은 404 + {chart:{result:null}} 로 온다.
-    if (res.status === 404) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
-    if (!res.ok) throw new Error(`시세 조회 실패 (${res.status})`);
+    let { result, bars } = await load(url, symbol);
+    let meta = result.meta ?? {};
+    const timeZone: string = meta.exchangeTimezoneName ?? "UTC";
+    let regularHours = prePost ? regularPeriods(meta.tradingPeriods) : undefined;
+    let prev = meta.chartPreviousClose ?? meta.previousClose;
 
-    let json: any;
-    try {
-      json = await res.json();
-    } catch {
-      throw new Error("시세 응답을 해석하지 못했습니다.");
-    }
-    const result = json?.chart?.result?.[0];
-    if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
-
-    const timestamps: number[] = result.timestamp ?? [];
-    const quote = result.indicators?.quote?.[0] ?? {};
-    const bars: ChartBar[] = [];
-    for (let i = 0; i < timestamps.length; i++) {
-      const c = num(quote.close, i);
-      if (c === undefined) continue;
-      bars.push({ t: timestamps[i], c, o: num(quote.open, i), h: num(quote.high, i), l: num(quote.low, i), v: num(quote.volume, i) });
+    if (prePost && bars.length < 2) {
+      // 새 거래일로 넘어간 직후에는 1d 응답에 봉이 없다. 5d에서 마지막 세션을 잘라 쓴다.
+      const today = bars.length;
+      const wide = await load(`${CHART}/${encodeURIComponent(symbol)}?range=5d&interval=5m&includePrePost=true`, symbol);
+      meta = wide.result.meta ?? {};
+      const offset = typeof meta.gmtoffset === "number" && Number.isFinite(meta.gmtoffset) ? meta.gmtoffset : 0;
+      bars = lastSession(wide.bars, offset);
+      regularHours = regularPeriods(meta.tradingPeriods);
+      const first = bars[0]?.t ?? 0;
+      prev = wide.bars.filter((b) => b.t < first && regularHours?.some((r) => r.start <= b.t && b.t <= r.end)).at(-1)?.c;
+      logEvent("log", "session_fallback", {
+        provider: "yahoo",
+        symbol,
+        bars: today,
+        session: bars.length ? new Date((first + offset) * 1000).toISOString().slice(0, 10) : undefined,
+        ok: bars.length >= 2,
+      });
+    } else if (prePost && typeof meta.regularMarketTime === "number" && day(bars[bars.length - 1].t, timeZone) > day(meta.regularMarketTime, timeZone)) {
+      // 프리마켓에는 오늘 봉만 오는데 chartPreviousClose는 직전 정규장의 전일 종가로 남아 있다.
+      prev = meta.regularMarketPrice;
     }
     if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
 
-    const meta = result.meta ?? {};
-    const timeZone: string = meta.exchangeTimezoneName ?? "UTC";
-    let prev = meta.chartPreviousClose ?? meta.previousClose;
-    // 프리마켓에는 오늘 봉만 오는데 chartPreviousClose는 직전 정규장의 전일 종가로 남아 있다.
-    if (prePost && typeof meta.regularMarketTime === "number" && day(bars[bars.length - 1].t, timeZone) > day(meta.regularMarketTime, timeZone)) {
-      prev = meta.regularMarketPrice;
-    }
     return {
       bars,
       label,
@@ -69,7 +65,7 @@ export const yahoo: MarketProvider = {
       name: meta.shortName ?? meta.longName ?? undefined,
       previousClose: typeof prev === "number" && Number.isFinite(prev) ? prev : undefined,
       continuous: CONTINUOUS_TYPES.has(meta.instrumentType),
-      regularHours: prePost ? regularPeriods(meta.tradingPeriods) : undefined,
+      regularHours,
     };
   },
 
@@ -102,6 +98,48 @@ export const yahoo: MarketProvider = {
       });
   },
 };
+
+async function load(url: string, symbol: string): Promise<{ result: any; bars: ChartBar[] }> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA },
+    cf: { cacheTtl: 300, cacheEverything: true },
+  } as RequestInit);
+  // 모르는 심볼은 404 + {chart:{result:null}} 로 온다.
+  if (res.status === 404) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
+  if (!res.ok) throw new Error(`시세 조회 실패 (${res.status})`);
+
+  let json: any;
+  try {
+    json = await res.json();
+  } catch {
+    throw new Error("시세 응답을 해석하지 못했습니다.");
+  }
+  const result = json?.chart?.result?.[0];
+  if (!result) throw new SymbolNotFoundError(`'${symbol}' 시세를 찾지 못했습니다.`);
+
+  const timestamps: number[] = result.timestamp ?? [];
+  const quote = result.indicators?.quote?.[0] ?? {};
+  const bars: ChartBar[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const c = num(quote.close, i);
+    if (c === undefined) continue;
+    bars.push({ t: timestamps[i], c, o: num(quote.open, i), h: num(quote.high, i), l: num(quote.low, i), v: num(quote.volume, i) });
+  }
+  return { result, bars };
+}
+
+/** 거래소 현지 날짜로 나눠 봉이 2개 이상인 가장 최근 날짜의 봉을 돌려준다. */
+function lastSession(bars: ChartBar[], offset: number): ChartBar[] {
+  const key = (t: number) => Math.floor((t + offset) / 86_400);
+  for (let end = bars.length; end > 0; ) {
+    const k = key(bars[end - 1].t);
+    let start = end - 1;
+    while (start > 0 && key(bars[start - 1].t) === k) start--;
+    if (end - start >= 2) return bars.slice(start, end);
+    end = start;
+  }
+  return [];
+}
 
 function num(arr: unknown, i: number): number | undefined {
   const x = Array.isArray(arr) ? arr[i] : undefined;

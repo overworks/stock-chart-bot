@@ -1,3 +1,4 @@
+import { logEvent } from "./log";
 import { kis } from "./providers/kis";
 import { upbit } from "./providers/upbit";
 import { yahoo } from "./providers/yahoo";
@@ -24,6 +25,7 @@ export async function getPrices(
       return series;
     } catch (err) {
       firstError ??= err;
+      logEvent("warn", "provider_failed", { provider: p.name, symbol, range: req.range, from: req.from, to: req.to, error: err instanceof Error ? err.message : String(err) });
     }
   }
   throw firstError ?? new Error("사용 가능한 시세 제공자가 없습니다.");

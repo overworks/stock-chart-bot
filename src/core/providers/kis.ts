@@ -1,4 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../types";
+import { logEvent } from "../log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "./types";
 
 const API = "https://openapi.koreainvestment.com:9443";
@@ -178,11 +179,22 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
       plan.sessions === 1 ? daily(cfg, INDEX_DAILY, code, "D", ymd(Math.floor(now() / 1000) - 21 * 86_400), today) : undefined,
     ]);
     const rows = (body.output2 ?? []).filter((r) => /^\d{8}$/.test(r.stck_bsop_date ?? "") && /^([01]\d|2[0-3])\d{4}$/.test(r.stck_cntg_hour ?? ""));
-    const dates = [...new Set(rows.map((r) => r.stck_bsop_date!))].sort().slice(-plan.sessions);
+    const barsOf = (days: string[]) =>
+      dedupe(rows.filter((r) => days.includes(r.stck_bsop_date!)).map((r) => toBar(r, dateSec(r.stck_bsop_date!) + clockSec(r.stck_cntg_hour!), INDEX_MINUTE_FIELDS)));
+    let dates = [...new Set(rows.map((r) => r.stck_bsop_date!))].sort();
+    // 개장 직후 당일 봉이 하나뿐이면 직전 세션을 쓴다.
+    let thin: number | undefined;
+    if (plan.sessions === 1 && dates.length > 1) {
+      const count = barsOf(dates.slice(-1)).length;
+      if (count < 2) {
+        thin = count;
+        dates = dates.slice(0, -1);
+      }
+    }
+    dates = dates.slice(-plan.sessions);
     if (dates.length < plan.sessions) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
-    const bars = dedupe(
-      rows.filter((r) => dates.includes(r.stck_bsop_date!)).map((r) => toBar(r, dateSec(r.stck_bsop_date!) + clockSec(r.stck_cntg_hour!), INDEX_MINUTE_FIELDS)),
-    );
+    const bars = barsOf(dates);
+    if (thin !== undefined) logEvent("log", "session_fallback", { provider: "kis", symbol, bars: thin, session: dates[0], ok: bars.length >= 2 });
     const previousClose = recent?.bars.filter((b) => b.t < dateSec(dates[0])).at(-1)?.c;
     return { bars, previousClose, name: body.output1?.hts_kor_isnm?.trim() || recent?.name };
   }
@@ -259,15 +271,24 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
           const last = recent.bars.at(-1);
           if (!last) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
           if (plan.sessions === 1) {
+            const size = plan.minutes * 60;
+            const dates = recent.bars.map((b) => ymd(b.t)).reverse();
             // 장 시작 전 프리마켓이면 일봉에 오늘이 아직 없을 수 있다.
-            let date = ymd(last.t);
-            let raw: ChartBar[] = [];
-            if (date < today && tradingHours(Math.floor(now() / 1000))) raw = await extended(cfg, code, today, plan.minutes * 60);
-            if (raw.length) date = today;
-            else raw = await extended(cfg, code, date, plan.minutes * 60);
+            const pre = dates[0] < today && tradingHours(Math.floor(now() / 1000));
+            // 당일 봉이 부족하면 직전 세션으로 넘어간다.
+            const candidates = [...(pre ? [today] : []), ...dates].slice(0, 2);
+            let date = candidates[0];
+            let first = 0;
+            bars = [];
+            for (const [i, d] of candidates.entries()) {
+              date = d;
+              bars = bucket(await extended(cfg, code, d, size), size);
+              if (i === 0) first = bars.length;
+              if (bars.length >= 2) break;
+            }
+            if (date !== candidates[0]) logEvent("log", "session_fallback", { provider: "kis", symbol, bars: first, session: date, ok: bars.length >= 2 });
             previousClose = recent.bars.filter((b) => b.t < dateSec(date)).at(-1)?.c;
             regularHours = [{ start: dateSec(date) + clockSec(REGULAR.open), end: dateSec(date) + clockSec(REGULAR.close) }];
-            bars = bucket(raw, plan.minutes * 60);
           } else {
             bars = [];
             for (const d of recent.bars.slice(-plan.sessions)) bars.push(...bucket(await minutes(cfg, code, ymd(d.t), REGULAR), plan.minutes * 60));

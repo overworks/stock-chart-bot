@@ -131,7 +131,8 @@ describe("runChart", () => {
   it("does not search when the error is 'not enough data'", async () => {
     const urls = stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
     await expect(runChart({ ticker: "AAPL" }, ENV)).rejects.toThrow("부족");
-    expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/AAPL"]);
+    expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/AAPL", "/v8/finance/chart/AAPL"]);
+    expect(urls.map((u) => u.searchParams.get("range"))).toEqual(["1d", "5d"]);
   });
 
   it("does not search for Hangul tickers that miss KV", async () => {

@@ -196,6 +196,48 @@ describe("kis provider", () => {
     expect(s.previousClose).toBe(100);
   });
 
+  it("uses the previous session when today's row exists but has a single 5-minute bucket", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const calls = stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 101), day("20260903", 100), day("20260902", 90)]) };
+      const date = url.searchParams.get("FID_INPUT_DATE_1")!;
+      if (date === "20260904") return { body: ok([minute(date, "090100", 102), minute(date, "090000", 101)]) };
+      return { body: ok([minute(date, "153000", 100), minute(date, "090000", 95)]) };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-04T09:02:00+09:00")).getPrices("005930.KS", { ticker: "x", range: "1d" });
+    const pages = calls.filter((c) => c.url.pathname.endsWith("inquire-time-dailychartprice"));
+    expect(pages.map((c) => [c.url.searchParams.get("FID_INPUT_DATE_1"), c.url.searchParams.get("FID_COND_MRKT_DIV_CODE")])).toEqual([
+      ["20260904", "UN"],
+      ["20260904", "J"],
+      ["20260903", "UN"],
+    ]);
+    const at = (hm: string) => Date.parse(`2026-09-03T${hm}:00+09:00`) / 1000;
+    expect(s.bars.map((b) => [b.t, b.c])).toEqual([
+      [at("09:00"), 95],
+      [at("15:30"), 100],
+    ]);
+    expect(s.previousClose).toBe(90);
+    expect(s.regularHours).toEqual([{ start: at("09:00"), end: at("15:30") }]);
+    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "session_fallback", provider: "kis", symbol: "005930.KS", bars: 1, session: "20260903", ok: true }]);
+    log.mockRestore();
+  });
+
+  it("uses the last session when today's pre-market has a single bar", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 100), day("20260902", 90)]) };
+      const date = url.searchParams.get("FID_INPUT_DATE_1")!;
+      if (date === "20260904") return { body: ok(url.searchParams.get("FID_COND_MRKT_DIV_CODE") === "UN" ? [minute(date, "080100", 101)] : []) };
+      return { body: ok([minute(date, "153000", 100), minute(date, "090000", 95)]) };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-04T08:03:00+09:00")).getPrices("005930.KS", { ticker: "x", range: "1d" });
+    expect(s.bars.map((b) => b.c)).toEqual([95, 100]);
+    expect(s.bars[0].t).toBe(Date.parse("2026-09-03T09:00:00+09:00") / 1000);
+    expect(s.previousClose).toBe(90);
+    expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ message: "session_fallback", session: "20260903", ok: true });
+    log.mockRestore();
+  });
+
   it("keeps 1w on the regular KRX session", async () => {
     const calls = stub((url) => {
       if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 105), day("20260902", 100)]) };
@@ -311,6 +353,23 @@ describe("kis domestic indices", () => {
     expect(s.bars).toHaveLength(10);
     expect(s.bars[0].t).toBe(kst("2026-08-31", "09:00"));
     expect(s.bars.at(-1)!.t).toBe(kst("2026-09-04", "10:00"));
+  });
+
+  it("uses the previous index session right after the open", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    stub((url) => {
+      if (url.pathname.endsWith("inquire-daily-indexchartprice")) return { body: ok([indexDay("20260904", 106), indexDay("20260903", 100), indexDay("20260902", 90)]) };
+      return { body: ok([indexMinute("20260904", "090000", 106), indexMinute("20260903", "153000", 100), indexMinute("20260903", "090500", 97), indexMinute("20260903", "090000", 95)], "종합") };
+    });
+    const s = await provider(undefined, Date.parse("2026-09-04T09:02:00+09:00")).getPrices("^KS11", { ticker: "x", range: "1d" });
+    expect(s.bars.map((b) => [b.t, b.c])).toEqual([
+      [kst("2026-09-03", "09:00"), 95],
+      [kst("2026-09-03", "09:05"), 97],
+      [kst("2026-09-03", "15:30"), 100],
+    ]);
+    expect(s.previousClose).toBe(90);
+    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "session_fallback", provider: "kis", symbol: "^KS11", bars: 1, session: "20260903", ok: true }]);
+    log.mockRestore();
   });
 
   it("falls back to Yahoo when KIS has too few sessions or fails", async () => {
