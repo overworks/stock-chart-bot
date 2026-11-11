@@ -140,7 +140,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 ### 5. CI/CD 및 종목 목록 자동 갱신
 
 - **자동 배포 (`deploy.yml`)**: `main` 브랜치에 push하면 GitHub Actions가 `typecheck` → `test` → `dry-run` → `deploy`를 차례로 실행한다(PR에서는 검증만 실행). 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`("Edit Cloudflare Workers" 템플릿)과 `CLOUDFLARE_ACCOUNT_ID`를 등록해야 한다. 수동 배포는 `npm run deploy`, 롤백은 `npx wrangler rollback`을 사용한다.
-- **종목 목록 갱신 (`refresh-symbols.yml`)**: 매주 월요일 09:00 KST마다 KIND·네이버 금융·업비트 목록을 새로 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행되며, GitHub Actions 탭에서 수동으로도 실행할 수 있다.
+- **종목 목록 갱신 (`refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 새로 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행되며, GitHub Actions 탭에서 수동으로도 실행할 수 있다.
 
 ## 개발 및 기여
 
