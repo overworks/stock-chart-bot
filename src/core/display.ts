@@ -1,4 +1,4 @@
-import type { PriceSeries } from "./providers/types";
+import type { PriceSeries } from "./market";
 
 /** 시세를 관행 단위로 바꿔 보여주는 심볼. factor를 곱하고 제목에 label을 붙인다. */
 const DISPLAY: Record<string, { factor: number; label: string }> = {

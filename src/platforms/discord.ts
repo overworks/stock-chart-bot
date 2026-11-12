@@ -1,6 +1,7 @@
 import { verifyKey } from "discord-interactions";
 import { runAlias, searchAliases } from "../core/aliases";
 import { errorMessage, logEvent } from "../core/log";
+import type { Providers } from "../core/market";
 import { runChart } from "../core/run";
 import { searchSymbols } from "../core/symbols";
 import { helpText } from "./help";
@@ -14,6 +15,7 @@ export async function handleDiscord(
   req: Request,
   env: Env,
   ctx: ExecutionContext,
+  providers: Providers,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
@@ -44,7 +46,7 @@ export async function handleDiscord(
     const choices =
       isAliasCommand && focused?.name === "alias"
         ? await searchAliases(query, env.KV)
-        : await searchSymbols(query, env.KV);
+        : await searchSymbols(query, env.KV, providers);
     return json({ type: 8, data: { choices } });
   }
 
@@ -54,7 +56,7 @@ export async function handleDiscord(
   }
 
   if (interaction.type === 2 && name === "stock-chart") {
-    ctx.waitUntil(serveChart(interaction, args, env));
+    ctx.waitUntil(serveChart(interaction, args, env, providers));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }
 
@@ -63,7 +65,7 @@ export async function handleDiscord(
       logEvent("warn", "alias_denied", { platform: "discord", action });
       return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }
-    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env));
+    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers));
     return json({ type: 5 });
   }
 
@@ -98,12 +100,12 @@ function canManage(interaction: any): boolean {
   }
 }
 
-async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env): Promise<void> {
+async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers): Promise<void> {
   const started = Date.now();
   let content: string;
   let error: unknown;
   try {
-    content = await runAlias(args, env);
+    content = await runAlias(args, env, providers);
   } catch (err) {
     error = err;
     content = `⚠️ ${errorMessage(err)}`;
@@ -117,6 +119,7 @@ async function serveChart(
   interaction: any,
   args: Record<string, string | undefined>,
   env: Env,
+  providers: Providers,
 ): Promise<void> {
   const endpoint = `${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
   const started = Date.now();
@@ -124,7 +127,7 @@ async function serveChart(
   let send: () => Promise<Response>;
   let fallback: (() => Promise<Response>) | undefined;
   try {
-    const result = await runChart(args, env);
+    const result = await runChart(args, env, providers);
     const form = new FormData();
     form.append(
       "payload_json",

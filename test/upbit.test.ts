@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { upbit } from "../src/core/providers/upbit";
+import { upbit } from "../src/providers/upbit";
 import { getPrices, searchRemote, SymbolNotFoundError } from "../src/core/market";
+import { PROVIDERS } from "./providers";
 
 function candle(utc: string, price: number, extra: Record<string, unknown> = {}) {
   return { candle_date_time_utc: utc, opening_price: price - 1, high_price: price + 1, low_price: price - 2, trade_price: price, candle_acc_trade_volume: 5, ...extra };
@@ -131,14 +132,14 @@ describe("provider routing", () => {
       if (u.hostname === "api.upbit.com") return { body: [candle("2026-09-12T00:00:00", 2), candle("2026-09-11T00:00:00", 1)] };
       return { body: { chart: { result: [{ meta: { currency: "USD" }, timestamp: [1, 2], indicators: { quote: [{ close: [1, 2] }] } }] } } };
     });
-    expect((await getPrices("KRW-BTC", { ticker: "x", range: "1m" })).source).toBe("Upbit");
-    expect((await getPrices("BTC-USD", { ticker: "x", range: "1m" })).source).toBe("Yahoo Finance");
+    expect((await getPrices("KRW-BTC", { ticker: "x", range: "1m" }, PROVIDERS)).source).toBe("Upbit");
+    expect((await getPrices("BTC-USD", { ticker: "x", range: "1m" }, PROVIDERS)).source).toBe("Yahoo Finance");
     expect(urls.map((u) => u.hostname)).toEqual(["api.upbit.com", "query1.finance.yahoo.com"]);
   });
 
   it("keeps ASCII remote search on Yahoo", async () => {
     const urls = stub(() => ({ body: { quotes: [{ symbol: "BTC-USD", shortname: "Bitcoin USD", quoteType: "CRYPTOCURRENCY" }] } }));
-    expect((await searchRemote("btc"))[0].value).toBe("BTC-USD");
+    expect((await searchRemote("btc", PROVIDERS))[0].value).toBe("BTC-USD");
     expect(urls.map((u) => u.hostname)).toEqual(["query1.finance.yahoo.com"]);
   });
 });

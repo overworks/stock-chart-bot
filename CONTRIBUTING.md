@@ -55,17 +55,12 @@ npx wrangler deploy --dry-run --outdir dist
 
 ```
 src/
-├─ index.ts              # 엔트리포인트: 라우팅 (/discord, /slack, /charts/*) 및 AliasWriter export
+├─ index.ts              # 엔트리포인트: 라우팅 (/discord, /slack, /charts/*), 제공자 목록 조립, AliasWriter export
 ├─ env.d.ts              # Env 바인딩 및 *.wasm / *.ttf 모듈 타입 선언
 ├─ core/                 # 플랫폼 중립 코어 (플랫폼 SDK import 금지)
 │  ├─ types.ts           #   공통 데이터 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts         #   커맨드 인자 검증 및 정규화
-│  ├─ market.ts          #   시세 조회·원격 검색 파사드 (PROVIDERS 순서대로 폴백)
-│  ├─ providers/         #   데이터 소스 구현체 (외부 API 호출은 이 디렉터리에만 작성)
-│  │  ├─ types.ts        #     MarketProvider 인터페이스 및 SymbolNotFoundError
-│  │  ├─ upbit.ts        #     업비트 원화 마켓 (KRW-*)
-│  │  ├─ kis.ts          #     한국투자증권 Open API (.KS, .KQ, 국내 지수)
-│  │  └─ yahoo.ts        #     Yahoo Finance 차트 및 영문 검색 폴백
+│  ├─ market.ts          #   MarketProvider 인터페이스, SymbolNotFoundError, 시세 조회·원격 검색 폴백
 │  ├─ symbols.ts         #   종목 목록 로드(KV 캐시), 별칭 해석, 초성·부분 일치 검색
 │  ├─ aliases.ts         #   /stock-alias 비즈니스 로직 (add, remove, list, 자동완성)
 │  ├─ alias-writer.ts    #   별칭 변경 직렬화 및 KV 복제를 담당하는 SQLite Durable Object
@@ -75,6 +70,11 @@ src/
 │  ├─ store.ts           #   R2 이미지 저장 및 /charts/<key> 서빙 (URL 전용 플랫폼용)
 │  ├─ log.ts             #   구조화 로그 (logEvent, errorMessage)
 │  └─ run.ts             #   차트 생성 오케스트레이션 (runChart)
+├─ providers/            # 데이터 소스 구현체 (외부 API 호출은 이 디렉터리에만 작성, core만 import)
+│  ├─ index.ts           #   createProviders: 우선순위 순서로 제공자 목록 조립
+│  ├─ upbit.ts           #   업비트 원화 마켓 (KRW-*)
+│  ├─ kis.ts             #   한국투자증권 Open API (.KS, .KQ, 국내 지수)
+│  └─ yahoo.ts           #   Yahoo Finance 차트 및 영문 검색 폴백
 └─ platforms/            # 메신저 플랫폼별 어댑터
    ├─ discord.ts         #   Ed25519 서명 검증, 자동완성, deferred 응답, multipart 파일 업로드
    ├─ slack.ts           #   HMAC-SHA256 서명 검증, 즉시 ack, R2 URL 기반 response_url 전송
@@ -98,9 +98,11 @@ scripts/
 - 서명 검증은 반드시 파싱 전의 **원본 요청 문자열(`await req.text()`)**로 수행한다.
 - `/stock-help`는 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`). `platforms/help.ts`의 순수 함수가 기존 옵션 상수와 플랫폼별 예시로 안내를 구성하며, 외부 호출이나 저장소 접근은 하지 않는다. Discord 도움말 본문은 2,000자 이내로 유지한다.
 
-### 2. 데이터 소스 (`src/core/providers/`)
+### 2. 데이터 소스 (`src/providers/`)
 
-`MarketProvider` 인터페이스를 구현한 모듈을 `src/core/providers/`에 두고 `market.ts`의 `PROVIDERS` 배열(`[upbit, kis, yahoo]`)에 등록한다.
+`MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/`에 두고 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. KIS는 앱키와 시크릿이 모두 있을 때만 목록에 들어간다.
+
+- **주입**: `core`는 구현체를 import하지 않는다. `src/index.ts`가 `env`로 목록을 조립해 어댑터에 넘기고, 어댑터가 `runChart`, `runAlias`, `searchSymbols`의 마지막 인자로 전달한다. KIS 토큰 메모리 캐시가 유지되도록 `env`가 같으면 조립 결과를 재사용한다. 테스트는 `test/providers.ts`의 기본 목록이나 가짜 제공자를 넘긴다.
 
 - **제공자 선택 및 폴백**: `supports(symbol)`가 정의된 제공자는 해당 조건이 참인 심볼만 처리한다. `getPrices`는 심볼을 지원하는 제공자를 순서대로 시도하며, 오류가 발생하면 다음 제공자로 폴백하고 모두 실패하면 첫 번째 오류를 던진다.
 - **에러 구분**: 존재하지 않는 심볼은 `SymbolNotFoundError`를 던지고, 그 외 오류(네트워크·HTTP 오류, 데이터 부족, 파싱 실패 등)는 일반 `Error`를 던진다. `runChart`의 영문 검색 재시도는 `SymbolNotFoundError`에만 반응한다.
@@ -155,7 +157,7 @@ Workers Logs와 Traces는 `wrangler.jsonc`의 `observability`에서 켜져 있�
 
 - **대시보드 쿼리 예시**: `message = "command_done"`을 `platform`, `outcome`으로 묶어 건수와 `ms` p95를 본다. 장애 알림은 `command_done`의 `delivery_failed`와 `chart_failed`의 `reason = "upstream"`을 기준으로 삼는다.
 - **`ms`의 의미**: Workers는 I/O 시점에만 시계가 전진하므로 `ms`는 I/O 대기를 포함한 경과 시간이다. CPU 시간은 invocation의 `cpuTimeMs`로 본다.
-- **커스텀 스팬**: `run.ts`가 `cloudflare:workers`의 `tracing.enterSpan`으로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render`를 만든다. `scripts/smoke.ts`가 Node에서 `market.ts`와 `providers/*`를 import하므로 이 파일들에는 `cloudflare:workers` 의존을 넣지 않는다.
+- **커스텀 스팬**: `run.ts`가 `cloudflare:workers`의 `tracing.enterSpan`으로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render`를 만든다. `scripts/smoke.ts`가 Node에서 `src/core/market.ts`와 `src/providers/*`를 import하므로 이 파일들에는 `cloudflare:workers` 의존을 넣지 않는다.
 - **자동완성**: 키 입력마다 호출되므로 성공 로그를 추가하지 않는다.
 
 ## 확장 가이드
@@ -168,9 +170,9 @@ Workers Logs와 Traces는 `wrangler.jsonc`의 `observability`에서 켜져 있�
 
 ### 새 데이터 소스 추가
 
-1. `src/core/providers/<name>.ts`에 `MarketProvider` 인터페이스를 구현한다.
+1. `src/providers/<name>.ts`에 `MarketProvider` 인터페이스를 구현한다. `core`의 타입과 `log`만 import한다.
 2. 특정 심볼 형식만 담당한다면 `supports(symbol)` 메서드를 구현하고, 없는 심볼 조회 시에는 `SymbolNotFoundError`를 던진다.
-3. `src/core/market.ts`의 `PROVIDERS` 배열에서 우선순위에 맞는 위치에 추가하고 `test/`에 단위 테스트를 작성한다.
+3. `src/providers/index.ts`의 `createProviders`에서 우선순위에 맞는 위치에 추가하고 `test/`에 단위 테스트를 작성한다. 설정값이 필요하면 `ProvidersConfig`에 필드를 추가하고 `src/index.ts`와 `scripts/smoke.ts`에서 넘긴다.
 
 ## 코딩 컨벤션 및 보안
 

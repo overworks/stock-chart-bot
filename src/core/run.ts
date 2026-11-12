@@ -3,7 +3,7 @@ import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
 import { displayCurrency, displayRule, scaleSeries } from "./display";
 import { errorMessage, logEvent } from "./log";
-import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries } from "./market";
+import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { ChartRequest, OutgoingMessage } from "./types";
@@ -17,6 +17,7 @@ const DISPLAY_TZ = "Asia/Seoul";
 export function runChart(
   args: Record<string, string | undefined>,
   env: CoreEnv,
+  providers: Providers,
 ): Promise<OutgoingMessage> {
   return tracing.enterSpan("chart", async (span) => {
     const started = Date.now();
@@ -30,15 +31,15 @@ export function runChart(
 
       let series = await tracing.enterSpan("chart.prices", async (): Promise<PriceSeries> => {
         try {
-          return await getPrices(symbol, parsed);
+          return await getPrices(symbol, parsed, providers);
         } catch (err) {
           // 별칭으로 해석되지 않은 영문 입력이 '없는 심볼'일 때만 검색으로 한 번 더 시도한다.
           if (!(err instanceof SymbolNotFoundError) || resolved !== "direct" || !isAsciiQuery(symbol)) throw err;
-          const hit = (await searchRemote(symbol))[0];
+          const hit = (await searchRemote(symbol, providers))[0];
           if (!hit) throw err;
           symbol = hit.value;
           resolved = "search";
-          return getPrices(symbol, parsed);
+          return getPrices(symbol, parsed, providers);
         }
       });
 

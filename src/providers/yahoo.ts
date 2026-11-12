@@ -1,6 +1,6 @@
-import type { ChartBar, ChartRequest, TimeSpan } from "../types";
-import { errorMessage, logEvent } from "../log";
-import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "./types";
+import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
+import { errorMessage, logEvent } from "../core/log";
+import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
 const SEARCH = "https://query1.finance.yahoo.com/v1/finance/search";

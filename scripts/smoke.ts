@@ -1,9 +1,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
-import { configureKis, getPrices } from "../src/core/market";
+import { getPrices } from "../src/core/market";
 import { buildSvg, CHART_WIDTH } from "../src/core/chart";
 import { RANGE_CHOICES } from "../src/core/command";
 import { displayRule, scaleSeries } from "../src/core/display";
+import { createProviders } from "../src/providers";
 
 const outDir = process.env.OUT_DIR ?? "dist/smoke";
 const cases = (process.argv[2] ?? "AAPL:1y,005930.KS:1m,AAPL:1d").split(",");
@@ -11,7 +12,7 @@ const cases = (process.argv[2] ?? "AAPL:1y,005930.KS:1m,AAPL:1d").split(",");
 await initWasm(readFileSync("wasm/resvg.wasm"));
 const fonts = ["fonts/NanumSquareR.ttf", "fonts/NanumSquareB.ttf"].map((f) => new Uint8Array(readFileSync(f)));
 mkdirSync(outDir, { recursive: true });
-configureKis(process.env.KIS_APP_KEY, process.env.KIS_APP_SECRET);
+const providers = createProviders({ kisAppKey: process.env.KIS_APP_KEY, kisAppSecret: process.env.KIS_APP_SECRET });
 
 for (const c of cases) {
   const [sym, range = "1d", ...flags] = c.split(":");
@@ -22,7 +23,7 @@ for (const c of cases) {
     continue;
   }
   try {
-    let series = await getPrices(sym, { ticker: sym, range });
+    let series = await getPrices(sym, { ticker: sym, range }, providers);
     const rule = displayRule(sym);
     if (rule) series = scaleSeries(series, rule.factor);
     const { bars, label, currency, name, previousClose, source, intraday, regularHours } = series;

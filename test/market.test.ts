@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getPrices, searchRemote, SymbolNotFoundError, type MarketProvider } from "../src/core/market";
 import { captureLogs } from "./logs";
+import { PROVIDERS } from "./providers";
 
 function yahoo(body: unknown, status = 200) {
   const fn = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));
@@ -28,7 +29,7 @@ afterEach(() => {
 describe("getPrices", () => {
   it("maps user ranges to Yahoo range/interval and drops null closes", async () => {
     const fn = yahoo(ok);
-    const series = await getPrices("005930.KS", { ticker: "x", range: "1m" });
+    const series = await getPrices("005930.KS", { ticker: "x", range: "1m" }, PROVIDERS);
     const url = fn.url();
     expect(url.pathname).toBe("/v8/finance/chart/005930.KS");
     expect(url.searchParams.get("range")).toBe("1mo");
@@ -56,7 +57,7 @@ describe("getPrices", () => {
     ["max", "max", "1mo", null],
   ])("range %s -> yahoo %s/%s (includePrePost %s)", async (range, yRange, interval, prePost) => {
     const fn = yahoo(ok);
-    await getPrices("AAPL", { ticker: "AAPL", range });
+    await getPrices("AAPL", { ticker: "AAPL", range }, PROVIDERS);
     const url = fn.url();
     expect(url.searchParams.get("range")).toBe(yRange);
     expect(url.searchParams.get("interval")).toBe(interval);
@@ -72,36 +73,36 @@ describe("getPrices", () => {
 
     it("uses the last regular close during pre-market", async () => {
       yahoo(body({ chartPreviousClose: 338.32, previousClose: 338.32, regularMarketPrice: 331.9, regularMarketTime: close1103 }, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).previousClose).toBe(331.9);
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).previousClose).toBe(331.9);
     });
 
     it("keeps Yahoo's previous close once the regular session has traded", async () => {
       yahoo(body({ chartPreviousClose: 331.9, regularMarketPrice: 336, regularMarketTime: pre1104[1] + 6 * 3600 }, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).previousClose).toBe(331.9);
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).previousClose).toBe(331.9);
     });
 
     it("passes regular hours from either tradingPeriods shape on 1d only", async () => {
       const span = { timezone: "EST", start: 1793802600, end: 1793826000, gmtoffset: -18000 };
       const regularHours = [{ start: span.start, end: span.end }];
       yahoo(body({ tradingPeriods: { pre: [[{ ...span, start: 1 }]], regular: [[span]], post: [[{ ...span, end: 2 }]] } }, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).regularHours).toEqual(regularHours);
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).regularHours).toEqual(regularHours);
       yahoo(body({ tradingPeriods: [[span]] }, pre1104));
-      expect((await getPrices("^GSPC", { ticker: "^GSPC", range: "1d" })).regularHours).toEqual(regularHours);
+      expect((await getPrices("^GSPC", { ticker: "^GSPC", range: "1d" }, PROVIDERS)).regularHours).toEqual(regularHours);
       yahoo(body({ tradingPeriods: [[span]] }, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).regularHours).toBeUndefined();
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" }, PROVIDERS)).regularHours).toBeUndefined();
       yahoo(body({}, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).regularHours).toBeUndefined();
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).regularHours).toBeUndefined();
     });
 
     it("ignores the regular session time for other ranges", async () => {
       yahoo(body({ chartPreviousClose: 338.32, regularMarketPrice: 331.9, regularMarketTime: close1103 }, pre1104));
-      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).previousClose).toBe(338.32);
+      expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" }, PROVIDERS)).previousClose).toBe(338.32);
     });
   });
 
   it("uses period1/period2 for custom periods", async () => {
     const fn = yahoo(ok);
-    const series = await getPrices("AAPL", { ticker: "AAPL", from: "2024-01-01", to: "2024-01-31" });
+    const series = await getPrices("AAPL", { ticker: "AAPL", from: "2024-01-01", to: "2024-01-31" }, PROVIDERS);
     const url = fn.url();
     expect(url.searchParams.get("period1")).toBe(String(Date.UTC(2024, 0, 1) / 1000));
     expect(url.searchParams.get("period2")).toBe(String(Date.UTC(2024, 1, 1) / 1000));
@@ -111,37 +112,37 @@ describe("getPrices", () => {
 
   it("throws on http errors", async () => {
     yahoo({}, 429);
-    await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("429");
+    await expect(getPrices("AAPL", { ticker: "AAPL" }, PROVIDERS)).rejects.toThrow("429");
   });
 
   it("throws SymbolNotFoundError on Yahoo's 404 and on a null result", async () => {
     yahoo({ chart: { result: null, error: { code: "Not Found" } } }, 404);
-    await expect(getPrices("NOPE", { ticker: "NOPE" })).rejects.toBeInstanceOf(SymbolNotFoundError);
+    await expect(getPrices("NOPE", { ticker: "NOPE" }, PROVIDERS)).rejects.toBeInstanceOf(SymbolNotFoundError);
     yahoo({ chart: { result: null } });
-    await expect(getPrices("NOPE", { ticker: "NOPE" })).rejects.toThrow("찾지 못했습니다");
+    await expect(getPrices("NOPE", { ticker: "NOPE" }, PROVIDERS)).rejects.toThrow("찾지 못했습니다");
   });
 
   it("treats too few bars as a plain error, not as not-found", async () => {
     yahoo({ chart: { result: [{ timestamp: [1, 2], indicators: { quote: [{ close: [1, null] }] } }] } });
-    const err = await getPrices("AAPL", { ticker: "AAPL" }).catch((e) => e);
+    const err = await getPrices("AAPL", { ticker: "AAPL" }, PROVIDERS).catch((e) => e);
     expect(err.message).toContain("부족");
     expect(err).not.toBeInstanceOf(SymbolNotFoundError);
   });
 
   it("reports unparseable bodies instead of throwing SyntaxError", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>consent</html>", { status: 200 })));
-    await expect(getPrices("AAPL", { ticker: "AAPL" })).rejects.toThrow("해석하지");
+    await expect(getPrices("AAPL", { ticker: "AAPL" }, PROVIDERS)).rejects.toThrow("해석하지");
   });
 
   it("flags intraday for minute intervals only", async () => {
     yahoo(ok);
-    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" })).intraday).toBe(true);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).intraday).toBe(true);
     yahoo(ok);
-    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" })).intraday).toBe(true);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "1w" }, PROVIDERS)).intraday).toBe(true);
     yahoo(ok);
-    expect((await getPrices("AAPL", { ticker: "AAPL", range: "max" })).intraday).toBe(false);
+    expect((await getPrices("AAPL", { ticker: "AAPL", range: "max" }, PROVIDERS)).intraday).toBe(false);
     yahoo(ok);
-    expect((await getPrices("AAPL", { ticker: "AAPL", from: "2024-01-01", to: "2024-02-01" })).intraday).toBe(false);
+    expect((await getPrices("AAPL", { ticker: "AAPL", from: "2024-01-01", to: "2024-02-01" }, PROVIDERS)).intraday).toBe(false);
   });
 });
 
@@ -187,7 +188,7 @@ describe("provider fallback", () => {
 
   it("marks crypto and FX as continuous markets", async () => {
     yahoo({ chart: { result: [{ meta: { instrumentType: "CRYPTOCURRENCY", currency: "USD" }, timestamp: [1, 2], indicators: { quote: [{ close: [1, 2] }] } }] } });
-    expect((await getPrices("BTC-USD", { ticker: "BTC-USD" })).continuous).toBe(true);
+    expect((await getPrices("BTC-USD", { ticker: "BTC-USD" }, PROVIDERS)).continuous).toBe(true);
   });
 });
 
@@ -233,7 +234,7 @@ describe("1d fallback to the previous session", () => {
   it("refetches 5d when 1d is empty and keeps the latest day with two or more bars", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const urls = stub({ "5d": wide });
-    const s = await getPrices("AAPL", { ticker: "AAPL", range: "1d" });
+    const s = await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS);
     expect(urls.map((u) => [u.searchParams.get("range"), u.searchParams.get("interval"), u.searchParams.get("includePrePost")])).toEqual([
       ["1d", "5m", "true"],
       ["5d", "5m", "true"],
@@ -248,7 +249,7 @@ describe("1d fallback to the previous session", () => {
   it("also falls back when 1d has a single bar", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     stub({ "1d": wide.slice(-1), "5d": wide });
-    const s = await getPrices("AAPL", { ticker: "AAPL", range: "1d" });
+    const s = await getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS);
     expect(s.bars.map((b) => b.c)).toEqual([102, 103, 104, 105]);
   });
 
@@ -256,14 +257,14 @@ describe("1d fallback to the previous session", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     stub({ "5d": [wide[0], wide[2], wide[6]] });
-    await expect(getPrices("AAPL", { ticker: "AAPL", range: "1d" })).rejects.toThrow("부족");
+    await expect(getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).rejects.toThrow("부족");
     expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ message: "session_fallback", ok: false });
   });
 
   it("does not refetch for other ranges", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const urls = stub({});
-    await expect(getPrices("AAPL", { ticker: "AAPL", range: "1w" })).rejects.toThrow("부족");
+    await expect(getPrices("AAPL", { ticker: "AAPL", range: "1w" }, PROVIDERS)).rejects.toThrow("부족");
     expect(urls).toHaveLength(1);
   });
 

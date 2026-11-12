@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSymbolCache, resolveSymbol, searchSymbols, SYMBOLS_KEY } from "../src/core/symbols";
-import { yahoo } from "../src/core/providers/yahoo";
+import { yahoo } from "../src/providers/yahoo";
 import { captureLogs } from "./logs";
+import { PROVIDERS } from "./providers";
 
 const KV = (env as unknown as Env).KV;
 
@@ -43,40 +44,40 @@ afterEach(() => {
 describe("searchSymbols", () => {
   it("returns nothing for an empty query without touching the network", async () => {
     const fn = stubYahoo();
-    expect(await searchSymbols("   ", KV)).toEqual([]);
+    expect(await searchSymbols("   ", KV, PROVIDERS)).toEqual([]);
     expect(fn).not.toHaveBeenCalled();
   });
 
   it("ranks exact, then prefix, then substring matches and never falls back for Hangul", async () => {
     const fn = stubYahoo();
-    const out = await searchSymbols("삼성", KV);
+    const out = await searchSymbols("삼성", KV, PROVIDERS);
     expect(out[0]).toEqual({ name: "삼성전자 (005930.KS)", value: "005930.KS" });
     expect(out.map((c) => c.value).slice(1).sort()).toEqual(["005935.KS", "006400.KS"]);
-    expect((await searchSymbols("하이닉스", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect((await searchSymbols("하이닉스", KV, PROVIDERS)).map((c) => c.value)).toEqual(["000660.KS"]);
     expect(fn).not.toHaveBeenCalled();
   });
 
   it("matches names and symbols case-insensitively, ignoring spaces", async () => {
     stubYahoo({ quotes: [] });
-    expect((await searchSymbols("nav", KV))[0]).toEqual({ name: "NAVER (035420.KS)", value: "035420.KS" });
-    expect((await searchSymbols("0059", KV)).map((c) => c.value)).toEqual(["005930.KS", "005935.KS"]);
-    expect((await searchSymbols("sk 하이닉스", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect((await searchSymbols("nav", KV, PROVIDERS))[0]).toEqual({ name: "NAVER (035420.KS)", value: "035420.KS" });
+    expect((await searchSymbols("0059", KV, PROVIDERS)).map((c) => c.value)).toEqual(["005930.KS", "005935.KS"]);
+    expect((await searchSymbols("sk 하이닉스", KV, PROVIDERS)).map((c) => c.value)).toEqual(["000660.KS"]);
   });
 
   it("matches Hangul initial consonants, mixed with syllables, and ranks prefix first", async () => {
     const fn = stubYahoo();
-    expect((await searchSymbols("ㅅㅅㅈㅈ", KV)).map((c) => c.value)).toEqual(["005930.KS", "005935.KS"]);
-    expect((await searchSymbols("ㅅㅅ", KV))[0].value).toBe("005930.KS");
-    expect((await searchSymbols("삼ㅅ", KV)).map((c) => c.value).sort()).toEqual(["005930.KS", "005935.KS", "006400.KS"]);
-    expect((await searchSymbols("ㅎㅇㄴㅅ", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
-    expect((await searchSymbols("skㅎ", KV)).map((c) => c.value)).toEqual(["000660.KS"]);
-    expect(await searchSymbols("ㅋㅋ", KV)).toEqual([]);
+    expect((await searchSymbols("ㅅㅅㅈㅈ", KV, PROVIDERS)).map((c) => c.value)).toEqual(["005930.KS", "005935.KS"]);
+    expect((await searchSymbols("ㅅㅅ", KV, PROVIDERS))[0].value).toBe("005930.KS");
+    expect((await searchSymbols("삼ㅅ", KV, PROVIDERS)).map((c) => c.value).sort()).toEqual(["005930.KS", "005935.KS", "006400.KS"]);
+    expect((await searchSymbols("ㅎㅇㄴㅅ", KV, PROVIDERS)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect((await searchSymbols("skㅎ", KV, PROVIDERS)).map((c) => c.value)).toEqual(["000660.KS"]);
+    expect(await searchSymbols("ㅋㅋ", KV, PROVIDERS)).toEqual([]);
     expect(fn).not.toHaveBeenCalled();
   });
 
   it("falls back to Yahoo search for ASCII queries and dedupes against local hits", async () => {
     const fn = stubYahoo();
-    const out = await searchSymbols("hynix", KV);
+    const out = await searchSymbols("hynix", KV, PROVIDERS);
     expect(fn).toHaveBeenCalledTimes(1);
     expect(new URL(String(fn.mock.calls[0]![0])).searchParams.get("q")).toBe("hynix");
     expect(out.map((c) => c.value)).toEqual(["SKHY", "000660.KS", "HY9H.F"]);
@@ -86,8 +87,8 @@ describe("searchSymbols", () => {
 
   it("reads both KV keys once per cache window", async () => {
     const spy = vi.spyOn(KV, "get");
-    await searchSymbols("삼성", KV);
-    await searchSymbols("애플", KV);
+    await searchSymbols("삼성", KV, PROVIDERS);
+    await searchSymbols("애플", KV, PROVIDERS);
     await resolveSymbol("삼성전자", KV);
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
@@ -98,14 +99,14 @@ describe("searchSymbols", () => {
     await KV.delete(SYMBOLS_KEY);
     const logs = captureLogs();
     stubYahoo({ quotes: [] });
-    expect(await searchSymbols("삼성", KV)).toEqual([]);
+    expect(await searchSymbols("삼성", KV, PROVIDERS)).toEqual([]);
     expect(await resolveSymbol("삼성전자", KV)).toBe("삼성전자");
     expect(logs("symbols_missing")).toEqual([{ level: "error", message: "symbols_missing", key: SYMBOLS_KEY }]);
   });
 
   it("skips the fallback for single-character ASCII queries", async () => {
     const fn = stubYahoo();
-    await searchSymbols("h", KV);
+    await searchSymbols("h", KV, PROVIDERS);
     expect(fn).not.toHaveBeenCalled();
   });
 });
@@ -132,7 +133,7 @@ describe("resolveSymbol", () => {
   it("dedupes concurrent cold loads into one KV round trip", async () => {
     resetSymbolCache();
     const spy = vi.spyOn(KV, "get");
-    await Promise.all([resolveSymbol("삼성전자", KV), resolveSymbol("NAVER", KV), searchSymbols("삼성", KV)]);
+    await Promise.all([resolveSymbol("삼성전자", KV), resolveSymbol("NAVER", KV), searchSymbols("삼성", KV, PROVIDERS)]);
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });

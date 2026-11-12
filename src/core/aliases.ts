@@ -1,6 +1,6 @@
 import { mutateAlias } from "./alias-writer";
 import { logEvent } from "./log";
-import { getPrices, SymbolNotFoundError } from "./market";
+import { getPrices, SymbolNotFoundError, type Providers } from "./market";
 import {
   ALIASES_KEY,
   isAsciiQuery,
@@ -35,6 +35,7 @@ export async function addAlias(
   aliasInput: string,
   targetInput: string,
   writer: DurableObjectNamespace,
+  providers: Providers,
 ): Promise<{ alias: string; symbol: string; display: string }> {
   const alias = aliasInput.trim();
   const target = targetInput.trim();
@@ -49,7 +50,7 @@ export async function addAlias(
     throw new Error(`'${alias}'은(는) 이미 종목명으로 등록돼 있습니다 (${existing}).`);
   }
 
-  const { symbol, display } = await resolveTarget(target, kv, byKey, byValue);
+  const { symbol, display } = await resolveTarget(target, kv, byKey, byValue, providers);
   await mutateAlias(writer, { key: alias, value: symbol });
   resetSymbolCache();
   return { alias, symbol, display };
@@ -68,18 +69,19 @@ async function resolveTarget(
   kv: KVNamespace,
   byKey: Map<string, string>,
   byValue: Map<string, string>,
+  providers: Providers,
 ): Promise<{ symbol: string; display: string }> {
   const known = byKey.get(target);
   if (known !== undefined) return { symbol: known, display: label(known, byValue) };
 
   const notFound = new Error(`'${target}' 종목을 찾지 못했습니다.`);
   if (!looksLikeSymbol(target)) {
-    const hit = (await searchSymbols(target, kv))[0];
+    const hit = (await searchSymbols(target, kv, providers))[0];
     if (hit) return { symbol: hit.value, display: byValue.has(hit.value) ? label(hit.value, byValue) : hit.name };
     if (!isAsciiQuery(target)) throw notFound;
   }
   try {
-    const series = await getPrices(target, { ticker: target, range: "1m" });
+    const series = await getPrices(target, { ticker: target, range: "1m" }, providers);
     return { symbol: target, display: label(target, byValue, series.name) };
   } catch (err) {
     if (err instanceof SymbolNotFoundError) throw notFound;
@@ -93,10 +95,14 @@ function label(symbol: string, byValue: Map<string, string>, fallback?: string):
 }
 
 /** 어댑터 공용 진입점. 결과 메시지를 돌려주고 실패는 Error로 던진다. */
-export async function runAlias(args: AliasArgs, env: { KV: KVNamespace; ALIAS_WRITER: DurableObjectNamespace }): Promise<string> {
+export async function runAlias(
+  args: AliasArgs,
+  env: { KV: KVNamespace; ALIAS_WRITER: DurableObjectNamespace },
+  providers: Providers,
+): Promise<string> {
   switch (args.action) {
     case "add": {
-      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER);
+      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER, providers);
       logEvent("log", "alias_changed", { action: "add", alias: r.alias, symbol: r.symbol });
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }

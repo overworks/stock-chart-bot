@@ -1,6 +1,7 @@
 import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
 import { errorMessage, logEvent } from "../core/log";
+import type { Providers } from "../core/market";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
 import { helpText } from "./help";
@@ -14,6 +15,7 @@ export async function handleSlack(
   req: Request,
   env: Env,
   ctx: ExecutionContext,
+  providers: Providers,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
@@ -28,24 +30,30 @@ export async function handleSlack(
   const responseUrl = form.get("response_url") ?? "";
   const command = form.get("command");
   if (command === "/stock-help") return ephemeral(helpText("slack"));
-  if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx);
+  if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx, providers);
   if (command !== "/stock-chart") return ephemeral("알 수 없는 명령입니다.");
 
   const args = parseText(form.get("text") ?? "");
   if (!args.ticker || !responseUrl) return ephemeral(USAGE);
 
   const origin = new URL(req.url).origin;
-  ctx.waitUntil(serveChart(responseUrl, origin, args, env));
+  ctx.waitUntil(serveChart(responseUrl, origin, args, env, providers));
   return ephemeral("차트를 만드는 중입니다…");
 }
 
-async function handleAlias(form: URLSearchParams, responseUrl: string, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleAlias(
+  form: URLSearchParams,
+  responseUrl: string,
+  env: Env,
+  ctx: ExecutionContext,
+  providers: Providers,
+): Promise<Response> {
   const args = parseAliasText(form.get("text") ?? "");
   if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
   const report = { platform: "slack" as const, command: "stock-alias", action: args.action, started: Date.now() };
   if (args.action === "list") {
     try {
-      const text = await runAlias(args, env);
+      const text = await runAlias(args, env, providers);
       await reportCommand(report);
       return ephemeral(text);
     } catch (err) {
@@ -58,7 +66,7 @@ async function handleAlias(form: URLSearchParams, responseUrl: string, env: Env,
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
   ctx.waitUntil(
-    runAlias(args, env).then(
+    runAlias(args, env, providers).then(
       (text) => reportCommand(report, () => post(responseUrl, { response_type: "in_channel", text })),
       (err) => reportCommand({ ...report, error: err }, () => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` })),
     ),
@@ -104,12 +112,13 @@ async function serveChart(
   origin: string,
   args: Record<string, string | undefined>,
   env: Env,
+  providers: Providers,
 ): Promise<void> {
   const started = Date.now();
   let error: unknown;
   let payload: unknown;
   try {
-    const result = await runChart(args, env);
+    const result = await runChart(args, env, providers);
     const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text: toMrkdwn(result.text) } }];
     if (result.image) {
       const key = await storeChart(env.CHARTS, result.image.png);

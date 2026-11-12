@@ -1,6 +1,6 @@
-import type { ChartBar, ChartRequest, TimeSpan } from "../types";
-import { errorMessage, logEvent } from "../log";
-import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "./types";
+import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
+import { errorMessage, logEvent } from "../core/log";
+import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "../core/market";
 
 const API = "https://openapi.koreainvestment.com:9443";
 const MINUTE = "/uapi/domestic-stock/v1/quotations/inquire-time-dailychartprice";
@@ -99,8 +99,8 @@ const RANGE: Record<string, { period: "D" | "W" | "M"; days: number } | { minute
   max: { period: "M", days: 0 },
 };
 
-/** 한국투자증권 Open API. KRX 종목(.KS/.KQ)과 국내 지수(^KS11 등)를 맡고 앱키가 없으면 건너뛴다. */
-export function createKis(config: () => KisConfig | undefined, now: () => number = Date.now): MarketProvider {
+/** 한국투자증권 Open API. KRX 종목(.KS/.KQ)과 국내 지수(^KS11 등)를 맡는다. */
+export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketProvider {
   let cached: Token | undefined;
   let pending: Promise<Token> | undefined;
 
@@ -236,14 +236,13 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     name: "한국투자증권",
 
     supports(symbol) {
-      return (SYMBOL.test(symbol) || INDEX.has(symbol)) && config() !== undefined;
+      return SYMBOL.test(symbol) || INDEX.has(symbol);
     },
 
     async getPrices(symbol, req: ChartRequest) {
-      const cfg = config();
       const index = INDEX.get(symbol);
       const code = index ?? SYMBOL.exec(symbol)?.[1];
-      if (!cfg || !code) throw new Error("한국투자증권 설정이 없습니다.");
+      if (!code) throw new SymbolNotFoundError(`'${symbol}'은(는) 한국투자증권이 지원하지 않는 심볼입니다.`);
       const api = index ? INDEX_DAILY : STOCK_DAILY;
       const today = ymd(Math.floor(now() / 1000));
 
@@ -333,15 +332,6 @@ export function createKis(config: () => KisConfig | undefined, now: () => number
     return fresh;
   }
 }
-
-let current: KisConfig | undefined;
-
-/** 요청 진입점에서 env로 한 번 호출한다. 키가 비어 있으면 KIS를 끈다. */
-export function configureKis(appKey: string | undefined, appSecret: string | undefined, kv?: KVNamespace): void {
-  current = appKey && appSecret ? { appKey, appSecret, kv } : undefined;
-}
-
-export const kis = createKis(() => current);
 
 function toBar(r: Row, t: number, f: Fields): ChartBar | undefined {
   const c = num(r[f.c]);

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { configureKis, createKis, kis } from "../src/core/providers/kis";
-import { yahoo } from "../src/core/providers/yahoo";
+import { createProviders } from "../src/providers";
+import { createKis } from "../src/providers/kis";
+import { yahoo } from "../src/providers/yahoo";
 import { getPrices, SymbolNotFoundError } from "../src/core/market";
 import { captureLogs } from "./logs";
 
@@ -23,7 +24,7 @@ function memoryKv() {
 }
 
 function provider(kv?: KVNamespace, now = NOW) {
-  return createKis(() => ({ appKey: "key", appSecret: "secret", kv }), () => now);
+  return createKis({ appKey: "key", appSecret: "secret", kv }, () => now);
 }
 
 type Handler = (url: URL, init: RequestInit) => { status?: number; body: unknown };
@@ -62,13 +63,12 @@ afterEach(() => {
 });
 
 describe("kis provider", () => {
-  it("only claims KRX symbols when credentials are configured", () => {
+  it("only claims KRX symbols", () => {
     const p = provider();
     expect(p.supports!("005930.KS")).toBe(true);
     expect(p.supports!("0167A0.KQ")).toBe(true);
     expect(p.supports!("AAPL")).toBe(false);
     expect(p.supports!("KRW-BTC")).toBe(false);
-    expect(createKis(() => undefined).supports!("005930.KS")).toBe(false);
   });
 
   it("maps daily rows into ascending KST bars and sends auth headers", async () => {
@@ -316,7 +316,6 @@ describe("kis domestic indices", () => {
     for (const s of ["^KS11", "^KQ11", "^KS200"]) expect(p.supports!(s)).toBe(true);
     expect(p.supports!("^GSPC")).toBe(false);
     expect(p.supports!("constructor")).toBe(false);
-    expect(createKis(() => undefined).supports!("^KS11")).toBe(false);
   });
 
   it("maps index daily rows from the sector API", async () => {
@@ -418,14 +417,12 @@ describe("kis domestic indices", () => {
   });
 });
 
-describe("configureKis", () => {
-  afterEach(() => configureKis(undefined, undefined));
+describe("createProviders", () => {
+  const names = (cfg?: Parameters<typeof createProviders>[0]) => createProviders(cfg).map((p) => p.name);
 
-  it("enables the default provider only with both keys", () => {
-    expect(kis.supports!("005930.KS")).toBe(false);
-    configureKis("key", "");
-    expect(kis.supports!("005930.KS")).toBe(false);
-    configureKis("key", "secret");
-    expect(kis.supports!("005930.KS")).toBe(true);
+  it("includes KIS only with both keys, between Upbit and Yahoo", () => {
+    expect(names()).toEqual(["Upbit", "Yahoo Finance"]);
+    expect(names({ kisAppKey: "key", kisAppSecret: "" })).toEqual(["Upbit", "Yahoo Finance"]);
+    expect(names({ kisAppKey: "key", kisAppSecret: "secret" })).toEqual(["Upbit", "한국투자증권", "Yahoo Finance"]);
   });
 });

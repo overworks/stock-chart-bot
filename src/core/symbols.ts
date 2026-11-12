@@ -1,6 +1,5 @@
 import { logEvent } from "./log";
-import { searchRemote } from "./market";
-import type { SymbolChoice } from "./providers/types";
+import { searchRemote, type Providers, type SymbolChoice } from "./market";
 
 export type { SymbolChoice };
 
@@ -113,7 +112,7 @@ export async function resolveSymbol(ticker: string, kv: KVNamespace): Promise<st
   return byKey.get(t) ?? t;
 }
 
-export async function searchSymbols(query: string, kv: KVNamespace): Promise<SymbolChoice[]> {
+export async function searchSymbols(query: string, kv: KVNamespace, providers: Providers): Promise<SymbolChoice[]> {
   const q = norm(query);
   if (!q) return [];
 
@@ -147,7 +146,7 @@ export async function searchSymbols(query: string, kv: KVNamespace): Promise<Sym
   for (const { e } of ranked) push({ name: `${byValue.get(e.value) ?? e.key} (${e.value})`, value: e.value });
 
   if (out.length < MAX && isAsciiQuery(query.trim()) && q.length >= 2) {
-    for (const c of await searchRemote(query.trim())) push(c);
+    for (const c of await searchRemote(query.trim(), providers)) push(c);
   }
   return out;
 }
