@@ -179,8 +179,8 @@ describe("discord adapter", () => {
     expect([...bytes.slice(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     expect(bytes.length).toBeGreaterThan(5000);
 
-    expect(logs("chart_served")).toEqual([expect.objectContaining({ level: "log", symbol: "005930.KS", resolved: "alias", pngBytes: bytes.length })]);
-    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "discord", command: "stock-chart", outcome: "ok", status: 200 })]);
+    expect(logs("chart.served")).toEqual([expect.objectContaining({ level: "log", "chart.symbol": "005930.KS", "chart.resolved": "alias", "chart.image.size": bytes.length })]);
+    expect(logs("chart.command.done")).toEqual([expect.objectContaining({ level: "log", "chart.platform": "discord", "chart.command.name": "stock-chart", "chart.command.outcome": "ok", "http.response.status_code": 200 })]);
   });
 
   it("reports /stock-chart upstream failures back to the user in Korean", async () => {
@@ -192,9 +192,9 @@ describe("discord adapter", () => {
     await waitOnExecutionContext(ctx);
     const patch = calls.find((c) => c.url.includes("discord.com/api"))!;
     expect(JSON.parse(patch.init?.body as string).content).toBe("⚠️ 시세 조회 실패 (500)");
-    expect(logs("chart_failed")).toEqual([expect.objectContaining({ level: "error", reason: "upstream" })]);
-    expect(logs("command_done")).toEqual([
-      expect.objectContaining({ level: "warn", command: "stock-chart", outcome: "failed", status: 200, error: "시세 조회 실패 (500)" }),
+    expect(logs("chart.failed")).toEqual([expect.objectContaining({ level: "error", "error.type": "upstream" })]);
+    expect(logs("chart.command.done")).toEqual([
+      expect.objectContaining({ level: "warn", "chart.command.name": "stock-chart", "chart.command.outcome": "failed", "http.response.status_code": 200, "exception.message": "시세 조회 실패 (500)" }),
     ]);
   });
 
@@ -215,9 +215,9 @@ describe("discord adapter", () => {
     const req = await signed({ type: 2, token: "tok", data: { name: "stock-chart", options: [{ name: "ticker", value: "AAPL" }, { name: "range", value: "1m" }] } });
     await worker.fetch(req, ENV, ctx);
     await waitOnExecutionContext(ctx);
-    const [done] = logs("command_done");
-    expect(done).toMatchObject({ level: "error", platform: "discord", outcome: "delivery_failed", status: 413, fallback: "sent" });
-    expect(done.detail).toContain("Request entity too large");
+    const [done] = logs("chart.command.done");
+    expect(done).toMatchObject({ level: "error", "chart.platform": "discord", "chart.command.outcome": "delivery_failed", "http.response.status_code": 413, "chart.command.fallback": "sent" });
+    expect(done["chart.command.delivery_detail"]).toContain("Request entity too large");
     expect(patches).toHaveLength(2);
     expect(JSON.parse(patches[1] as string).content).toBe("⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     expect(JSON.stringify(done)).not.toContain("tok");
@@ -238,7 +238,7 @@ describe("discord adapter", () => {
     expect(body.data.flags).toBe(64);
     expect(body.data.content).toContain("권한");
     expect(calls).toHaveLength(0);
-    expect(logs("alias_denied")).toEqual([{ level: "warn", message: "alias_denied", platform: "discord", action: "add" }]);
+    expect(logs("chart.alias.denied")).toEqual([{ level: "warn", message: "chart.alias.denied", "chart.platform": "discord", "chart.alias.action": "add" }]);
   });
 
   it("adds and autocompletes, then lists and removes with /stock-alias", async () => {

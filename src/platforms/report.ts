@@ -1,4 +1,4 @@
-import { errorMessage, logEvent } from "../core/log";
+import { errorMessage, exceptionAttributes, logEvent } from "../core/log";
 
 export const DELIVERY_FAILED_TEXT = "⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
@@ -23,20 +23,20 @@ async function attempt(send: Send): Promise<{ ok: boolean; status?: number; deta
   }
 }
 
-/** 결과를 전송하고 명령 한 번을 `command_done` 한 줄로 남긴다. 전송이 실패하면 fallback을 한 번 보낸다. */
+/** 결과를 전송하고 명령 한 번을 `chart.command.done` 한 줄로 남긴다. 전송이 실패하면 fallback을 한 번 보낸다. */
 export async function reportCommand(report: CommandReport, send?: Send, fallback?: Send): Promise<void> {
   const first = send ? await attempt(send) : undefined;
   const retry = first && !first.ok && fallback ? await attempt(fallback) : undefined;
   const outcome = first && !first.ok ? "delivery_failed" : report.error !== undefined ? "failed" : "ok";
-  logEvent(outcome === "ok" ? "log" : outcome === "failed" ? "warn" : "error", "command_done", {
-    platform: report.platform,
-    command: report.command,
-    action: report.action,
-    outcome,
-    ms: Date.now() - report.started,
-    status: first?.status,
-    error: report.error === undefined ? undefined : errorMessage(report.error),
-    detail: first?.detail,
-    fallback: retry && (retry.ok ? "sent" : "failed"),
+  logEvent(outcome === "ok" ? "log" : outcome === "failed" ? "warn" : "error", "chart.command.done", {
+    "chart.platform": report.platform,
+    "chart.command.name": report.command,
+    "chart.command.action": report.action,
+    "chart.command.outcome": outcome,
+    "chart.duration_ms": Date.now() - report.started,
+    "http.response.status_code": first?.status,
+    ...(report.error === undefined ? undefined : exceptionAttributes(report.error)),
+    "chart.command.delivery_detail": first?.detail,
+    "chart.command.fallback": retry && (retry.ok ? "sent" : "failed"),
   });
 }

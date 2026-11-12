@@ -103,8 +103,8 @@ describe("kis provider", () => {
     const again = stub(() => ({ body: ok([day("20260904", 105), day("20260903", 100)]) }));
     await provider(kv).getPrices("005930.KS", { ticker: "x", range: "1m" });
     expect(again.filter((c) => c.url.pathname === "/oauth2/tokenP")).toHaveLength(0);
-    expect(logs("kis_token_issued")).toEqual([{ level: "log", message: "kis_token_issued", ttl: 86_400 }]);
-    expect(JSON.stringify(logs("kis_token_issued"))).not.toContain("tok\"");
+    expect(logs("chart.kis.token.issued")).toEqual([{ level: "log", message: "chart.kis.token.issued", "chart.kis.token.ttl": 86_400 }]);
+    expect(JSON.stringify(logs("chart.kis.token.issued"))).not.toContain("tok\"");
   });
 
   it("logs token cache failures and rate-limit retries", async () => {
@@ -118,11 +118,11 @@ describe("kis provider", () => {
     });
     const s = await provider(kv).getPrices("005930.KS", { ticker: "x", range: "1m" });
     expect(s.bars).toHaveLength(2);
-    expect(logs("kis_token_cache_failed").map((e) => [e.level, e.op, e.error])).toEqual([
+    expect(logs("chart.kis.token.cache_failed").map((e) => [e.level, e["chart.kis.token.cache_operation"], e["exception.message"]])).toEqual([
       ["warn", "get", "KV down"],
       ["warn", "put", "KV down"],
     ]);
-    expect(logs("kis_rate_limited")).toEqual([{ level: "warn", message: "kis_rate_limited", trId: "FHKST03010100", attempt: 0 }]);
+    expect(logs("chart.kis.rate_limited")).toEqual([{ level: "warn", message: "chart.kis.rate_limited", "chart.kis.tr_id": "FHKST03010100", "chart.kis.attempt": 0 }]);
   });
 
   it("pages daily rows backwards until the start date", async () => {
@@ -198,7 +198,7 @@ describe("kis provider", () => {
     expect(pages.map((c) => c.url.searchParams.get("FID_COND_MRKT_DIV_CODE"))).toEqual(["UN", "J"]);
     expect(pages[1].url.searchParams.get("FID_INPUT_HOUR_1")).toBe("153000");
     expect(s.bars).toHaveLength(2);
-    expect(logs("market_fallback")).toEqual([expect.objectContaining({ level: "log", provider: "kis", code: "069500", date: "20260904" })]);
+    expect(logs("chart.market.fallback")).toEqual([expect.objectContaining({ level: "log", "chart.provider.name": "kis", "chart.kis.code": "069500", "chart.session.date": "20260904" })]);
   });
 
   it.each([
@@ -248,7 +248,7 @@ describe("kis provider", () => {
     ]);
     expect(s.previousClose).toBe(90);
     expect(s.regularHours).toEqual([{ start: at("09:00"), end: at("15:30") }]);
-    expect(events(log, "session_fallback")).toEqual([{ message: "session_fallback", provider: "kis", symbol: "005930.KS", bars: 1, session: "20260903", ok: true }]);
+    expect(events(log, "chart.session.fallback")).toEqual([{ message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "005930.KS", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
     log.mockRestore();
   });
 
@@ -264,7 +264,7 @@ describe("kis provider", () => {
     expect(s.bars.map((b) => b.c)).toEqual([95, 100]);
     expect(s.bars[0].t).toBe(Date.parse("2026-09-03T09:00:00+09:00") / 1000);
     expect(s.previousClose).toBe(90);
-    expect(events(log, "session_fallback")[0]).toMatchObject({ session: "20260903", ok: true });
+    expect(events(log, "chart.session.fallback")[0]).toMatchObject({ "chart.session.date": "20260903", "chart.session.ok": true });
     log.mockRestore();
   });
 
@@ -397,7 +397,7 @@ describe("kis domestic indices", () => {
       [kst("2026-09-03", "15:30"), 100],
     ]);
     expect(s.previousClose).toBe(90);
-    expect(events(log, "session_fallback")).toEqual([{ message: "session_fallback", provider: "kis", symbol: "^KS11", bars: 1, session: "20260903", ok: true }]);
+    expect(events(log, "chart.session.fallback")).toEqual([{ message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "^KS11", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
     log.mockRestore();
   });
 

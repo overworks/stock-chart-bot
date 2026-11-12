@@ -1,5 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
-import { errorMessage, logEvent } from "../core/log";
+import { exceptionAttributes, logEvent } from "../core/log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "../core/market";
 
 const API = "https://openapi.koreainvestment.com:9443";
@@ -131,7 +131,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
       } catch {
         throw new Error(`시세 조회 실패 (${res.status})`);
       }
-      if (body.msg_cd === RATE_LIMITED) logEvent("warn", "kis_rate_limited", { trId, attempt });
+      if (body.msg_cd === RATE_LIMITED) logEvent("warn", "chart.kis.rate_limited", { "chart.kis.tr_id": trId, "chart.kis.attempt": attempt });
       if (body.msg_cd === RATE_LIMITED && attempt === 0) {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
@@ -195,7 +195,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
     dates = dates.slice(-plan.sessions);
     if (dates.length < plan.sessions) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
     const bars = barsOf(dates);
-    if (thin !== undefined) logEvent("log", "session_fallback", { provider: "kis", symbol, bars: thin, session: dates[0], ok: bars.length >= 2 });
+    if (thin !== undefined) logEvent("log", "chart.session.fallback", { "chart.provider.name": "kis", "chart.symbol": symbol, "chart.bars": thin, "chart.session.date": dates[0], "chart.session.ok": bars.length >= 2 });
     const previousClose = recent?.bars.filter((b) => b.t < dateSec(dates[0])).at(-1)?.c;
     return { bars, previousClose, name: body.output1?.hts_kor_isnm?.trim() || recent?.name };
   }
@@ -228,7 +228,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
   async function extended(cfg: KisConfig, code: string, date: string, size: number): Promise<ChartBar[]> {
     const bars = await minutes(cfg, code, date, EXTENDED);
     if (bucket(bars, size).length >= 2 && bars.some((b) => hms(b.t) < "150000")) return bars;
-    logEvent("log", "market_fallback", { provider: "kis", code, date, bars: bars.length });
+    logEvent("log", "chart.market.fallback", { "chart.provider.name": "kis", "chart.kis.code": code, "chart.session.date": date, "chart.bars": bars.length });
     return minutes(cfg, code, date, REGULAR);
   }
 
@@ -287,7 +287,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
               if (i === 0) first = bars.length;
               if (bars.length >= 2) break;
             }
-            if (date !== candidates[0]) logEvent("log", "session_fallback", { provider: "kis", symbol, bars: first, session: date, ok: bars.length >= 2 });
+            if (date !== candidates[0]) logEvent("log", "chart.session.fallback", { "chart.provider.name": "kis", "chart.symbol": symbol, "chart.bars": first, "chart.session.date": date, "chart.session.ok": bars.length >= 2 });
             previousClose = recent.bars.filter((b) => b.t < dateSec(date)).at(-1)?.c;
             regularHours = [{ start: dateSec(date) + clockSec(REGULAR.open), end: dateSec(date) + clockSec(REGULAR.close) }];
           } else {
@@ -309,7 +309,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
 
   async function loadToken(cfg: KisConfig, nowSec: number): Promise<Token> {
     const stored = await cfg.kv?.get<Token>(TOKEN_KEY, "json").catch((err) => {
-      logEvent("warn", "kis_token_cache_failed", { op: "get", error: errorMessage(err) });
+      logEvent("warn", "chart.kis.token.cache_failed", { "chart.kis.token.cache_operation": "get", ...exceptionAttributes(err) });
       return null;
     });
     if (stored && stored.expiresAt - TOKEN_MARGIN > nowSec) return stored;
@@ -325,9 +325,9 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
       throw new Error(`한국투자증권 인증 실패 (${json?.error_description ?? json?.msg1 ?? res.status})`);
     }
     const fresh = { token: access, expiresAt: nowSec + ttl };
-    logEvent("log", "kis_token_issued", { ttl });
+    logEvent("log", "chart.kis.token.issued", { "chart.kis.token.ttl": ttl });
     await cfg.kv?.put(TOKEN_KEY, JSON.stringify(fresh), { expirationTtl: Math.max(60, ttl - TOKEN_MARGIN) }).catch((err) => {
-      logEvent("warn", "kis_token_cache_failed", { op: "put", error: errorMessage(err) });
+      logEvent("warn", "chart.kis.token.cache_failed", { "chart.kis.token.cache_operation": "put", ...exceptionAttributes(err) });
     });
     return fresh;
   }

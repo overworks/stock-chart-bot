@@ -141,9 +141,9 @@ describe("user aliases", () => {
     expect(await searchAliases("zz", KV)).toEqual([]);
     expect(await runAlias({ action: "remove", alias: "하닉" }, { KV, ALIAS_WRITER: WRITER }, PROVIDERS)).toBe("🗑️ 별칭 삭제: 하닉 → 000660.KS");
     await expect(runAlias({ action: "bogus" }, { KV, ALIAS_WRITER: WRITER }, PROVIDERS)).rejects.toThrow("사용법");
-    expect(logs("alias_changed")).toEqual([
-      { level: "log", message: "alias_changed", action: "add", alias: "하닉", symbol: "000660.KS" },
-      { level: "log", message: "alias_changed", action: "remove", alias: "하닉", symbol: "000660.KS" },
+    expect(logs("chart.alias.changed")).toEqual([
+      { level: "log", message: "chart.alias.changed", "chart.alias.action": "add", "chart.alias.name": "하닉", "chart.symbol": "000660.KS" },
+      { level: "log", message: "chart.alias.changed", "chart.alias.action": "remove", "chart.alias.name": "하닉", "chart.symbol": "000660.KS" },
     ]);
   });
 });

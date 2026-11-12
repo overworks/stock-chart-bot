@@ -1,4 +1,4 @@
-import { errorMessage, logEvent } from "./log";
+import { exceptionAttributes, logEvent } from "./log";
 import type { ChartBar, ChartRequest, TimeSpan } from "./types";
 
 export class SymbolNotFoundError extends Error {}
@@ -50,7 +50,15 @@ export async function getPrices(
       return series;
     } catch (err) {
       firstError ??= err;
-      logEvent("warn", "provider_failed", { provider: p.name, symbol, range: req.range, from: req.from, to: req.to, notFound: err instanceof SymbolNotFoundError || undefined, error: errorMessage(err) });
+      logEvent("warn", "chart.provider.failed", {
+        "chart.provider.name": p.name,
+        "chart.symbol": symbol,
+        "chart.range": req.range,
+        "chart.from": req.from,
+        "chart.to": req.to,
+        "error.type": err instanceof SymbolNotFoundError ? "not_found" : "upstream",
+        ...exceptionAttributes(err),
+      });
     }
   }
   throw firstError ?? new Error("사용 가능한 시세 제공자가 없습니다.");
@@ -65,7 +73,7 @@ export async function searchRemote(
       const hits = await p.search(query);
       if (hits.length) return hits;
     } catch (err) {
-      logEvent("warn", "search_failed", { provider: p.name, error: errorMessage(err) });
+      logEvent("warn", "chart.search.failed", { "chart.provider.name": p.name, ...exceptionAttributes(err) });
     }
   }
   return [];

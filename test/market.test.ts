@@ -243,7 +243,7 @@ describe("1d fallback to the previous session", () => {
     expect(s.previousClose).toBe(100);
     expect(s.regularHours).toEqual(days.map(span));
     expect(s.label).toBe("1d");
-    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "session_fallback", provider: "yahoo", symbol: "AAPL", bars: 0, session: "2026-11-03", ok: true }]);
+    expect(log.mock.calls.map((c) => JSON.parse(c[0]))).toEqual([{ message: "chart.session.fallback", "chart.provider.name": "yahoo", "chart.symbol": "AAPL", "chart.bars": 0, "chart.session.date": "2026-11-03", "chart.session.ok": true }]);
   });
 
   it("also falls back when 1d has a single bar", async () => {
@@ -258,7 +258,7 @@ describe("1d fallback to the previous session", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     stub({ "5d": [wide[0], wide[2], wide[6]] });
     await expect(getPrices("AAPL", { ticker: "AAPL", range: "1d" }, PROVIDERS)).rejects.toThrow("부족");
-    expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ message: "session_fallback", ok: false });
+    expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({ message: "chart.session.fallback", "chart.session.ok": false });
   });
 
   it("does not refetch for other ranges", async () => {
@@ -272,15 +272,15 @@ describe("1d fallback to the previous session", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const failing: MarketProvider = { name: "A", getPrices: async () => { throw new Error("시세 조회 실패 (503)"); }, search: async () => [] };
     await expect(getPrices("X", { ticker: "X", range: "1m" }, [failing])).rejects.toThrow("503");
-    expect(JSON.parse(warn.mock.calls[0]![0])).toEqual({ message: "provider_failed", provider: "A", symbol: "X", range: "1m", error: "시세 조회 실패 (503)" });
+    expect(JSON.parse(warn.mock.calls[0]![0])).toEqual({ message: "chart.provider.failed", "chart.provider.name": "A", "chart.symbol": "X", "chart.range": "1m", "error.type": "upstream", "exception.type": "Error", "exception.message": "시세 조회 실패 (503)" });
   });
 
   it("marks unknown symbols and logs search providers that throw", async () => {
     const logs = captureLogs();
     const missing: MarketProvider = { name: "A", getPrices: async () => { throw new SymbolNotFoundError("없음"); }, search: async () => { throw new Error("boom"); } };
     await expect(getPrices("X", { ticker: "X", range: "1m" }, [missing])).rejects.toBeInstanceOf(SymbolNotFoundError);
-    expect(logs("provider_failed")).toEqual([expect.objectContaining({ level: "warn", provider: "A", notFound: true })]);
+    expect(logs("chart.provider.failed")).toEqual([expect.objectContaining({ level: "warn", "chart.provider.name": "A", "error.type": "not_found", "exception.type": "SymbolNotFoundError" })]);
     expect(await searchRemote("x", [missing])).toEqual([]);
-    expect(logs("search_failed")).toEqual([{ level: "warn", message: "search_failed", provider: "A", error: "boom" }]);
+    expect(logs("chart.search.failed")).toEqual([{ level: "warn", message: "chart.search.failed", "chart.provider.name": "A", "exception.type": "Error", "exception.message": "boom" }]);
   });
 });

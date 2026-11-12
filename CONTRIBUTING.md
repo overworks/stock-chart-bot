@@ -79,7 +79,7 @@ src/
    ├─ discord.ts         #   Ed25519 서명 검증, 자동완성, deferred 응답, multipart 파일 업로드
    ├─ slack.ts           #   HMAC-SHA256 서명 검증, 즉시 ack, R2 URL 기반 response_url 전송
    ├─ help.ts            #   /stock-help 공통 문구 및 플랫폼별 사용 예시
-   └─ report.ts          #   결과 전송 및 명령 단위 로그(command_done)
+   └─ report.ts          #   결과 전송 및 명령 단위 로그(chart.command.done)
 scripts/
 ├─ fetch-krx-symbols.ts  # KIND + 네이버 ETF/ETN + 업비트 + 수동 별칭 병합 스크립트
 ├─ symbols.manual.json   # 수동 관리 별칭 목록 (원본)
@@ -140,31 +140,38 @@ scripts/
 
 ### 6. 관측 (`log.ts`, `platforms/report.ts`, `run.ts`)
 
-Workers Logs와 Traces는 `wrangler.jsonc`의 `observability`에서 켜져 있고, 외부 `fetch`·KV·R2·Durable Object 호출은 자동으로 스팬이 남는다. 코드에서는 `logEvent(level, message, fields)`로 JSON 한 줄을 남기며, 대시보드에서 `message`와 각 필드로 필터·집계한다. 사용자 ID, 토큰, 웹훅 URL은 필드에 넣지 않는다.
+Workers Logs와 Traces는 `wrangler.jsonc`의 `observability`에서 켜져 있고, 외부 `fetch`·KV·R2·Durable Object 호출은 자동으로 스팬이 남는다. 코드에서는 `logEvent(level, name, attributes)`로 JSON 한 줄을 남기며, 대시보드에서 `message`(이벤트 이름)와 각 속성으로 필터·집계한다. 사용자 ID, 토큰, 웹훅 URL은 속성에 넣지 않는다.
 
-| `message` | 레벨 | 주요 필드 | 남는 시점 |
+이벤트 이름과 속성 키는 [OpenTelemetry 시맨틱 컨벤션](https://opentelemetry.io/docs/specs/semconv/)을 따른다.
+
+- **이름 규칙**: 점으로 네임스페이스를 나누고 각 마디는 소문자 `snake_case`로 쓴다. 이벤트 이름에는 심볼 같은 가변 값을 넣지 않는다.
+- **표준 속성 우선**: 실패 분류는 `error.type`(낮은 카디널리티 값), 예외는 `exception.type`·`exception.message`(`exceptionAttributes(err)`가 만든다), HTTP 응답 코드는 `http.response.status_code`를 쓴다.
+- **앱 고유 속성**: OpenTelemetry 네임스페이스와 겹치지 않도록 모두 `chart.*` 아래에 둔다. 스팬 속성도 같은 키를 쓴다.
+- **이벤트 이름의 위치**: LogRecord의 `EventName`에 해당하는 값을 JSON의 `message`에 담는다(Workers Logs가 `message`를 로그 본문으로 표시한다).
+
+| `message` | 레벨 | 주요 속성 | 남는 시점 |
 |---|---|---|---|
-| `command_done` | log / warn / error | `platform`, `command`, `action`, `outcome`(`ok`·`failed`·`delivery_failed`), `ms`, `status`, `error`, `detail`, `fallback`(`sent`·`failed`) | 명령 한 번이 끝날 때. `failed`는 사용자에게 오류 문구를 보낸 경우, `delivery_failed`는 Discord·Slack이 결과 전송을 거절한 경우이며, 차트 전송이면 고정 오류 문구를 한 번 더 보낸다 |
-| `chart_served` | log | `ticker`, `symbol`, `range`, `source`, `bars`, `lastBar`, `resolved`(`direct`·`alias`·`search`), `ms`, `pngBytes` | 차트 생성 성공 |
-| `chart_failed` | warn / error | `reason`(`invalid_args`·`not_found`·`upstream`), `ticker`, `symbol`, `error`, `ms` | 차트 생성 실패. `upstream`만 error |
-| `provider_failed` | warn | `provider`, `symbol`, `notFound`, `error` | 시세 제공자 하나가 실패해 다음으로 넘어갈 때 |
-| `search_failed` | warn | `provider`, `status` 또는 `error` | 원격 종목 검색 실패(성공 시에는 남기지 않음) |
-| `session_fallback`, `market_fallback` | log | `provider`, `symbol`/`code`, `bars`, `session`/`date` | `1d`에서 직전 세션이나 KRX 시세로 넘어갈 때 |
-| `kis_token_issued`, `kis_token_cache_failed`, `kis_rate_limited` | log / warn / warn | `ttl` · `op`, `error` · `trId`, `attempt` | 한국투자증권 토큰 발급, KV 캐시 실패, 요청 한도 재시도 |
-| `symbols_missing` | error | `key` | KV `symbols:v1`이 비어 있을 때 |
-| `alias_changed`, `alias_denied` | log / warn | `action`, `alias`, `symbol` · `platform`, `action` | 별칭 추가·삭제 성공, 권한 없는 변경 시도 |
-| `alias_publish_deferred`, `alias_publish_failed` | warn / error | `error` | 별칭의 KV 반영이 지연되거나 알람 재시도까지 실패했을 때 |
+| `chart.command.done` | log / warn / error | `chart.platform`, `chart.command.name`, `chart.command.action`, `chart.command.outcome`(`ok`·`failed`·`delivery_failed`), `chart.duration_ms`, `http.response.status_code`, `exception.*`, `chart.command.delivery_detail`, `chart.command.fallback`(`sent`·`failed`) | 명령 한 번이 끝날 때. `failed`는 사용자에게 오류 문구를 보낸 경우, `delivery_failed`는 Discord·Slack이 결과 전송을 거절한 경우이며, 차트 전송이면 고정 오류 문구를 한 번 더 보낸다 |
+| `chart.served` | log | `chart.ticker`, `chart.symbol`, `chart.range`, `chart.source`, `chart.bars`, `chart.last_bar`, `chart.resolved`(`direct`·`alias`·`search`), `chart.duration_ms`, `chart.image.size`(PNG 바이트) | 차트 생성 성공 |
+| `chart.failed` | warn / error | `error.type`(`invalid_args`·`not_found`·`upstream`), `chart.ticker`, `chart.symbol`, `chart.range`, `chart.from`, `chart.to`, `exception.*`, `chart.duration_ms` | 차트 생성 실패. `upstream`만 error |
+| `chart.provider.failed` | warn | `chart.provider.name`, `chart.symbol`, `chart.range`, `error.type`(`not_found`·`upstream`), `exception.*` | 시세 제공자 하나가 실패해 다음으로 넘어갈 때 |
+| `chart.search.failed` | warn | `chart.provider.name`, `http.response.status_code` 또는 `exception.*` | 원격 종목 검색 실패(성공 시에는 남기지 않음) |
+| `chart.session.fallback`, `chart.market.fallback` | log | `chart.provider.name`, `chart.symbol`/`chart.kis.code`, `chart.bars`, `chart.session.date`, `chart.session.ok` | `1d`에서 직전 세션이나 KRX 시세로 넘어갈 때 |
+| `chart.kis.token.issued`, `chart.kis.token.cache_failed`, `chart.kis.rate_limited` | log / warn / warn | `chart.kis.token.ttl` · `chart.kis.token.cache_operation`(`get`·`put`), `exception.*` · `chart.kis.tr_id`, `chart.kis.attempt` | 한국투자증권 토큰 발급, KV 캐시 실패, 요청 한도 재시도 |
+| `chart.symbols.missing` | error | `chart.symbols.key` | KV `symbols:v1`이 비어 있을 때 |
+| `chart.alias.changed`, `chart.alias.denied` | log / warn | `chart.alias.action`, `chart.alias.name`, `chart.symbol` · `chart.platform`, `chart.alias.action` | 별칭 추가·삭제 성공, 권한 없는 변경 시도 |
+| `chart.alias.publish_deferred`, `chart.alias.publish_failed` | warn / error | `exception.*` | 별칭의 KV 반영이 지연되거나 알람 재시도까지 실패했을 때 |
 
-- **대시보드 쿼리 예시**: `message = "command_done"`을 `platform`, `outcome`으로 묶어 건수와 `ms` p95를 본다. 장애 알림은 `command_done`의 `delivery_failed`와 `chart_failed`의 `reason = "upstream"`을 기준으로 삼는다.
-- **`ms`의 의미**: Workers는 I/O 시점에만 시계가 전진하므로 `ms`는 I/O 대기를 포함한 경과 시간이다. CPU 시간은 invocation의 `cpuTimeMs`로 본다.
-- **커스텀 스팬**: `run.ts`가 `cloudflare:workers`의 `tracing.enterSpan`으로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render`를 만든다. `scripts/smoke.ts`가 Node에서 `src/core/market.ts`와 `src/providers/*`를 import하므로 이 파일들에는 `cloudflare:workers` 의존을 넣지 않는다.
+- **대시보드 쿼리 예시**: `message = "chart.command.done"`을 `chart.platform`, `chart.command.outcome`으로 묶어 건수와 `chart.duration_ms` p95를 본다. 장애 알림은 `chart.command.done`의 `delivery_failed`와 `chart.failed`의 `error.type = "upstream"`을 기준으로 삼는다.
+- **`chart.duration_ms`의 의미**: Workers는 I/O 시점에만 시계가 전진하므로 `chart.duration_ms`는 I/O 대기를 포함한 경과 시간이다. CPU 시간은 invocation의 `cpuTimeMs`로 본다.
+- **커스텀 스팬**: `run.ts`가 `cloudflare:workers`의 `tracing.enterSpan`으로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render`를 만들고, `chart` 스팬에는 로그와 같은 `chart.*`·`error.type` 속성을 붙인다. `scripts/smoke.ts`가 Node에서 `src/core/market.ts`와 `src/providers/*`를 import하므로 이 파일들에는 `cloudflare:workers` 의존을 넣지 않는다.
 - **자동완성**: 키 입력마다 호출되므로 성공 로그를 추가하지 않는다.
 
 ## 확장 가이드
 
 ### 새 메신저 플랫폼 추가
 
-1. `src/platforms/<name>.ts`에 어댑터를 작성한다(원본 본문 서명 검증 → 커맨드 인자 파싱 → `runChart` / `runAlias` 호출 → 플랫폼 포맷에 맞게 응답 전송). 결과 전송은 `platforms/report.ts`의 `reportCommand`로 감싸 `command_done` 로그를 남긴다.
+1. `src/platforms/<name>.ts`에 어댑터를 작성한다(원본 본문 서명 검증 → 커맨드 인자 파싱 → `runChart` / `runAlias` 호출 → 플랫폼 포맷에 맞게 응답 전송). 결과 전송은 `platforms/report.ts`의 `reportCommand`로 감싸 `chart.command.done` 로그를 남긴다.
 2. `src/index.ts`에 라우트를 추가한다.
 3. `src/core/**`는 수정하지 않는다. 만약 `core` 수정이 필요하다면 플랫폼 종속 개념이 새어 들어가고 있지 않은지 먼저 점검한다.
 

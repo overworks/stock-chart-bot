@@ -79,7 +79,7 @@ export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
       kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json"),
       kv.get<SymbolEntry[]>(ALIASES_KEY, "json"),
     ]);
-    if (!base?.length) logEvent("error", "symbols_missing", { key: SYMBOLS_KEY });
+    if (!base?.length) logEvent("error", "chart.symbols.missing", { "chart.symbols.key": SYMBOLS_KEY });
     const entries = [...(base ?? []), ...(user ?? []).map((e) => ({ ...e, alias: true }))];
     const byKey = new Map<string, string>();
     const byValue = new Map<string, string>();

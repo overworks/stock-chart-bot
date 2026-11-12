@@ -17,7 +17,7 @@ it("recovers durable aliases after a failed KV write and a new instance", async 
       method: "POST", body: JSON.stringify({ key: "추가", value: "MSFT" }),
     }));
     expect(response.status).toBe(503);
-    expect(logs("alias_publish_deferred")).toEqual([{ level: "warn", message: "alias_publish_deferred", error: "KV unavailable" }]);
+    expect(logs("chart.alias.publish_deferred")).toEqual([{ level: "warn", message: "chart.alias.publish_deferred", "exception.type": "Error", "exception.message": "KV unavailable" }]);
     const expected = [{ key: "기존", value: "AAPL" }, { key: "추가", value: "MSFT" }];
     expect(await state.storage.get(ALIASES_KEY)).toEqual(expected);
     expect(await state.storage.getAlarm()).not.toBeNull();

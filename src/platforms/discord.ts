@@ -62,7 +62,7 @@ export async function handleDiscord(
 
   if (interaction.type === 2 && isAliasCommand) {
     if (action !== "list" && !canManage(interaction)) {
-      logEvent("warn", "alias_denied", { platform: "discord", action });
+      logEvent("warn", "chart.alias.denied", { "chart.platform": "discord", "chart.alias.action": action });
       return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }
     ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers));

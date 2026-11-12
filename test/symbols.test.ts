@@ -101,7 +101,7 @@ describe("searchSymbols", () => {
     stubYahoo({ quotes: [] });
     expect(await searchSymbols("삼성", KV, PROVIDERS)).toEqual([]);
     expect(await resolveSymbol("삼성전자", KV)).toBe("삼성전자");
-    expect(logs("symbols_missing")).toEqual([{ level: "error", message: "symbols_missing", key: SYMBOLS_KEY }]);
+    expect(logs("chart.symbols.missing")).toEqual([{ level: "error", message: "chart.symbols.missing", "chart.symbols.key": SYMBOLS_KEY }]);
   });
 
   it("skips the fallback for single-character ASCII queries", async () => {
@@ -146,9 +146,9 @@ describe("yahoo.search", () => {
     expect(await yahoo.search("aapl")).toEqual([]);
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("boom"); }));
     expect(await yahoo.search("aapl")).toEqual([]);
-    expect(logs("search_failed")).toEqual([
-      { level: "warn", message: "search_failed", provider: "yahoo", status: 500 },
-      { level: "warn", message: "search_failed", provider: "yahoo", error: "boom" },
+    expect(logs("chart.search.failed")).toEqual([
+      { level: "warn", message: "chart.search.failed", "chart.provider.name": "yahoo", "http.response.status_code": 500 },
+      { level: "warn", message: "chart.search.failed", "chart.provider.name": "yahoo", "exception.type": "Error", "exception.message": "boom" },
     ]);
   });
 });

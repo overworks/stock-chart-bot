@@ -2,7 +2,7 @@ import { tracing } from "cloudflare:workers";
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
 import { displayCurrency, displayRule, scaleSeries } from "./display";
-import { errorMessage, logEvent } from "./log";
+import { exceptionAttributes, logEvent } from "./log";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
@@ -56,17 +56,13 @@ export function runChart(
       );
       const change = summarizeChange(bars, currency, reference);
 
-      span.setAttributes({ "chart.ticker": parsed.ticker, "chart.symbol": symbol, "chart.range": label, "chart.source": source, "chart.bars": bars.length, "chart.resolved": resolved });
-      logEvent("log", "chart_served", {
-        ticker: parsed.ticker,
-        symbol,
-        range: label,
-        source,
-        bars: bars.length,
-        lastBar: new Date(bars[bars.length - 1].t * 1000).toISOString(),
-        resolved,
-        ms: Date.now() - started,
-        pngBytes: png.length,
+      const attributes = { "chart.ticker": parsed.ticker, "chart.symbol": symbol, "chart.range": label, "chart.source": source, "chart.bars": bars.length, "chart.resolved": resolved };
+      span.setAttributes(attributes);
+      logEvent("log", "chart.served", {
+        ...attributes,
+        "chart.last_bar": new Date(bars[bars.length - 1].t * 1000).toISOString(),
+        "chart.duration_ms": Date.now() - started,
+        "chart.image.size": png.length,
       });
       return {
         text: `**${title}** ${label} · ${change.text}`,
@@ -77,8 +73,16 @@ export function runChart(
     } catch (err) {
       const reason = !req ? "invalid_args" : err instanceof SymbolNotFoundError ? "not_found" : "upstream";
       const { ticker, range, from, to } = req ?? args;
-      span.setAttributes({ "chart.ticker": ticker, "chart.symbol": symbol, "chart.failed": reason });
-      logEvent(reason === "upstream" ? "error" : "warn", "chart_failed", { ticker, symbol, range, from, to, reason, error: errorMessage(err), ms: Date.now() - started });
+      const attributes = { "chart.ticker": ticker, "chart.symbol": symbol, "error.type": reason };
+      span.setAttributes(attributes);
+      logEvent(reason === "upstream" ? "error" : "warn", "chart.failed", {
+        ...attributes,
+        "chart.range": range,
+        "chart.from": from,
+        "chart.to": to,
+        ...exceptionAttributes(err),
+        "chart.duration_ms": Date.now() - started,
+      });
       throw err;
     }
   });

@@ -135,7 +135,7 @@ describe("runChart", () => {
       "/v8/finance/chart/000660.KS",
     ]);
     expect(msg.text).toBe("**000660.KS** 1y · 109 KRW ▲ +9 (+9.00%)");
-    expect(logs("chart_served")).toEqual([expect.objectContaining({ ticker: "hynix", symbol: "000660.KS", resolved: "search" })]);
+    expect(logs("chart.served")).toEqual([expect.objectContaining({ "chart.ticker": "hynix", "chart.symbol": "000660.KS", "chart.resolved": "search" })]);
   });
 
   it("logs why a chart failed and reserves the error level for upstream faults", async () => {
@@ -146,7 +146,7 @@ describe("runChart", () => {
     await expect(runChart({ ticker: "zzzz" }, ENV, PROVIDERS)).rejects.toThrow("찾지 못했습니다");
     stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
     await expect(runChart({ ticker: "AAPL", range: "1m" }, ENV, PROVIDERS)).rejects.toThrow("부족");
-    expect(logs("chart_failed").map((e) => [e.level, e.reason, e.ticker])).toEqual([
+    expect(logs("chart.failed").map((e) => [e.level, e["error.type"], e["chart.ticker"]])).toEqual([
       ["warn", "invalid_args", " "],
       ["warn", "invalid_args", "AAPL"],
       ["warn", "not_found", "zzzz"],

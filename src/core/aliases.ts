@@ -103,12 +103,12 @@ export async function runAlias(
   switch (args.action) {
     case "add": {
       const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER, providers);
-      logEvent("log", "alias_changed", { action: "add", alias: r.alias, symbol: r.symbol });
+      logEvent("log", "chart.alias.changed", { "chart.alias.action": "add", "chart.alias.name": r.alias, "chart.symbol": r.symbol });
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }
     case "remove": {
       const r = await removeAlias(args.alias ?? "", env.ALIAS_WRITER);
-      logEvent("log", "alias_changed", { action: "remove", alias: r.key, symbol: r.value });
+      logEvent("log", "chart.alias.changed", { "chart.alias.action": "remove", "chart.alias.name": r.key, "chart.symbol": r.value });
       return `🗑️ 별칭 삭제: ${r.key} → ${r.value}`;
     }
     case "list": {

@@ -1,5 +1,5 @@
 import type { ChartBar, ChartRequest } from "../core/types";
-import { errorMessage, logEvent } from "../core/log";
+import { exceptionAttributes, logEvent } from "../core/log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
 
 const API = "https://api.upbit.com/v1";
@@ -68,12 +68,12 @@ export const upbit: MarketProvider = {
     try {
       const res = await fetch(`${API}/market/all?is_details=false`, { cf: { cacheTtl: 3600, cacheEverything: true } } as RequestInit);
       if (!res.ok) {
-        logEvent("warn", "search_failed", { provider: "upbit", status: res.status });
+        logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", "http.response.status_code": res.status });
         return [];
       }
       markets = await res.json();
     } catch (err) {
-      logEvent("warn", "search_failed", { provider: "upbit", error: errorMessage(err) });
+      logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", ...exceptionAttributes(err) });
       return [];
     }
     if (!Array.isArray(markets)) return [];

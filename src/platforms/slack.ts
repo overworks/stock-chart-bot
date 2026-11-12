@@ -62,7 +62,7 @@ async function handleAlias(
     }
   }
   if (!isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
-    logEvent("warn", "alias_denied", { platform: "slack", action: args.action });
+    logEvent("warn", "chart.alias.denied", { "chart.platform": "slack", "chart.alias.action": args.action });
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
   ctx.waitUntil(

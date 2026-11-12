@@ -1,5 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
-import { errorMessage, logEvent } from "../core/log";
+import { exceptionAttributes, logEvent } from "../core/log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -42,12 +42,12 @@ export const yahoo: MarketProvider = {
       regularHours = regularPeriods(meta.tradingPeriods);
       const first = bars[0]?.t ?? 0;
       prev = wide.bars.filter((b) => b.t < first && regularHours?.some((r) => r.start <= b.t && b.t <= r.end)).at(-1)?.c;
-      logEvent("log", "session_fallback", {
-        provider: "yahoo",
-        symbol,
-        bars: today,
-        session: bars.length ? new Date((first + offset) * 1000).toISOString().slice(0, 10) : undefined,
-        ok: bars.length >= 2,
+      logEvent("log", "chart.session.fallback", {
+        "chart.provider.name": "yahoo",
+        "chart.symbol": symbol,
+        "chart.bars": today,
+        "chart.session.date": bars.length ? new Date((first + offset) * 1000).toISOString().slice(0, 10) : undefined,
+        "chart.session.ok": bars.length >= 2,
       });
     } else if (prePost && typeof meta.regularMarketTime === "number" && day(bars[bars.length - 1].t, timeZone) > day(meta.regularMarketTime, timeZone)) {
       // 프리마켓에는 오늘 봉만 오는데 chartPreviousClose는 직전 정규장의 전일 종가로 남아 있다.
@@ -78,11 +78,11 @@ export const yahoo: MarketProvider = {
         cf: { cacheTtl: 3600, cacheEverything: true },
       } as RequestInit);
     } catch (err) {
-      logEvent("warn", "search_failed", { provider: "yahoo", error: errorMessage(err) });
+      logEvent("warn", "chart.search.failed", { "chart.provider.name": "yahoo", ...exceptionAttributes(err) });
       return [];
     }
     if (!res.ok) {
-      logEvent("warn", "search_failed", { provider: "yahoo", status: res.status });
+      logEvent("warn", "chart.search.failed", { "chart.provider.name": "yahoo", "http.response.status_code": res.status });
       return [];
     }
 

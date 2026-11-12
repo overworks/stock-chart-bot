@@ -51,7 +51,7 @@ src/
    ├─ discord.ts       #   Ed25519 서명 검증, 자동완성, deferred 응답, multipart 업로드
    ├─ slack.ts         #   HMAC 서명 검증, 3초 이내 ack, response_url 전송
    ├─ help.ts          #   /stock-help 공통 문구 및 플랫폼별 사용 예시
-   └─ report.ts        #   결과 전송 및 명령 단위 로그(command_done)
+   └─ report.ts        #   결과 전송 및 명령 단위 로그(chart.command.done)
 ```
 
 ## 반드시 지킬 규칙
@@ -64,7 +64,7 @@ src/
   - 외부 시세·검색 API 호출은 `src/providers/*`에만 둔다. 제공자 목록은 `src/index.ts`(와 smoke 스크립트)가 `createProviders`로 조립해 어댑터를 거쳐 `runChart`, `runAlias`, `searchSymbols`에 인자로 넘기며, `core`는 전역 목록이나 모듈 전역 설정을 두지 않는다. 새 소스는 `MarketProvider`를 구현해 `src/providers/index.ts`의 `createProviders`에 추가하며, 특정 심볼 형식만 담당하면 `supports(symbol)`를 구현한다.
   - `search`는 자동완성마다 호출되므로 영문 질의에 불필요한 네트워크 호출을 추가하지 않는다(영문 원격 검색은 Yahoo만 담당).
   - 존재하지 않는 심볼은 `SymbolNotFoundError`, 그 외 오류(HTTP 오류, 데이터 부족, 파싱 실패)는 일반 `Error`로 던진다. 실행 시 검색 폴백은 `SymbolNotFoundError`에만 반응한다.
-- **로그**: `logEvent`로 JSON 한 줄을 남기고 사용자 ID·토큰·웹훅 URL은 넣지 않는다. 어댑터의 결과 전송은 `reportCommand`로 감싸 `command_done`을 남기며, 자동완성 성공 경로에는 로그를 추가하지 않는다. 이벤트 목록은 CONTRIBUTING.md의 "관측" 절을 따른다. `src/core/market.ts`와 `src/providers/*`는 smoke 스크립트가 Node에서 불러오므로 `cloudflare:workers`를 import하지 않는다.
+- **로그**: `logEvent`로 JSON 한 줄을 남기고 사용자 ID·토큰·웹훅 URL은 넣지 않는다. 이벤트 이름과 속성 키는 OpenTelemetry 시맨틱 컨벤션을 따른다: 점으로 구분한 소문자 `snake_case`를 쓰고, 표준 속성(`error.type`, `exception.*`, `http.response.status_code` 등)이 있으면 그것을, 앱 고유 값은 `chart.*` 네임스페이스를 쓴다. 예외는 `exceptionAttributes(err)`로 남긴다. 어댑터의 결과 전송은 `reportCommand`로 감싸 `chart.command.done`을 남기며, 자동완성 성공 경로에는 로그를 추가하지 않는다. 이벤트 목록은 CONTRIBUTING.md의 "관측" 절을 따른다. `src/core/market.ts`와 `src/providers/*`는 smoke 스크립트가 Node에서 불러오므로 `cloudflare:workers`를 import하지 않는다.
 - **WASM 메모리 해제**: `Resvg` 인스턴스와 `render()` 결과(`RenderedImage`)는 GC에 등록되지 않으므로 반드시 `finally` 블록에서 `free()`해 메모리 누수를 막는다.
 - **이미지 전달**: 직접 파일 업로드를 지원하지 않는 플랫폼은 `core/store.ts`로 R2에 저장하고 `/charts/<key>` URL을 사용한다.
 - **종목 목록 및 별칭 규칙**:

@@ -107,9 +107,9 @@ describe("slack alias commands", () => {
       expect(denied.text).toContain("권한");
     }
     expect(calls).toHaveLength(0);
-    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "slack", command: "stock-alias", action: "list", outcome: "ok" })]);
-    expect(logs("alias_denied").map((e) => e.action)).toEqual(["add", "remove"]);
-    expect(JSON.stringify(logs("alias_denied"))).not.toContain("U_USER");
+    expect(logs("chart.command.done")).toEqual([expect.objectContaining({ level: "log", "chart.platform": "slack", "chart.command.name": "stock-alias", "chart.command.action": "list", "chart.command.outcome": "ok" })]);
+    expect(logs("chart.alias.denied").map((e) => e["chart.alias.action"])).toEqual(["add", "remove"]);
+    expect(JSON.stringify(logs("chart.alias.denied"))).not.toContain("U_USER");
   });
 
   it("adds, then lists and removes with /stock-alias", async () => {
@@ -243,7 +243,7 @@ describe("slack adapter", () => {
     expect(img.headers.get("content-type")).toBe("image/png");
     const bytes = new Uint8Array(await img.arrayBuffer());
     expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "log", platform: "slack", command: "stock-chart", outcome: "ok", status: 200 })]);
+    expect(logs("chart.command.done")).toEqual([expect.objectContaining({ level: "log", "chart.platform": "slack", "chart.command.name": "stock-chart", "chart.command.outcome": "ok", "http.response.status_code": 200 })]);
   });
 
   it("reports /stock-chart failures as an ephemeral message", async () => {
@@ -263,7 +263,7 @@ describe("slack adapter", () => {
     let ctx = createExecutionContext();
     await worker.fetch(await slash({ command: "/stock-chart", text: "AAPL" }), ENV, ctx);
     await waitOnExecutionContext(ctx);
-    expect(logs("command_done")).toEqual([expect.objectContaining({ level: "warn", outcome: "failed", error: "시세 조회 실패 (500)" })]);
+    expect(logs("chart.command.done")).toEqual([expect.objectContaining({ level: "warn", "chart.command.outcome": "failed", "exception.message": "시세 조회 실패 (500)" })]);
 
     const posts: any[] = [];
     vi.stubGlobal(
@@ -278,7 +278,7 @@ describe("slack adapter", () => {
     ctx = createExecutionContext();
     await worker.fetch(await slash({ command: "/stock-chart", text: "AAPL 1m" }), ENV, ctx);
     await waitOnExecutionContext(ctx);
-    expect(logs("command_done").at(-1)).toMatchObject({ level: "error", outcome: "delivery_failed", status: 400, detail: "invalid_blocks", fallback: "failed" });
+    expect(logs("chart.command.done").at(-1)).toMatchObject({ level: "error", "chart.command.outcome": "delivery_failed", "http.response.status_code": 400, "chart.command.delivery_detail": "invalid_blocks", "chart.command.fallback": "failed" });
     expect(posts.map((p) => p.response_type)).toEqual(["in_channel", "ephemeral"]);
     expect(posts[1].text).toBe("⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   });
