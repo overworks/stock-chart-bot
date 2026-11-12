@@ -72,9 +72,6 @@ Discord와 Slack에서 인자 없이 `/stock-help`를 실행하면 차트 조회
   1. **채팅 명령어**: `/stock-alias add 내삼전 삼성전자`처럼 종목명이나 심볼을 지정해 추가한다. KV의 `aliases:v1` 키에 별도로 저장되므로 주간 종목 목록 갱신에 덮어써지지 않는다.
   2. **수동 별칭 파일**: 저장소의 `scripts/symbols.manual.json`을 수정해 `main`에 push하면 `refresh-symbols` 워크플로가 자동으로 실행되어 KV에 반영한다.
 
-> [!NOTE]
-> 이전 버전의 `/chart`, `/alias` 명령은 제거되었다. `/stock-chart`, `/stock-alias`, `/stock-help`를 사용한다.
-
 ## 데이터 출처
 
 종목 유형에 따라 아래 순서로 시세를 조회한다.
@@ -123,7 +120,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 ```
 
 - `npm run register`는 프로젝트 루트의 `.dev.vars`에서 `DISCORD_APPLICATION_ID`와 `DISCORD_BOT_TOKEN`을 자동으로 읽는다(환경변수를 직접 지정하면 환경변수가 우선한다).
-- 등록 시 `/stock-chart`, `/stock-alias`, `/stock-help` 세 명령으로 전체 덮어쓰기되므로, 이전에 등록된 구버전 명령(`/chart`, `/alias`)도 함께 정리된다.
+- 등록 시 `/stock-chart`, `/stock-alias`, `/stock-help` 세 명령으로 전체 덮어쓰기되므로, 목록에 없는 기존 등록 명령은 함께 정리된다.
 - Discord Developer Portal → **General Information** → **Interactions Endpoint URL**에 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, **OAuth2 URL Generator**에서 `applications.commands`와 `bot` 스코프로 초대 링크를 만들어 서버에 봇을 추가한다.
 
 ### 4. Slack 연동 (선택)

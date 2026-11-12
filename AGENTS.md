@@ -59,7 +59,7 @@ src/
 - **작업 계획**: 장기 작업이나 구조 변경은 시작 전에 계획을 먼저 세운다.
 - **플랫폼 경계 유지**: `src/core/**`에서 플랫폼 SDK나 Discord/Slack 전용 타입, `src/providers/**`, `src/platforms/**`를 절대 import하지 않는다. 플랫폼 종속 코드는 `src/platforms/**`에만 둔다. 새 플랫폼 추가는 어댑터 파일과 `src/index.ts` 라우트 추가로 끝내고 `core`는 수정하지 않는다.
 - **서명 검증 및 비동기 응답**: Discord/Slack 서명 검증은 파싱된 객체가 아닌 **원본 요청 문자열(`await req.text()`)**로 수행한다. 슬래시 커맨드는 3초 이내에 즉시 응답(Discord `{ type: 5 }` deferred, Slack 즉시 응답)을 반환하고, 실제 작업은 `ctx.waitUntil(...)`에서 처리한 뒤 웹훅(`interaction.token` 또는 `response_url`)으로 결과를 보낸다. 고정 문구를 반환하는 `/stock-help`는 예외로, 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`). 도움말 처리에는 외부 호출이나 저장소 접근을 추가하지 않는다.
-- **슬래시 커맨드**: 지원하는 명령은 `/stock-chart`, `/stock-alias`, `/stock-help` 세 개뿐이다. 제거된 구버전 `/chart`, `/alias`는 다시 등록하거나 처리하지 않는다.
+- **슬래시 커맨드**: 지원하는 명령은 `/stock-chart`, `/stock-alias`, `/stock-help` 세 개뿐이며, 그 외 명령은 등록하거나 처리하지 않는다.
 - **시세·검색 제공자 (`src/providers/*`)**:
   - 외부 시세·검색 API 호출은 `src/providers/*`에만 둔다. 제공자 목록은 `src/index.ts`(와 smoke 스크립트)가 `createProviders`로 조립해 어댑터를 거쳐 `runChart`, `runAlias`, `searchSymbols`에 인자로 넘기며, `core`는 전역 목록이나 모듈 전역 설정을 두지 않는다. 새 소스는 `MarketProvider`를 구현해 `src/providers/index.ts`의 `createProviders`에 추가하며, 특정 심볼 형식만 담당하면 `supports(symbol)`를 구현한다.
   - `search`는 자동완성마다 호출되므로 영문 질의에 불필요한 네트워크 호출을 추가하지 않는다(영문 원격 검색은 Yahoo만 담당).
