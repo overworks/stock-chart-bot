@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { upbit } from "../src/providers/upbit";
 import { getPrices, searchRemote, SymbolNotFoundError } from "../src/core/market";
 import { PROVIDERS } from "./providers";
@@ -21,7 +21,12 @@ function stub(handler: (url: URL) => { status?: number; body: unknown }) {
   return urls;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+const NOW = Date.parse("2026-09-12T12:00:00Z");
+beforeEach(() => { vi.spyOn(Date, "now").mockReturnValue(NOW); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe("upbit provider", () => {
   it("rejects custom periods above 2000 days before fetching", async () => {
@@ -98,6 +103,39 @@ describe("upbit provider", () => {
     expect(urls[0].searchParams.get("to")).toBe("2026-03-04T00:00:00Z");
     expect(s.bars.map((b) => b.c)).toEqual([1, 2, 3]);
     expect(s.label).toBe("2026-03-01 ~ 2026-03-03");
+  });
+
+  it.each([
+    ["1d", 1, 600],
+    ["1w", 7, 3600],
+    ["1m", 30, 2 * 86_400],
+    ["1y", 365, 2 * 86_400],
+    ["5y", 5 * 365, 14 * 86_400],
+  ] as const)("keeps sparse %s candles inside the requested time window", async (range, days, spacing) => {
+    const urls = stub((url) => {
+      if (range === "1d" && url.pathname.endsWith("/days")) {
+        return { body: [candle("2026-09-12T00:00:00", 100, { prev_closing_price: 99 })] };
+      }
+      return { body: Array.from({ length: Number(url.searchParams.get("count")) }, (_, i) =>
+        candle(new Date(NOW - i * spacing * 1000).toISOString().slice(0, 19), 100)) };
+    });
+    const series = await upbit.getPrices("KRW-BTC", { ticker: "KRW-BTC", range });
+    const since = NOW / 1000 - days * 86_400;
+    expect(series.label).toBe(range);
+    expect(series.bars.length).toBeGreaterThan(1);
+    expect(series.bars.every((bar) => bar.t >= since && bar.t <= NOW / 1000)).toBe(true);
+    expect(series.bars[0].t - since).toBeLessThan(spacing);
+    expect(urls).toHaveLength(range === "1d" ? 2 : 1);
+  });
+
+  it("reports insufficient recent data instead of filling 1d with older trades", async () => {
+    stub(() => ({ body: [candle("2026-09-12T12:00:00", 100), candle("2026-09-10T12:00:00", 90)] }));
+    await expect(upbit.getPrices("KRW-BTC", { ticker: "KRW-BTC", range: "1d" })).rejects.toThrow("부족");
+  });
+
+  it("keeps old monthly candles for max", async () => {
+    stub(() => ({ body: [candle("2026-09-01T00:00:00", 100), candle("2018-01-01T00:00:00", 90)] }));
+    expect((await upbit.getPrices("KRW-BTC", { ticker: "KRW-BTC", range: "max" })).bars).toHaveLength(2);
   });
 
   it("turns 404 into SymbolNotFoundError and other failures into plain errors", async () => {

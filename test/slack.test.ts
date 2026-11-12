@@ -100,13 +100,16 @@ describe("slack alias commands", () => {
     const calls = stubOutbound();
     const usage = (await (await worker.fetch(await slash({ command: "/stock-alias", text: "add" }), ENV, createExecutionContext())).json()) as any;
     expect(usage.text).toContain("/stock-alias add");
-    const list = (await (await worker.fetch(await slash({ command: "/stock-alias", text: "list" }), ENV, createExecutionContext())).json()) as any;
-    expect(list).toEqual({ response_type: "ephemeral", text: "등록된 별칭이 없습니다." });
+    const ctx = createExecutionContext();
+    const list = await worker.fetch(await slash({ command: "/stock-alias", text: "list" }), ENV, ctx);
+    expect(await list.text()).toBe("");
+    await waitOnExecutionContext(ctx);
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ response_type: "ephemeral", text: "등록된 별칭이 없습니다." });
     for (const text of ["add 하닉 SK하이닉스", "remove 하닉"]) {
       const denied = (await (await worker.fetch(await slash({ command: "/stock-alias", text }), ENV, createExecutionContext())).json()) as any;
       expect(denied.text).toContain("권한");
     }
-    expect(calls).toHaveLength(0);
+    expect(calls).toHaveLength(1);
     expect(logs("chart.command.done")).toEqual([expect.objectContaining({ level: "log", "chart.platform": "slack", "chart.command.name": "stock-alias", "chart.command.action": "list", "chart.command.outcome": "ok" })]);
     expect(logs("chart.alias.denied").map((e) => e["chart.alias.action"])).toEqual(["add", "remove"]);
     expect(JSON.stringify(logs("chart.alias.denied"))).not.toContain("U_USER");
@@ -125,8 +128,11 @@ describe("slack alias commands", () => {
     expect(JSON.parse(hook.init?.body as string)).toEqual({ response_type: "in_channel", text: "✅ 별칭 추가: 하닉 → SK하이닉스 (000660.KS)" });
     expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([{ key: "하닉", value: "000660.KS" }]);
 
-    const list = await worker.fetch(await slash({ command: "/stock-alias", text: "list" }), ENV, createExecutionContext());
-    expect(await list.json()).toEqual({ response_type: "ephemeral", text: "• 하닉 → SK하이닉스 (000660.KS)" });
+    const listCtx = createExecutionContext();
+    const list = await worker.fetch(await slash({ command: "/stock-alias", text: "list" }), ENV, listCtx);
+    expect(await list.text()).toBe("");
+    await waitOnExecutionContext(listCtx);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string)).toEqual({ response_type: "ephemeral", text: "• 하닉 → SK하이닉스 (000660.KS)" });
 
     const removeCtx = createExecutionContext();
     const removed = await worker.fetch(await slash({ command: "/stock-alias", text: "remove 하닉", user_id: "U_OTHER" }), ENV, removeCtx);
@@ -150,6 +156,44 @@ describe("slack alias commands", () => {
       response_type: "ephemeral",
       text: "⚠️ 심볼 형식(005930.KS, KRW=X 등)은 별칭으로 쓸 수 없습니다.",
     });
+  });
+
+  it("acknowledges list before KV completes and sends the private result later", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const get = vi.fn(async () => { await gate; return null; });
+    const bindings = { ...ENV, KV: { get } } as unknown as Env;
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const response = worker.fetch(await slash({ command: "/stock-alias", text: "list" }), bindings, ctx);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const res = await Promise.race([
+        response,
+        new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), 1000); }),
+      ]);
+      expect(res?.status).toBe(200);
+      expect(await res!.text()).toBe("");
+      expect(get).toHaveBeenCalled();
+      expect(calls).toHaveLength(0);
+    } finally {
+      clearTimeout(timer);
+      release();
+      await response;
+      await waitOnExecutionContext(ctx);
+    }
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ response_type: "ephemeral", text: "등록된 별칭이 없습니다." });
+  });
+
+  it("delivers list storage failures after acknowledging the command", async () => {
+    const bindings = { ...ENV, KV: { get: async () => { throw new Error("목록 조회 실패"); } } } as unknown as Env;
+    const calls = stubOutbound();
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(await slash({ command: "/stock-alias", text: "list" }), bindings, ctx);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("");
+    await waitOnExecutionContext(ctx);
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ response_type: "ephemeral", text: "⚠️ 목록 조회 실패" });
   });
 });
 

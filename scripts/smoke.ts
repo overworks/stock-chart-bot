@@ -31,7 +31,7 @@ for (const c of cases) {
     const timeZone = series.continuous ? "Asia/Seoul" : series.timeZone;
     const title = process.env.TITLE ?? buildTitle(sym, name, rule?.label);
     const reference = range === "1d" ? previousClose : undefined;
-    const svg = buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style, volume, reference, source, intraday, regularHours });
+    const svg = buildSvg(bars, title, { period: label, timeZone, currency, style, volume, reference, source, intraday, regularHours });
     const resvg = new Resvg(svg, {
       fitTo: { mode: "width", value: CHART_WIDTH },
       font: { fontBuffers: fonts, defaultFontFamily: FONT_FAMILY, loadSystemFonts: false },

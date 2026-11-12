@@ -54,7 +54,7 @@ export function runChart(
       const title = buildTitle(symbol, name, rule?.label);
       const reference = parsed.range === "1d" && !parsed.from ? previousClose : undefined;
       const png = await tracing.enterSpan("chart.render", () =>
-        svgToPng(buildSvg(bars, `${title} · ${label}`, { timeZone, currency, style: parsed.style, volume: parsed.volume, reference, source, intraday, regularHours })),
+        svgToPng(buildSvg(bars, title, { period: label, timeZone, currency, style: parsed.style, volume: parsed.volume, reference, source, intraday, regularHours })),
       );
       const change = summarizeChange(bars, currency, reference);
 

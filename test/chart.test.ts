@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSvg, COLOR, extendedRuns, FONT_BOLD, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange } from "../src/core/chart";
+import { buildSvg, COLOR, extendedRuns, FONT_BOLD, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange, textWidth } from "../src/core/chart";
 import type { ChartBar } from "../src/core/types";
 
 const DAY = 86_400;
@@ -26,6 +26,24 @@ describe("buildSvg", () => {
     const svg = buildSvg(daily(3), "Taiwan Semiconductor Manufacturing Company Limited (TSM) · 1w");
     expect(svg).toMatch(/font-size="38"[^>]*>Taiwan Semiconductor[^<]*\.\.\. \(TSM\) · 1w</);
     expect(svg).not.toContain("Company Limited");
+  });
+
+  it("keeps custom dates on their own line below the title and price", () => {
+    const bars = daily(30).map((bar, i) => ({ ...bar, c: 70_000 + i * 100 }));
+    const svg = buildSvg(bars, "삼성전자 (005930.KS)", { currency: "KRW", period: "2024-01-01 ~ 2024-06-30" });
+    const title = svg.match(/<text x="36" y="72"[^>]*>([^<]*)<\/text>/)![1];
+    expect(title).toBe("삼성전자 (005930.KS)");
+    expect(svg).toMatch(/<text x="36" y="156"[^>]*>2024-01-01 ~ 2024-06-30<\/text>/);
+    expect(svg).toContain(">72,900<");
+    expect(buildSvg(bars, "삼성전자 (005930.KS)", { period: "1m" })).toContain("삼성전자 (005930.KS) · 1m");
+  });
+
+  it("keeps an oversized symbol suffix out of the price area", () => {
+    const bars = daily(3).map((bar) => ({ ...bar, c: 100_000_000 }));
+    const svg = buildSvg(bars, `종목 (${"LONG".repeat(20)}) · 1d`, { currency: "KRW" });
+    const [, size, title] = svg.match(/<text x="36" y="72" font-size="(\d+)"[^>]*>([^<]*)<\/text>/)!;
+    const priceLeft = 924 - textWidth("100,000,000", 56) - 9 - textWidth("KRW", 28);
+    expect(36 + textWidth(title, Number(size))).toBeLessThanOrEqual(priceLeft - 24);
   });
 
   it("escapes xml in the title", () => {

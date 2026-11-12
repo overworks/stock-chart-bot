@@ -122,6 +122,34 @@ describe("user aliases", () => {
     await expect(addAlias(KV, "", "삼성전자", WRITER, PROVIDERS)).rejects.toThrow("사용법");
   });
 
+  it.each(["T", "AM", "ETH", "USD"])("prefers the exact ticker %s over local prefix matches", async (target) => {
+    await KV.put(SYMBOLS_KEY, JSON.stringify([
+      { key: "TP", value: "007980.KS" },
+      { key: "아마존", value: "AMZN" },
+      { key: "이더리움/달러", value: "ETH-USD" },
+      { key: "USDKRW", value: "KRW=X" },
+    ]));
+    const fetch = stub(() => series);
+    expect((await addAlias(KV, "검증별칭", target, WRITER, PROVIDERS)).symbol).toBe(target);
+    expect(await listAliases(KV)).toEqual([{ key: "검증별칭", value: target }]);
+    expect(fetch.mock.calls.map((call) => new URL(String(call[0])).pathname)).toEqual([`/v8/finance/chart/${target}`]);
+  });
+
+  it("searches names only after a not-found response, preserving upstream errors", async () => {
+    const fetch = stub((url) => url.pathname.includes("/chart/") ? notFound : {
+      quotes: [{ symbol: "TSLA", shortname: "Tesla, Inc.", quoteType: "EQUITY" }],
+    });
+    expect((await addAlias(KV, "테슬라별칭", "Tesla", WRITER, PROVIDERS)).symbol).toBe("TSLA");
+    expect(fetch.mock.calls.map((call) => new URL(String(call[0])).pathname)).toEqual([
+      "/v8/finance/chart/Tesla", "/v1/finance/search",
+    ]);
+    const unavailable = vi.fn(async () => new Response("unavailable", { status: 503 }));
+    vi.stubGlobal("fetch", unavailable);
+    await expect(addAlias(KV, "잘못된별칭", "AM", WRITER, PROVIDERS)).rejects.toThrow("503");
+    expect(unavailable).toHaveBeenCalledTimes(1);
+    expect((await listAliases(KV)).some((entry) => entry.key === "잘못된별칭")).toBe(false);
+  });
+
   it("removes aliases and reports missing ones", async () => {
     stub(() => ({ quotes: [] }));
     await addAlias(KV, "하닉", "SK하이닉스", WRITER, PROVIDERS);

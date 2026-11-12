@@ -78,7 +78,9 @@ scripts/
 
 - `src/core/**`는 메신저 플랫폼 SDK나 전용 타입, `src/providers/**`, `src/platforms/**`를 절대 import하지 않는다.
 - 서명 검증(반드시 파싱 전의 원본 문자열 `await req.text()` 사용), 플랫폼별 요청·응답 포맷 변환, 3초 이내 초기 응답(ack/deferred), 파일 첨부 또는 이미지 URL 전달은 `src/platforms/<platform>.ts`에서 처리한다.
+- Discord 요청은 서명 시각이 현재 시각과 5분 이내일 때만 허용한다. 별칭 변경에는 interaction ID와 만료 시각을 전달해 DO에서 중복 변경을 차단한다. Slack 별칭 목록도 초기 응답 후 `response_url`로 실행자에게만 전송한다.
 - `/stock-help`는 외부 호출이나 저장소 접근 없이 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`). Discord 본문은 2,000자 이내로 유지한다.
+- 긴 Discord 별칭 목록은 어댑터에서 줄 단위로 나눠 각 메시지가 2,000자를 넘지 않도록 원본 응답과 후속 메시지로 전송한다.
 
 ### 2. 데이터 소스 (`src/providers/`)
 
@@ -86,6 +88,7 @@ scripts/
 
 - **선택·폴백 및 에러 구분**: `getPrices`는 `supports(symbol)`가 참(또는 미정의)인 제공자를 순서대로 시도하며, 실패 시 다음 제공자로 넘어간다. 존재하지 않는 심볼은 `SymbolNotFoundError`를, 그 외 오류는 일반 `Error`를 던진다. `runChart`의 영문 검색 재시도는 `SymbolNotFoundError`에만 반응한다.
 - **업비트 (`upbit.ts`)**: `KRW-*` 마켓만 전담한다. 24시간 거래 상품이므로 `continuous: true`(KST 표시)를 반환하며, 커스텀 날짜(`from`~`to`) 조회는 최대 2,000일까지 허용한다. `search`는 한글 질의나 `KRW-` 접두사일 때만 동작한다.
+  - `max` 외의 기간은 요청 시각 기준 시간 범위로 제한하고, 페이지 조회도 시작 시각에 도달하면 멈춘다. 월 단위 기간은 30·90·180일, 연 단위 기간은 365·1,825일을 사용한다.
 - **한국투자증권 (`kis.ts`)**: `KIS_APP_KEY`·`KIS_APP_SECRET`이 설정된 경우 `.KS`·`.KQ` 종목과 국내 지수(`^KS11`, `^KQ11`, `^KS200`)를 맡는다. 접근 토큰은 워커 메모리와 KV(`kis:token:v1`)에 캐시한다. 주식 `1d`는 KRX+NXT 통합(`UN`, 08:00~20:00) 시세를 먼저 조회하고 장중 봉이 부족하면 KRX 정규장(`J`, 09:00~15:30)으로 재조회하며, 개장 직후 등 당일 봉이 2개 미만이면 직전 거래일 세션을 사용한다.
 - **Yahoo Finance (`yahoo.ts`)**: 모든 심볼을 지원하며 마지막 폴백과 영문 원격 검색(`/v1/finance/search`)을 담당한다. `1d`는 `includePrePost=true`로 미국 주식의 시간외 봉을 포함하며, 새 거래일 직후 당일 봉이 부족하면 5일 데이터에서 마지막 세션을 잘라 쓴다.
 - **단위 보정 (`display.ts`)**: `JPYKRW=X`는 100엔 기준으로 배율(`×100`)과 라벨을 적용하고(`displayRule`), 지수(`^` 접두사)는 통화 단위를 표시하지 않는다(`displayCurrency`).
@@ -99,12 +102,16 @@ scripts/
 ### 4. 사용자 별칭과 동시성 제어 (`src/core/aliases.ts`, `src/core/alias-writer.ts`)
 
 - 채팅에서 `/stock-alias`로 추가한 별칭은 KV의 `aliases:v1`에 저장되며 `loadSymbols`가 시드 목록 뒤에 합친다.
+- 별칭 대상은 정확히 일치하는 등록명을 먼저 확인하고, 영문 입력은 직접 시세 조회를 우선한다. 없는 심볼일 때만 부분 이름 검색으로 폴백하며, 시세 제공자 장애를 다른 종목으로 대체하지 않는다.
 - 별칭 추가·삭제는 단일 인스턴스 SQLite Durable Object인 `AliasWriter`(`ALIAS_WRITER` 바인딩)를 통해 직렬화한다. DO 내부 스토리지를 원본(source of truth)으로 삼고, KV 동일 키 쓰기 제한(초당 1회)을 준수하기 위해 최소 1.1초 간격으로 `aliases:v1`에 복제하며 실패 시 DO Alarm으로 재시도한다. 외부에서 `KV.put`으로 `aliases:v1`을 직접 수정하지 않는다.
+
+- 중복 방지 키가 주어진 변경은 처리 기록과 별칭을 같은 트랜잭션에 저장한다. 기록은 DO 재시작 후에도 유지하며 만료되면 알람으로 정리한다. KV 복제 실패의 재시도와 기록 정리를 같은 알람에서 구분한다.
 
 ### 5. 렌더링 및 이미지 전달 (`chart.ts`, `render.ts`, `store.ts`)
 
 - **SVG 및 WASM 렌더링**: `chart.ts`가 SVG를 생성하고 `render.ts`가 `@resvg/resvg-wasm`으로 PNG를 렌더링한다. 서브셋 폰트 `fonts/NanumSquare{R,B}.ttf`를 번들하며, 굵은 글씨는 `font-family`(`FONT_BOLD = "NanumSquare Bold"`)로 지정한다. `Resvg` 인스턴스와 `RenderedImage`는 GC 대상이 아니므로 반드시 `try ... finally`에서 `free()`를 호출한다.
 - **시간외 구간 음영**: `PriceSeries.regularHours`가 주어지면 `extendedRuns`가 정규장 밖의 연속된 봉 구간에 회색 음영과 `프리마켓`·`애프터마켓` 라벨을 넣는다.
+- **제목과 기간**: `buildSvg`에 제목과 `period`를 나눠 전달한다. 날짜 지정 기간은 헤더 아래 별도 줄에 표시하고, 제목은 심볼 접미사가 길어도 현재가 영역을 넘지 않도록 말줄임한다.
 - **이미지 전달**: Discord는 PNG 바이트를 multipart 응답으로 직접 첨부하고, Slack은 `storeChart`로 R2에 저장한 뒤 `${origin}/charts/<key>` URL을 전달한다.
 
 ### 6. 관측 (`log.ts`, `platforms/report.ts`, `run.ts`)

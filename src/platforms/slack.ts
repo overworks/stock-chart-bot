@@ -51,23 +51,13 @@ async function handleAlias(
   const args = parseAliasText(form.get("text") ?? "");
   if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
   const report = { platform: "slack" as const, command: "stock-alias", action: args.action, started: Date.now() };
-  if (args.action === "list") {
-    try {
-      const text = await runAlias(args, env, providers);
-      await reportCommand(report);
-      return ephemeral(text);
-    } catch (err) {
-      await reportCommand({ ...report, error: err });
-      return ephemeral(`⚠️ ${errorMessage(err)}`);
-    }
-  }
-  if (!isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
+  if (args.action !== "list" && !isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
     logEvent("warn", "chart.alias.denied", { "chart.platform": "slack", "chart.alias.action": args.action });
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
   ctx.waitUntil(
     runAlias(args, env, providers).then(
-      (text) => reportCommand(report, () => post(responseUrl, { response_type: "in_channel", text })),
+      (text) => reportCommand(report, () => post(responseUrl, { response_type: args.action === "list" ? "ephemeral" : "in_channel", text })),
       (err) => reportCommand({ ...report, error: err }, () => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` })),
     ),
   );

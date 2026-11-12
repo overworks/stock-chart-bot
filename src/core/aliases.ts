@@ -1,4 +1,4 @@
-import { mutateAlias } from "./alias-writer";
+import { mutateAlias, type MutationIdentity } from "./alias-writer";
 import { logEvent } from "./log";
 import { getPrices, SymbolNotFoundError, type Providers } from "./market";
 import {
@@ -34,6 +34,7 @@ export async function addAlias(
   targetInput: string,
   writer: DurableObjectNamespace,
   providers: Providers,
+  request?: MutationIdentity,
 ): Promise<{ alias: string; symbol: string; display: string }> {
   const alias = aliasInput.trim();
   const target = targetInput.trim();
@@ -49,15 +50,15 @@ export async function addAlias(
   }
 
   const { symbol, display } = await resolveTarget(target, kv, byKey, byValue, providers);
-  await mutateAlias(writer, { key: alias, value: symbol });
+  await mutateAlias(writer, { key: alias, value: symbol, request });
   resetSymbolCache();
   return { alias, symbol, display };
 }
 
-export async function removeAlias(aliasInput: string, writer: DurableObjectNamespace): Promise<SymbolEntry> {
+export async function removeAlias(aliasInput: string, writer: DurableObjectNamespace, request?: MutationIdentity): Promise<SymbolEntry> {
   const alias = aliasInput.trim();
   if (!alias) throw new Error(ALIAS_USAGE);
-  const hit = await mutateAlias(writer, { key: alias });
+  const hit = await mutateAlias(writer, { key: alias, request });
   resetSymbolCache();
   return hit;
 }
@@ -69,22 +70,23 @@ async function resolveTarget(
   byValue: Map<string, string>,
   providers: Providers,
 ): Promise<{ symbol: string; display: string }> {
-  const known = byKey.get(target);
+  const symbolInput = looksLikeSymbol(target);
+  const known = symbolInput ? undefined : byKey.get(target);
   if (known !== undefined) return { symbol: known, display: label(known, byValue) };
 
   const notFound = new Error(`'${target}' 종목을 찾지 못했습니다.`);
-  if (!looksLikeSymbol(target)) {
-    const hit = (await searchSymbols(target, kv, providers))[0];
-    if (hit) return { symbol: hit.value, display: byValue.has(hit.value) ? label(hit.value, byValue) : hit.name };
-    if (!isAsciiQuery(target)) throw notFound;
+  if (isAsciiQuery(target)) {
+    try {
+      const series = await getPrices(target, { ticker: target, range: "1m" }, providers);
+      return { symbol: target, display: label(target, byValue, series.name) };
+    } catch (err) {
+      if (!(err instanceof SymbolNotFoundError)) throw err;
+      if (symbolInput) throw notFound;
+    }
   }
-  try {
-    const series = await getPrices(target, { ticker: target, range: "1m" }, providers);
-    return { symbol: target, display: label(target, byValue, series.name) };
-  } catch (err) {
-    if (err instanceof SymbolNotFoundError) throw notFound;
-    throw err;
-  }
+  const hit = (await searchSymbols(target, kv, providers))[0];
+  if (hit) return { symbol: hit.value, display: byValue.has(hit.value) ? label(hit.value, byValue) : hit.name };
+  throw notFound;
 }
 
 function label(symbol: string, byValue: Map<string, string>, fallback?: string): string {
@@ -97,15 +99,16 @@ export async function runAlias(
   args: AliasArgs,
   env: { KV: KVNamespace; ALIAS_WRITER: DurableObjectNamespace },
   providers: Providers,
+  request?: MutationIdentity,
 ): Promise<string> {
   switch (args.action) {
     case "add": {
-      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER, providers);
+      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER, providers, request);
       logEvent("log", "chart.alias.changed", { "chart.alias.action": "add", "chart.alias.name": r.alias, "chart.symbol": r.symbol });
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }
     case "remove": {
-      const r = await removeAlias(args.alias ?? "", env.ALIAS_WRITER);
+      const r = await removeAlias(args.alias ?? "", env.ALIAS_WRITER, request);
       logEvent("log", "chart.alias.changed", { "chart.alias.action": "remove", "chart.alias.name": r.key, "chart.symbol": r.value });
       return `🗑️ 별칭 삭제: ${r.key} → ${r.value}`;
     }

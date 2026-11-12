@@ -14,6 +14,7 @@ export const MA_PERIODS = [20, 60] as const;
 const MA_COLOR: Record<number, string> = { 20: "#f59e0b", 60: "#8b5cf6" };
 
 export interface ChartOptions {
+  period?: string;
   timeZone?: string;
   currency?: string;
   style?: ChartStyle;
@@ -218,7 +219,12 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   const headW = W - 2 * M;
   const price = fmtPrice(change.last, currency);
   const priceW = textWidth(price, FS.price) + (currency ? 9 + textWidth(currency, FS.unit) : 0);
-  const heading = fitTitle(title, FS.title, TITLE_MIN, headW - priceW - 24);
+  const separatePeriod = opts.period?.includes(" ~ ");
+  const headingTitle = opts.period && !separatePeriod ? `${title} · ${opts.period}` : title;
+  const heading = fitTitle(headingTitle, FS.title, TITLE_MIN, headW - priceW - 24);
+  const periodText = separatePeriod
+    ? `<text x="${M}" y="156" font-size="${FS.note}" fill="${NOTE_COLOR}">${escapeXml(opts.period!)}</text>`
+    : "";
   const priceText =
     `<text x="${W - M}" y="72" text-anchor="end" font-family="${FONT_BOLD}" fill="${change.color}">` +
     `<tspan font-size="${FS.price}">${escapeXml(price)}</tspan>` +
@@ -240,6 +246,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
   ${priceText}
   ${sourceText}
   <text x="${W - M}" y="116" text-anchor="end" font-size="${deltaSize}" font-family="${FONT_BOLD}" fill="${change.color}">${escapeXml(delta)}</text>
+  ${periodText}
   ${gridLines}
   ${candle ? candles : `<path d="${area}" fill="${change.color}" fill-opacity="0.10"/>
   <path d="${line}" fill="none" stroke="${change.color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`}
@@ -252,7 +259,7 @@ export function buildSvg(bars: ChartBar[], title: string, opts: ChartOptions = {
 </svg>`;
 }
 
-/** 너비를 넘는 제목은 최소 크기까지 줄이고, 그래도 넘치면 이름 부분을 말줄임하되 "(심볼) · 기간" 꼬리는 남긴다. */
+/** 너비를 넘는 제목은 축소·말줄임한다. 심볼·기간 꼬리도 혼자 너비를 넘으면 함께 줄인다. */
 function fitTitle(title: string, size: number, minSize: number, maxW: number): { text: string; size: number } {
   const fitted = Math.max(minSize, Math.min(size, Math.floor((size * maxW) / textWidth(title, size))));
   return { text: truncateTitle(title, fitted, maxW), size: fitted };
@@ -261,9 +268,14 @@ function fitTitle(title: string, size: number, minSize: number, maxW: number): {
 function truncateTitle(title: string, size: number, maxW: number): string {
   if (textWidth(title, size) <= maxW) return title;
   const cut = title.indexOf(" (");
-  const tail = cut > 0 ? title.slice(cut) : "";
-  const head = [...(cut > 0 ? title.slice(0, cut) : title)];
-  while (head.length > 1 && textWidth(`${head.join("").trimEnd()}...${tail}`, size) > maxW) head.pop();
+  let tail = cut > 0 ? title.slice(cut) : "";
+  let head = [...(cut > 0 ? title.slice(0, cut) : title)];
+  if (textWidth(`...${tail}`, size) > maxW) {
+    tail = "";
+    head = [...title];
+  }
+  if (textWidth("...", size) > maxW) return "";
+  while (head.length && textWidth(`${head.join("").trimEnd()}...${tail}`, size) > maxW) head.pop();
   return `${head.join("").trimEnd()}...${tail}`;
 }
 

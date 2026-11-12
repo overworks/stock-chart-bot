@@ -7,14 +7,14 @@ const PAGE = 200;
 const MAX_BARS = 2000;
 const MARKET = /^KRW-[A-Z0-9]+$/;
 
-const RANGE: Record<string, { path: string; count: number; intraday: boolean }> = {
-  "1d": { path: "minutes/5", count: 288, intraday: true },
-  "1w": { path: "minutes/30", count: 336, intraday: true },
-  "1m": { path: "days", count: 30, intraday: false },
-  "3m": { path: "days", count: 90, intraday: false },
-  "6m": { path: "days", count: 180, intraday: false },
-  "1y": { path: "days", count: 365, intraday: false },
-  "5y": { path: "weeks", count: 261, intraday: false },
+const RANGE: Record<string, { path: string; count: number; intraday: boolean; days?: number }> = {
+  "1d": { path: "minutes/5", count: 288, intraday: true, days: 1 },
+  "1w": { path: "minutes/30", count: 336, intraday: true, days: 7 },
+  "1m": { path: "days", count: 30, intraday: false, days: 30 },
+  "3m": { path: "days", count: 90, intraday: false, days: 90 },
+  "6m": { path: "days", count: 180, intraday: false, days: 180 },
+  "1y": { path: "days", count: 365, intraday: false, days: 365 },
+  "5y": { path: "weeks", count: 261, intraday: false, days: 5 * 365 },
   max: { path: "months", count: PAGE, intraday: false },
 };
 
@@ -38,7 +38,7 @@ export const upbit: MarketProvider = {
 
   async getPrices(symbol, req) {
     const plan = buildPlan(req);
-    const rows = await fetchCandles(symbol, plan.path, plan.count, plan.to);
+    const rows = await fetchCandles(symbol, plan.path, plan.count, plan.to, plan.since);
     let bars = rows.map(toBar).filter((b): b is ChartBar => b !== undefined).reverse();
     if (plan.since !== undefined) bars = bars.filter((b) => b.t >= plan.since!);
     if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
@@ -94,10 +94,11 @@ function buildPlan(req: ChartRequest): { path: string; count: number; to?: strin
     return { path: "days", count, to: iso(until), since, label: `${req.from} ~ ${req.to}`, intraday: false };
   }
   const label = req.range ?? "1d";
-  return { ...(RANGE[label] ?? RANGE["1d"]), label };
+  const { days, ...plan } = RANGE[label] ?? RANGE["1d"];
+  return { ...plan, label, since: days === undefined ? undefined : Math.floor(Date.now() / 1000) - days * 86_400 };
 }
 
-async function fetchCandles(market: string, path: string, count: number, to?: string): Promise<Candle[]> {
+async function fetchCandles(market: string, path: string, count: number, to?: string, since?: number): Promise<Candle[]> {
   const out: Candle[] = [];
   let cursor = to;
   while (out.length < count) {
@@ -117,6 +118,7 @@ async function fetchCandles(market: string, path: string, count: number, to?: st
     out.push(...(rows as Candle[]));
     if (rows.length < n) break;
     cursor = `${out[out.length - 1].candle_date_time_utc}Z`;
+    if (since !== undefined && Date.parse(cursor) / 1000 <= since) break;
   }
   return out;
 }

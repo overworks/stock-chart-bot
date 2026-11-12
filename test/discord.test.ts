@@ -19,9 +19,9 @@ afterEach(() => {
   resetSymbolCache();
 });
 
-async function signed(body: unknown, opts: { badSig?: boolean } = {}) {
-  const raw = JSON.stringify(body);
-  const timestamp = String(Math.floor(Date.now() / 1000));
+async function signed(body: unknown, opts: { badSig?: boolean; timestamp?: string } = {}) {
+  const raw = JSON.stringify({ id: crypto.randomUUID(), ...(body as object) });
+  const timestamp = opts.timestamp ?? String(Math.floor(Date.now() / 1000));
   const sig = new Uint8Array(await crypto.subtle.sign("Ed25519", privateKey, new TextEncoder().encode(timestamp + raw)));
   if (opts.badSig) sig[0] ^= 0xff;
   const hex = [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -82,6 +82,45 @@ describe("discord adapter", () => {
     const res = await worker.fetch(await signed({ type: 1 }), ENV, createExecutionContext());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ type: 1 });
+  });
+
+  it.each(["old", "future", "malformed", "fractional"])("rejects a correctly signed request with a %s timestamp before doing work", async (kind) => {
+    const now = Math.floor(Date.now() / 1000);
+    const timestamp = { old: String(now - 86_400), future: String(now + 600), malformed: "NaN", fractional: `${now}.5` }[kind];
+    const calls = stubOutbound();
+    const get = vi.spyOn(ENV.KV, "get");
+    const ctx = createExecutionContext();
+    const waitUntil = vi.spyOn(ctx, "waitUntil");
+    const req = await signed({
+      type: 2, token: "tok", member: { permissions: "32" },
+      data: { name: "stock-alias", options: [{ type: 1, name: "add", options: [{ name: "alias", value: "하닉" }, { name: "target", value: "SK하이닉스" }] }] },
+    }, { timestamp });
+    expect((await worker.fetch(req, ENV, ctx)).status).toBe(401);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("does not restore a deleted alias when the original Discord request is replayed", async () => {
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "SK하이닉스", value: "000660.KS" }]));
+    const calls = stubOutbound();
+    const request = await signed({
+      type: 2, token: "tok", member: { permissions: "32" },
+      data: { name: "stock-alias", options: [{ type: 1, name: "add", options: [{ name: "alias", value: "반복검증" }, { name: "target", value: "SK하이닉스" }] }] },
+    });
+    const send = async (req: Request) => {
+      const ctx = createExecutionContext();
+      expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
+      await waitOnExecutionContext(ctx);
+    };
+    await send(request.clone());
+    await send(await signed({
+      type: 2, token: "tok", member: { permissions: "32" },
+      data: { name: "stock-alias", options: [{ type: 1, name: "remove", options: [{ name: "alias", value: "반복검증" }] }] },
+    }));
+    await send(request);
+    expect(await ENV.KV.get(ALIASES_KEY, "json")).toEqual([]);
+    expect(JSON.parse(calls.at(-1)!.init?.body as string).content).toContain("이미 처리한");
   });
 
   it("immediately replies to /stock-help privately without storage or outbound requests", async () => {
@@ -301,6 +340,31 @@ describe("discord adapter", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain("discord.com/api");
     expect(JSON.parse(calls[0].init?.body as string).content).toBe("⚠️ 심볼 형식(005930.KS, KRW=X 등)은 별칭으로 쓸 수 없습니다.");
+  });
+
+  it.each([200, 500])("splits long alias lists and reports follow-up status %s", async (status) => {
+    const aliases = Array.from({ length: 50 }, (_, i) => ({ key: `별칭${String(i).padStart(2, "0")}${"가".repeat(36)}`, value: "005930.KS" }));
+    await ENV.KV.put(ALIASES_KEY, JSON.stringify(aliases));
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
+    const logs = captureLogs();
+    const messages: { content: string; method?: string; url: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const { content } = JSON.parse(init?.body as string);
+      messages.push({ content, method: init?.method, url: String(input) });
+      return new Response("{}", { status: content.length > 2000 ? 400 : init?.method === "POST" ? status : 200 });
+    }));
+    const ctx = createExecutionContext();
+    const req = await signed({ type: 2, token: "tok", data: { name: "stock-alias", options: [{ type: 1, name: "list" }] } });
+    expect(await (await worker.fetch(req, ENV, ctx)).json()).toEqual({ type: 5 });
+    await waitOnExecutionContext(ctx);
+    expect(messages.map((message) => message.method)).toEqual(["PATCH", "POST"]);
+    expect(messages.every((message) => message.content.length <= 2000)).toBe(true);
+    expect(messages[1].url).toBe("https://discord.com/api/v10/webhooks/test-app-id/tok?wait=true");
+    expect(messages.map((message) => message.content).join("\n")).toBe(aliases.map((entry) => `• ${entry.key} → 삼성전자 (005930.KS)`).join("\n"));
+    expect(logs("chart.command.done")[0]).toMatchObject({
+      "chart.command.outcome": status === 200 ? "ok" : "delivery_failed",
+      "http.response.status_code": status,
+    });
   });
 
   it.each(["chart", "alias"])("treats the removed /%s command as unknown", async (name) => {

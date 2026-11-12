@@ -1,4 +1,5 @@
 import { verifyKey } from "discord-interactions";
+import type { MutationIdentity } from "../core/alias-writer";
 import { runAlias, searchAliases } from "../core/aliases";
 import { errorMessage, logEvent } from "../core/log";
 import type { Providers } from "../core/market";
@@ -10,6 +11,8 @@ import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
 const API = "https://discord.com/api/v10";
 const ADMINISTRATOR = 1n << 3n;
 const MANAGE_GUILD = 1n << 5n;
+const TOLERANCE_SEC = 5 * 60;
+const MAX_CONTENT_LENGTH = 2000;
 
 export async function handleDiscord(
   req: Request,
@@ -26,6 +29,9 @@ export async function handleDiscord(
   if (
     !signature ||
     !timestamp ||
+    !/^\d+$/.test(timestamp) ||
+    !Number.isSafeInteger(Number(timestamp)) ||
+    Math.abs(Date.now() / 1000 - Number(timestamp)) > TOLERANCE_SEC ||
     !(await verifyKey(body, signature, timestamp, env.DISCORD_PUBLIC_KEY))
   ) {
     return new Response("invalid request signature", { status: 401 });
@@ -65,7 +71,14 @@ export async function handleDiscord(
       logEvent("warn", "chart.alias.denied", { "chart.platform": "discord", "chart.alias.action": action });
       return json({ type: 4, data: { content: "⚠️ 서버 관리 권한이 있는 사용자만 별칭을 바꿀 수 있습니다.", flags: 64 } });
     }
-    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers));
+    if (action !== "list" && (typeof interaction.id !== "string" || !interaction.id)) {
+      return new Response("invalid interaction id", { status: 400 });
+    }
+    const request = action === "list" ? undefined : {
+      key: `discord:${interaction.id}`,
+      expiresAt: (Number(timestamp) + TOLERANCE_SEC + 1) * 1000,
+    };
+    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers, request));
     return json({ type: 5 });
   }
 
@@ -100,19 +113,45 @@ function canManage(interaction: any): boolean {
   }
 }
 
-async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers): Promise<void> {
+async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers, request?: MutationIdentity): Promise<void> {
   const started = Date.now();
   let content: string;
   let error: unknown;
   try {
-    content = await runAlias(args, env, providers);
+    content = await runAlias(args, env, providers, request);
   } catch (err) {
     error = err;
     content = `⚠️ ${errorMessage(err)}`;
   }
   await reportCommand({ platform: "discord", command: "stock-alias", action: args.action, started, error }, () =>
-    patchOriginal(interaction, env, { content }),
+    sendAliasContent(interaction, env, content),
   );
+}
+
+async function sendAliasContent(interaction: any, env: Env, content: string): Promise<Response> {
+  const chunks: string[] = [];
+  while (content.length > MAX_CONTENT_LENGTH) {
+    let end = content.lastIndexOf("\n", MAX_CONTENT_LENGTH);
+    if (end <= 0) {
+      end = MAX_CONTENT_LENGTH;
+      const code = content.charCodeAt(end - 1);
+      if (code >= 0xd800 && code <= 0xdbff) end--;
+    }
+    chunks.push(content.slice(0, end));
+    content = content.slice(end);
+    if (content.startsWith("\n")) content = content.slice(1);
+  }
+  chunks.push(content);
+  let response = await patchOriginal(interaction, env, { content: chunks[0] });
+  for (const chunk of chunks.slice(1)) {
+    if (!response.ok) break;
+    response = await fetch(`${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}?wait=true`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: chunk }),
+    });
+  }
+  return response;
 }
 
 async function serveChart(
