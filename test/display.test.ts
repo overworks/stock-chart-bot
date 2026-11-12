@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayRule, scaleSeries } from "../src/core/display";
+import { displayCurrency, displayRule, scaleSeries } from "../src/core/display";
 
 describe("display scaling", () => {
   it("multiplies OHLC and previous close, leaving volume and timestamps alone", () => {
@@ -15,5 +15,12 @@ describe("display scaling", () => {
   it("only knows JPY/KRW for now", () => {
     expect(displayRule("JPYKRW=X")).toEqual({ factor: 100, label: "100엔" });
     expect(displayRule("KRW=X")).toBeUndefined();
+  });
+
+  it("drops the currency for index symbols only", () => {
+    expect(displayCurrency("^KS11", "KRW")).toBe("");
+    expect(displayCurrency("^IXIC", "USD")).toBe("");
+    expect(displayCurrency("005930.KS", "KRW")).toBe("KRW");
+    expect(displayCurrency("KRW=X", "KRW")).toBe("KRW");
   });
 });

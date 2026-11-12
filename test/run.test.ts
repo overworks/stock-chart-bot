@@ -103,6 +103,23 @@ describe("runChart", () => {
     expect(msg.text).toBe("**엔/원 (JPYKRW=X, 100엔)** 1d · 869.70 KRW ▼ -1.90 (-0.22%)");
   });
 
+  it("shows indices without a currency unit", async () => {
+    await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "나스닥", value: "^IXIC" }]));
+    stub(() => ({
+      chart: {
+        result: [
+          {
+            meta: { exchangeTimezoneName: "America/New_York", currency: "USD" },
+            timestamp: [1, 2, 3],
+            indicators: { quote: [{ close: [2500, 2510.5, 2525.25] }] },
+          },
+        ],
+      },
+    }));
+    const msg = await runChart({ ticker: "나스닥", range: "1m" }, ENV);
+    expect(msg.text).toBe("**나스닥 (^IXIC)** 1m · 2,525.25 ▲ +25.25 (+1.01%)");
+  });
+
   it("falls back to Yahoo search when an ASCII ticker is unknown", async () => {
     const logs = captureLogs();
     const urls = stub((u) => {

@@ -1,7 +1,7 @@
 import { tracing } from "cloudflare:workers";
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
-import { displayRule, scaleSeries } from "./display";
+import { displayCurrency, displayRule, scaleSeries } from "./display";
 import { errorMessage, logEvent } from "./log";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries } from "./market";
 import { svgToPng } from "./render";
@@ -44,7 +44,8 @@ export function runChart(
 
       const rule = displayRule(symbol);
       if (rule) series = scaleSeries(series, rule.factor);
-      const { bars, label, currency, previousClose, source, intraday, regularHours } = series;
+      const { bars, label, previousClose, source, intraday, regularHours } = series;
+      const currency = displayCurrency(symbol, series.currency);
       const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
       const name = (await symbolName(symbol, env.KV)) ?? series.name;
       const title = buildTitle(symbol, name, rule?.label);

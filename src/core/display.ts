@@ -9,6 +9,11 @@ export function displayRule(symbol: string): { factor: number; label: string } |
   return DISPLAY[symbol];
 }
 
+/** 지수(^KS11, ^IXIC 등)는 포인트 값이라 통화 단위를 붙이지 않는다. */
+export function displayCurrency(symbol: string, currency: string): string {
+  return symbol.startsWith("^") ? "" : currency;
+}
+
 export function scaleSeries(series: PriceSeries, factor: number): PriceSeries {
   if (factor === 1) return series;
   const mul = (n: number | undefined) => (n === undefined ? undefined : Number((n * factor).toFixed(6)));
