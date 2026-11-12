@@ -11,8 +11,6 @@ import {
   type SymbolEntry,
 } from "./symbols";
 
-export type AliasAction = "add" | "remove" | "list";
-
 export interface AliasArgs {
   action?: string;
   alias?: string;

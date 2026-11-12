@@ -1,5 +1,3 @@
-export type Platform = "discord" | "slack" | "telegram" | "kakao";
-
 export type ChartStyle = "line" | "candle";
 
 export interface ChartRequest {
@@ -32,13 +30,4 @@ export interface OutgoingMessage {
   image?: { png: Uint8Array; filename: string };
   color?: string;
   source?: string;
-}
-
-export interface IncomingCommand {
-  platform: Platform;
-  userId: string;
-  channelId: string;
-  name: string;
-  args: Record<string, string | undefined>;
-  reply: (msg: OutgoingMessage) => Promise<void>;
 }

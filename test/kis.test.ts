@@ -54,9 +54,6 @@ function minute(date: string, hour: string, price: number) {
 
 const ok = (output2: unknown[], name = "삼성전자") => ({ rt_cd: "0", msg_cd: "MCA00000", msg1: "정상처리", output1: { hts_kor_isnm: name }, output2 });
 
-const events = (spy: { mock: { calls: unknown[][] } }, message: string) =>
-  spy.mock.calls.map((c) => JSON.parse(String(c[0]))).filter((e) => e.message === message);
-
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -227,7 +224,7 @@ describe("kis provider", () => {
   });
 
   it("uses the previous session when today's row exists but has a single 5-minute bucket", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logs = captureLogs();
     const calls = stub((url) => {
       if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260904", 101), day("20260903", 100), day("20260902", 90)]) };
       const date = url.searchParams.get("FID_INPUT_DATE_1")!;
@@ -248,12 +245,11 @@ describe("kis provider", () => {
     ]);
     expect(s.previousClose).toBe(90);
     expect(s.regularHours).toEqual([{ start: at("09:00"), end: at("15:30") }]);
-    expect(events(log, "chart.session.fallback")).toEqual([{ message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "005930.KS", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
-    log.mockRestore();
+    expect(logs("chart.session.fallback")).toEqual([{ level: "log", message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "005930.KS", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
   });
 
   it("uses the last session when today's pre-market has a single bar", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logs = captureLogs();
     stub((url) => {
       if (url.pathname.endsWith("inquire-daily-itemchartprice")) return { body: ok([day("20260903", 100), day("20260902", 90)]) };
       const date = url.searchParams.get("FID_INPUT_DATE_1")!;
@@ -264,8 +260,7 @@ describe("kis provider", () => {
     expect(s.bars.map((b) => b.c)).toEqual([95, 100]);
     expect(s.bars[0].t).toBe(Date.parse("2026-09-03T09:00:00+09:00") / 1000);
     expect(s.previousClose).toBe(90);
-    expect(events(log, "chart.session.fallback")[0]).toMatchObject({ "chart.session.date": "20260903", "chart.session.ok": true });
-    log.mockRestore();
+    expect(logs("chart.session.fallback")[0]).toMatchObject({ level: "log", "chart.session.date": "20260903", "chart.session.ok": true });
   });
 
   it("keeps 1w on the regular KRX session", async () => {
@@ -385,7 +380,7 @@ describe("kis domestic indices", () => {
   });
 
   it("uses the previous index session right after the open", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logs = captureLogs();
     stub((url) => {
       if (url.pathname.endsWith("inquire-daily-indexchartprice")) return { body: ok([indexDay("20260904", 106), indexDay("20260903", 100), indexDay("20260902", 90)]) };
       return { body: ok([indexMinute("20260904", "090000", 106), indexMinute("20260903", "153000", 100), indexMinute("20260903", "090500", 97), indexMinute("20260903", "090000", 95)], "종합") };
@@ -397,8 +392,7 @@ describe("kis domestic indices", () => {
       [kst("2026-09-03", "15:30"), 100],
     ]);
     expect(s.previousClose).toBe(90);
-    expect(events(log, "chart.session.fallback")).toEqual([{ message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "^KS11", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
-    log.mockRestore();
+    expect(logs("chart.session.fallback")).toEqual([{ level: "log", message: "chart.session.fallback", "chart.provider.name": "kis", "chart.symbol": "^KS11", "chart.bars": 1, "chart.session.date": "20260903", "chart.session.ok": true }]);
   });
 
   it("falls back to Yahoo when KIS has too few sessions or fails", async () => {

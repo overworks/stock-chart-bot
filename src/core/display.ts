@@ -23,3 +23,11 @@ export function scaleSeries(series: PriceSeries, factor: number): PriceSeries {
     previousClose: mul(series.previousClose),
   };
 }
+
+/** "삼성전자 (005930.KS)", "JPY/KRW (JPYKRW=X, 100엔)", "JPYKRW=X (100엔)", "AAPL" */
+export function buildTitle(symbol: string, name?: string, label?: string): string {
+  const hasName = !!name && name !== symbol;
+  const inner = [hasName ? symbol : undefined, label].filter(Boolean).join(", ");
+  const head = hasName ? name! : symbol;
+  return inner ? `${head} (${inner})` : head;
+}

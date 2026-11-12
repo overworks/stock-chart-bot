@@ -1,12 +1,14 @@
 import { tracing } from "cloudflare:workers";
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
-import { displayCurrency, displayRule, scaleSeries } from "./display";
+import { buildTitle, displayCurrency, displayRule, scaleSeries } from "./display";
 import { exceptionAttributes, logEvent } from "./log";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market";
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { ChartRequest, OutgoingMessage } from "./types";
+
+export { buildTitle };
 
 export interface CoreEnv {
   KV: KVNamespace;
@@ -86,12 +88,4 @@ export function runChart(
       throw err;
     }
   });
-}
-
-/** "삼성전자 (005930.KS)", "JPY/KRW (JPYKRW=X, 100엔)", "JPYKRW=X (100엔)", "AAPL" */
-export function buildTitle(symbol: string, name?: string, label?: string): string {
-  const hasName = !!name && name !== symbol;
-  const inner = [hasName ? symbol : undefined, label].filter(Boolean).join(", ");
-  const head = hasName ? name! : symbol;
-  return inner ? `${head} (${inner})` : head;
 }
