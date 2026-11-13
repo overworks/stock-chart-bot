@@ -14,11 +14,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: cp wrangler.jsonc.example wrangler.jsonc
+      - run: cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npx wrangler deploy --dry-run --outdir dist
+      - run: npm run build:cloudflare
 
   deploy:
     needs: check
@@ -44,4 +44,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+          command: deploy src/index.ts --config wrangler.jsonc

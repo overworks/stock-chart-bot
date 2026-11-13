@@ -18,14 +18,20 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
 | 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → `scripts/symbols.json`) |
 | KV 심볼 시드 | `npm run seed:symbols` (`scripts/symbols.json` → KV `symbols:v1`) |
-| 빌드 확인 | `npx wrangler deploy --dry-run --outdir dist` |
+| 빌드 확인 | `npm run build:cloudflare` |
 | 운영 배포 | `npm run deploy` |
 | 커맨드 등록 | `npm run register` |
 | WASM 복사 | `npm run setup:wasm` |
 
+`dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. Cloudflare 설정·시크릿·Vitest 설정은 `cloudflare/`에 두며, 로컬 개발 상태는 루트 `.wrangler/state`를 사용한다.
+
 ## 구조
 
 ```
+cloudflare/
+├─ wrangler.jsonc.example # 리소스·번들 설정 예시 (실제 설정은 Git 제외)
+├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 시크릿은 Git 제외)
+└─ vitest.config.ts      # 저장소 루트의 test/**를 실행
 src/
 ├─ index.ts            # 경로 라우팅 (/discord, /slack, /charts/*), 제공자 목록 조립, AliasWriter DO export
 ├─ env.d.ts            # Env 바인딩 및 *.wasm / *.ttf 모듈 선언
@@ -75,18 +81,18 @@ src/
   - 시드 종목 목록은 KV `symbols:v1`, 사용자 별칭은 `aliases:v1` 단일 키에 JSON 배열로 저장하며 KV `list`는 호출하지 않는다.
   - 사용자 별칭(`aliases:v1`) 추가·삭제는 반드시 `ALIAS_WRITER` Durable Object(`mutateAlias`)를 거치며 KV를 직접 수정하지 않는다.
   - `/stock-alias` 변경 권한: Discord는 `ADMINISTRATOR`/`MANAGE_GUILD`, Slack은 `SLACK_ALIAS_ADMINS`로 검사한다(`list`는 전체 허용).
-- **시크릿 및 생성물**: 시크릿은 `.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
-- **Wrangler 설정**: `wrangler.jsonc`는 Git 추적에서 제외하고 `wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일, 운영 배포·KV 적재는 GitHub Actions Variable `WRANGLER_CONFIG`를 사용한다. 설정 파일에는 비밀값을 넣지 않는다.
+- **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
+- **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. 운영 배포는 진입점 `src/index.ts`도 명시한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행하며 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.
 
 ## 완료 전 확인
 
 1. `npm run typecheck` 통과
 2. `npm test` 통과
-3. `npx wrangler deploy --dry-run --outdir dist` 성공
+3. `npm run build:cloudflare` 성공
 4. `src/core/**`에 플랫폼 의존성이나 `src/providers/**` import가 유입되지 않았는지 확인
 
 ## 하지 말 것
 
 - 요청 없이 커밋하거나 push하지 않는다.
-- `.dev.vars`, `wrangler.jsonc`, `dist/`, `node_modules/`, `wasm/*.wasm`을 커밋하지 않는다.
+- 루트·`cloudflare/`의 실제 `.dev.vars`·`wrangler.jsonc`, `dist/`, `node_modules/`, `wasm/*.wasm`을 커밋하지 않는다.

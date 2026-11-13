@@ -39,7 +39,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$WRANGLER_CONFIG" > wrangler.jsonc
-          npm run seed:symbols
+          npx wrangler kv key put symbols:v1 --config wrangler.jsonc --path scripts/symbols.json --binding KV --remote
         env:
           WRANGLER_CONFIG: ${{ vars.WRANGLER_CONFIG }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -3,6 +3,7 @@ node_modules/
 dist/
 .dev.vars
 /wrangler.jsonc
+/cloudflare/wrangler.jsonc
 *.log
 .DS_Store
 wasm/*.wasm

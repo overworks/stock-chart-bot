@@ -1,12 +1,16 @@
 import { loadEnvFile } from "node:process";
+import { parseArgs } from "node:util";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
 
 const API = "https://discord.com/api/v10";
 
-try {
-  loadEnvFile(new URL("../.dev.vars", import.meta.url));
-} catch (err) {
-  if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+const { values } = parseArgs({ options: { "vars-file": { type: "string" } } });
+if (values["vars-file"]) {
+  try {
+    loadEnvFile(values["vars-file"]);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
 }
 
 const appId = process.env.DISCORD_APPLICATION_ID;
@@ -15,7 +19,7 @@ const guildId = process.env.DISCORD_GUILD_ID;
 
 if (!appId || !botToken) {
   console.error(
-    ".dev.vars 또는 환경변수에 DISCORD_APPLICATION_ID 와 DISCORD_BOT_TOKEN을 설정해 주세요.",
+    "환경변수 또는 --vars-file로 지정한 파일에 DISCORD_APPLICATION_ID 와 DISCORD_BOT_TOKEN을 설정해 주세요.",
   );
   process.exit(1);
 }

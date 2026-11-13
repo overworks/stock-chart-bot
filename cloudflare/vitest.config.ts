@@ -1,11 +1,13 @@
+import { fileURLToPath } from "node:url";
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
-import keypair from "./test/keypair.json" with { type: "json" };
+import keypair from "../test/keypair.json" with { type: "json" };
 
 export default defineConfig({
+  root: fileURLToPath(new URL("../", import.meta.url)),
   plugins: [
     cloudflareTest({
-      wrangler: { configPath: "./wrangler.jsonc" },
+      wrangler: { configPath: fileURLToPath(new URL("./wrangler.jsonc", import.meta.url)) },
       miniflare: {
         bindings: {
           DISCORD_APPLICATION_ID: "test-app-id",

@@ -8,7 +8,7 @@
 ## 개발 환경 및 명령
 
 - **요구 사항**: Node.js 20.12 이상 (CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`)
-- **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp wrangler.jsonc.example wrangler.jsonc`로 로컬 설정을 만들고, `cp .dev.vars.example .dev.vars`로 로컬 시크릿을 설정한다. 예시 설정 그대로 로컬 테스트와 빌드 검증이 가능하며, 실제 배포·원격 KV 적재 전에는 본인의 리소스 값을 입력한다. Cloudflare 리소스 생성 및 배포 절차는 [README.md](./README.md)를 참고한다.
+- **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc`로 로컬 설정을 만들고, `cp cloudflare/.dev.vars.example cloudflare/.dev.vars`로 로컬 시크릿을 설정한다. 예시 설정 그대로 로컬 테스트와 빌드 검증이 가능하며, 실제 배포·원격 KV 적재 전에는 본인의 리소스 값을 입력한다. Cloudflare 리소스 생성 및 기존 루트 설정의 이동 절차는 [README.md](./README.md)를 참고한다.
 
 | 명령 | 설명 |
 |---|---|
@@ -19,25 +19,32 @@
 | `npm run smoke -- "AAPL:1d,005930.KS:1m:candle"` | 실제 시세 조회 후 로컬 PNG 렌더링 확인 (`dist/smoke/`) |
 | `npm run fetch:symbols` | KIND 상장법인 + 네이버 ETF/ETN + 업비트 + 수동 별칭을 합쳐 `scripts/symbols.json` 생성 |
 | `npm run seed:symbols` | `scripts/symbols.json`을 원격 KV의 `symbols:v1` 키에 적재 |
-| `npm run register` | `.dev.vars`(또는 환경변수)를 읽어 Discord 슬래시 커맨드 등록 |
+| `npm run register` | `cloudflare/.dev.vars`(또는 환경변수)를 읽어 Discord 슬래시 커맨드 등록 |
 | `npm run setup:wasm` | `@resvg/resvg-wasm`의 WASM 바이너리를 `wasm/resvg.wasm`으로 복사 |
 | `npm run deploy` | 운영 환경 배포 |
+| `npm run build:cloudflare` | 예시 또는 로컬 설정으로 배포 dry-run (`dist/`) |
+
+`dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 같은 이름의 `:cloudflare` 명령을 호출한다. 추가 인자는 `npm run dev -- --port 8788`처럼 전달한다. `dev:cloudflare`는 로컬 저장소 경로를 루트 `.wrangler/state`로 지정한다. 커맨드 등록 스크립트는 `--vars-file <경로>`로 파일을 선택하며, 옵션이 없거나 파일이 없으면 환경변수만 사용한다.
 
 ## 검증
 
-테스트는 `@cloudflare/vitest-plugin`을 통해 실제 Cloudflare Workers(`workerd`) 런타임 안에서 실행된다(`vitest.config.ts`). 외부 네트워크 호출은 `vi.stubGlobal("fetch", ...)`로 격리하며, `test/keypair.json`은 테스트 전용 Ed25519 키 쌍이다.
+테스트는 `@cloudflare/vitest-plugin`을 통해 실제 Cloudflare Workers(`workerd`) 런타임 안에서 실행된다(`cloudflare/vitest.config.ts`). 설정에서 테스트 루트를 저장소 루트로 고정하고, Wrangler 설정은 `cloudflare/wrangler.jsonc`의 절대 경로로 지정한다. 외부 네트워크 호출은 `vi.stubGlobal("fetch", ...)`로 격리하며, `test/keypair.json`은 테스트 전용 Ed25519 키 쌍이다.
 
 작업을 마무리하기 전에 다음 세 단계를 반드시 통과해야 한다.
 
 ```bash
 npm run typecheck
 npm test
-npx wrangler deploy --dry-run --outdir dist
+npm run build:cloudflare
 ```
 
 ## 프로젝트 구조
 
 ```
+cloudflare/
+├─ wrangler.jsonc.example # Cloudflare 리소스·번들 설정 예시 (실제 wrangler.jsonc는 Git 제외)
+├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 .dev.vars는 Git 제외)
+└─ vitest.config.ts      # workerd 테스트 설정
 src/
 ├─ index.ts              # 엔트리포인트: 라우팅 (/discord, /slack, /charts/*), 제공자 목록 조립, AliasWriter export
 ├─ env.d.ts              # Env 바인딩 및 *.wasm / *.ttf 모듈 타입 선언
@@ -149,5 +156,5 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 ## 코딩 컨벤션 및 보안
 
 - **스타일 및 타입**: TypeScript `strict` 모드와 2칸 들여쓰기를 사용한다. 주석은 코드만으로 파악하기 어려운 배경 지식이나 제약 조건에만 간결하게 남기며, 사용자 노출 메시지는 한국어로 작성한다.
-- **Wrangler 설정**: `wrangler.jsonc`는 Git 추적에서 제외하며 `wrangler.jsonc.example`만 커밋한다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일, 운영 배포·KV 적재는 GitHub Actions Variable `WRANGLER_CONFIG`에 저장된 설정을 사용한다. 설정 파일에는 비밀값을 넣지 않는다.
-- **시크릿 및 생성물**: 시크릿은 `.dev.vars`(로컬), `wrangler secret`(운영), GitHub Actions Secrets(CI)만 사용하며 코드·설정·로그에 노출하지 않는다. 생성물(`node_modules/`, `dist/`, `.dev.vars`, `wasm/*.wasm`)은 커밋하지 않는다.
+- **Wrangler 설정**: 로컬 설정은 Git에서 제외한 `cloudflare/wrangler.jsonc`, 추적하는 예시는 `cloudflare/wrangler.jsonc.example`이다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. 운영 배포는 진입점 `src/index.ts`도 명시해 변수의 기존 `main` 경로와 호환한다. 설정 파일에는 비밀값을 넣지 않는다.
+- **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬), `wrangler secret`(운영), GitHub Actions Secrets(CI)만 사용하며 코드·설정·로그에 노출하지 않는다. 실제 `wrangler.jsonc`와 `.dev.vars`는 이전 위치인 루트에서도 Git 제외를 유지한다. 생성물(`node_modules/`, `dist/`, `wasm/*.wasm`)은 커밋하지 않는다.

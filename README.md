@@ -78,28 +78,30 @@ Discord Developer Portal에서 앱을 생성해 **Application ID**, **Public Key
 
 ```bash
 npm install                                # postinstall에서 wasm/resvg.wasm 자동 복사
-cp wrangler.jsonc.example wrangler.jsonc    # 본인 Cloudflare 리소스 설정용 (Git 추적 제외)
-cp .dev.vars.example .dev.vars             # 로컬 개발 및 커맨드 등록용 환경변수 입력
+cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc
+cp cloudflare/.dev.vars.example cloudflare/.dev.vars
 npx wrangler login
-npx wrangler kv namespace create stock-chart-bot --binding KV
-npx wrangler r2 bucket create your-r2-bucket-name
+npx wrangler kv namespace create stock-chart-bot --binding KV --config cloudflare/wrangler.jsonc
+npx wrangler r2 bucket create your-r2-bucket-name --config cloudflare/wrangler.jsonc
 ```
 
-`wrangler.jsonc`의 KV 네임스페이스 `id`와 R2 `bucket_name`을 본인이 생성한 리소스 값으로 변경한다. 예시 파일의 KV ID는 로컬 테스트·빌드 검증용이므로 실제 배포·원격 KV 적재 전에 반드시 교체한다. Worker 이름도 필요에 따라 변경한다.
+`cloudflare/wrangler.jsonc`의 KV 네임스페이스 `id`와 R2 `bucket_name`을 본인이 생성한 리소스 값으로 변경하고, `cloudflare/.dev.vars`에 로컬 개발·커맨드 등록용 환경변수를 입력한다. 예시 파일의 KV ID는 로컬 테스트·빌드 검증용이므로 실제 배포·원격 KV 적재 전에 반드시 교체한다. Worker 이름도 필요에 따라 변경한다.
 
-저장소에는 `wrangler.jsonc.example`만 포함한다. 개인·운영 설정은 Git 추적에서 제외된 `wrangler.jsonc`에서 관리하며, 공통 설정 변경 시 예시 파일도 함께 갱신한다.
+저장소에는 `cloudflare/wrangler.jsonc.example`과 `cloudflare/.dev.vars.example`을 포함한다. 실제 설정·시크릿은 Git에서 제외하며, 공통 설정 변경 시 예시 파일도 함께 갱신한다.
+
+기존 루트 설정을 사용하던 체크아웃은 `wrangler.jsonc`와 `.dev.vars`를 `cloudflare/`로 복사하고, 복사한 설정의 `main`을 `../src/index.ts`, `$schema`를 `../node_modules/wrangler/config-schema.json`으로 바꾼다. 이전 브랜치로 돌아갈 때 사용할 루트 원본은 보관한다. 새 위치에 이미 설정이 있다면 덮어쓰지 않고 필요한 항목을 반영한다.
 
 ### 2. 시크릿 등록 및 종목 데이터 적재
 
 ```bash
-npx wrangler secret put DISCORD_APPLICATION_ID
-npx wrangler secret put DISCORD_PUBLIC_KEY
-npx wrangler secret put DISCORD_BOT_TOKEN
-npx wrangler secret put SLACK_SIGNING_SECRET      # Slack 연동 시
-npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack 별칭 관리자 멤버 ID (쉼표 구분, 선택)
-npx wrangler secret put KIS_APP_KEY               # 한국투자증권 Open API (선택)
-npx wrangler secret put KIS_APP_SECRET            # 한국투자증권 Open API (선택)
-npx wrangler r2 bucket lifecycle add your-r2-bucket-name expire-charts charts/ --expire-days 7
+npx wrangler secret put DISCORD_APPLICATION_ID --config cloudflare/wrangler.jsonc
+npx wrangler secret put DISCORD_PUBLIC_KEY --config cloudflare/wrangler.jsonc
+npx wrangler secret put DISCORD_BOT_TOKEN --config cloudflare/wrangler.jsonc
+npx wrangler secret put SLACK_SIGNING_SECRET --config cloudflare/wrangler.jsonc  # Slack 연동 시
+npx wrangler secret put SLACK_ALIAS_ADMINS --config cloudflare/wrangler.jsonc    # Slack 별칭 관리자 (쉼표 구분, 선택)
+npx wrangler secret put KIS_APP_KEY --config cloudflare/wrangler.jsonc          # 한국투자증권 Open API (선택)
+npx wrangler secret put KIS_APP_SECRET --config cloudflare/wrangler.jsonc       # 한국투자증권 Open API (선택)
+npx wrangler r2 bucket lifecycle add your-r2-bucket-name expire-charts charts/ --expire-days 7 --config cloudflare/wrangler.jsonc
 npm run fetch:symbols                             # KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                              # KV의 symbols:v1 키에 적재
 ```
@@ -112,7 +114,7 @@ npm run register                                  # 글로벌 커맨드 등록 (
 DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 등록
 ```
 
-- `npm run register`는 `.dev.vars` 또는 환경변수에서 `DISCORD_APPLICATION_ID`와 `DISCORD_BOT_TOKEN`을 읽어 `/stock-chart`, `/stock-alias`, `/stock-help`를 등록한다.
+- `npm run register`는 `cloudflare/.dev.vars` 또는 환경변수에서 `DISCORD_APPLICATION_ID`와 `DISCORD_BOT_TOKEN`을 읽어 `/stock-chart`, `/stock-alias`, `/stock-help`를 등록한다. 파일이 없으면 환경변수만 사용한다. 공통 스크립트를 직접 실행할 때는 `npx tsx scripts/register-commands.ts --vars-file <파일 경로>`로 파일을 선택하거나, 옵션 없이 환경변수만 사용할 수 있다.
 - Discord Developer Portal → **General Information** → **Interactions Endpoint URL**에 `https://stock-chart-bot.<subdomain>.workers.dev/discord`를 입력하고, **OAuth2 URL Generator**에서 `applications.commands`와 `bot` 스코프로 초대 링크를 만들어 서버에 봇을 추가한다.
 
 ### 4. Slack 연동 (선택)
@@ -126,7 +128,8 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ### 5. CI/CD 및 종목 목록 자동 갱신
 
-- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `wrangler.jsonc.example`을 복사해 실행하며, 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 `wrangler.jsonc` 전체 내용으로 설정 파일을 복원한다(Settings → Secrets and variables → Actions → Variables). Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 롤백은 `npx wrangler rollback`을 사용한다.
+- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `cloudflare/wrangler.jsonc.example`을 복사해 실행한다. 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 설정 전체를 루트의 Git 제외 파일 `wrangler.jsonc`로 복원하고, `deploy src/index.ts --config wrangler.jsonc`로 진입점을 지정한다. 기존 Variable 값으로 이전 커밋도 배포할 수 있도록 운영 설정의 경로 기준은 저장소 루트로 유지한다(`main: src/index.ts`, `$schema: node_modules/wrangler/config-schema.json`).
+- **운영 설정 등록**: Settings → Secrets and variables → Actions → Variables에 `WRANGLER_CONFIG`를 등록한다. Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 로컬에서 배포를 롤백할 때는 `npx wrangler rollback --config cloudflare/wrangler.jsonc`를 사용한다.
 - **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다. 원격 KV 적재에는 자동 배포와 동일한 Variable 및 두 가지 Secrets가 필요하다.
 
 ## 개발 및 기여
@@ -134,10 +137,11 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 ```bash
 npm run dev                                        # 로컬 개발 서버 (http://localhost:8787)
 npm test                                           # workerd 런타임에서 테스트 실행
+npm run build:cloudflare                            # 업로드 없이 배포 번들 검증
 npm run smoke -- "AAPL:1d,005930.KS:1m:candle"     # 로컬 PNG 렌더링 확인 (dist/smoke/)
 ```
 
-아키텍처, 내부 설계, 새 플랫폼·데이터 소스 추가 방법은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고한다.
+`dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. 로컬 개발 상태는 루트 `.wrangler/state`에 저장한다. 아키텍처, 내부 설계, 새 플랫폼·데이터 소스 추가 방법은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고한다.
 
 ## 라이선스 고지
 
