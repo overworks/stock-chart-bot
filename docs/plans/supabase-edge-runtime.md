@@ -3,7 +3,7 @@
 - 작성일: 2026-11-14
 - 기준 커밋: `cedd35f` (`main`)
 - 작업 브랜치: `feat/supabase-edge-runtime`
-- 현재 단계: 2단계 종목·별칭 저장소 및 KIS 캐시 추상화 완료. 다음 작업은 3단계 실행 환경 기능 주입이다.
+- 현재 단계: 3단계 실행 환경 기능·렌더러 주입 및 진입점 분리 완료. 다음 작업은 4단계 제공자 HTTP 캐시 옵션 분리다.
 - 진행 방식: 한 번에 한 단계씩 구현·검증·커밋한 뒤 결과를 보고한다.
 
 ## 목표와 범위
@@ -45,8 +45,11 @@
 │   └── rendering/resvg.ts        # 자산을 주입받는 공통 PNG 렌더러
 ├── cloudflare/
 │   ├── index.ts                  # fetch 진입점 및 AliasWriter export
-│   ├── env.d.ts                  # Workers 바인딩·바이너리 import 타입
-│   ├── adapters.ts               # KV·R2·tracing·HTTP 캐시 어댑터
+│   ├── env.d.ts                  # 명시적으로 import하는 Workers 바인딩 타입
+│   ├── modules.d.ts              # 바이너리 import 타입
+│   ├── storage.ts                # KV·DO 저장소 어댑터
+│   ├── images.ts                 # R2 이미지 공개·서빙
+│   ├── tracing.ts                # Cloudflare tracing 연결
 │   ├── alias-writer.ts           # 기존 Durable Object
 │   ├── assets.ts                 # Wrangler의 WASM·TTF import
 │   ├── wrangler.jsonc.example
@@ -198,9 +201,10 @@
 | 빌드 | 통과 | `npx wrangler deploy --dry-run --outdir dist` |
 | 구현 1 | 완료 | `chore: isolate Cloudflare configuration`, 아래 검증 기록 참고 |
 | 구현 2 | 완료 | `refactor: decouple symbol and alias storage`, 아래 검증 기록 참고 |
-| 구현 3–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
+| 구현 3 | 완료 | `refactor: inject runtime services`, 아래 검증 기록 참고 |
+| 구현 4–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
 
-기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기존 `core`의 Cloudflare 의존성은 위 단계에서 제거할 대상이며 현재 제거 완료로 기록하지 않는다.
+기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기준 시점에 있던 `core`의 Cloudflare 의존성 제거 결과는 각 단계의 기록에서 확인한다.
 
 ### 1단계 완료 기록
 
@@ -222,6 +226,18 @@
 - `npm run typecheck`, `npm test`(13개 파일, 209개 테스트), `npm run build:cloudflare`를 통과했다. 기존 202개 회귀 테스트에 저장소 격리·만료·조회 실패·무효화 경쟁·변경 실패와 KV 없는 토큰 캐시 검증 7개를 추가했다.
 - Node에서 제공자·종목·별칭 모듈을 불러오고 저장소 계약만으로 심볼을 해석했다. 외부 네트워크 호출 없이 확인했다.
 - `core`의 저장소 경로와 `providers`에서 KV·DO 타입 및 구현 의존성을 제거했다. 기존 tracing·R2·바이너리 로딩·실행 환경 설정의 분리는 3단계에서 진행한다.
+
+### 3단계 완료 기록
+
+- `src/app.ts`에 공통 라우터를 두고 `BotConfig`와 `BotServices`를 주입한다. 메신저 어댑터에서 `Env`·`ExecutionContext` 의존성을 제거하고 원본 요청 본문 서명 검증과 즉시 응답 흐름을 유지했다.
+- `src/core/runtime.ts`에 렌더러·tracer·백그라운드 작업·이미지 공개 계약을 정의했다. `runChart`는 주입된 렌더러와 선택적 tracer를 사용하며 기본 무동작 tracer로도 동작한다. Cloudflare tracing은 전용 어댑터가 같은 스팬 이름·속성으로 연결한다.
+- `src/rendering/resvg.ts`는 자산 로더를 받아 최초 렌더링 때 로드하고 WASM 초기화를 공유한다. 실패한 초기화는 재시도하며, 렌더링·PNG 인코딩 예외에도 두 자원의 `finally` 해제를 보장한다. Cloudflare와 Node smoke가 같은 렌더러를 사용한다.
+- 이미지 저장·서빙을 `cloudflare/images.ts`로 옮겼다. Slack은 어댑터의 완성된 URL을 사용하고 Discord는 파일 첨부를 유지한다. Cloudflare 이미지 경로·캐시·ETag 동작은 기존 회귀 테스트로 검증했다.
+- Workers 진입점을 `cloudflare/index.ts`로 옮기고 바인딩 타입은 명시적 type import로 한정했다. npm 명령·Vitest·CI가 진입점을 명시하므로 저장된 `main: src/index.ts` 설정도 수정 없이 사용할 수 있다. 새 예시는 `main: index.ts`를 사용한다.
+- `npm run typecheck`, `npm test`(15개 파일, 218개 테스트)를 통과했다. 기존 209개 회귀 테스트에 공통 앱·즉시 응답·이미지 전달·tracer와 렌더러 수명 검증 9개를 추가했다.
+- 실제 로컬 설정, 새 예시 설정의 기본 진입점, 기존 루트 CI 형식의 설정으로 각각 dry-run을 통과했다. 로컬 서버에서도 새 진입점과 메신저·R2 경로를 확인했다.
+- 외부 시세 호출을 고정 fixture로 대체한 Node smoke에서 한글 제목·캔들·거래량을 포함한 960×540 PNG를 생성했다. Node에서 공통 앱과 차트 오케스트레이션도 Cloudflare 런타임 없이 로드했다.
+- `src/`의 Cloudflare 런타임 import·바인딩 타입·정적 WASM/TTF import가 제거됐음을 확인했다. 제공자의 기존 `cf` HTTP 캐시 힌트는 4단계, 독립 타입 검사 설정과 import 확장자 정리는 5단계에서 진행한다.
 
 ## 확인한 문서
 

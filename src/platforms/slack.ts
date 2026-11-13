@@ -1,10 +1,9 @@
 import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
 import { errorMessage, logEvent } from "../core/log";
-import type { Providers } from "../core/market";
-import type { SymbolStore } from "../core/storage";
+import type { BotConfig } from "../config";
+import type { BackgroundTasks, BotServices } from "../core/runtime";
 import { runChart } from "../core/run";
-import { storeChart } from "../core/store";
 import { helpText } from "./help";
 import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
 
@@ -14,17 +13,16 @@ const USAGE =
 
 export async function handleSlack(
   req: Request,
-  env: Env,
-  ctx: ExecutionContext,
-  providers: Providers,
-  symbols: SymbolStore,
+  config: BotConfig,
+  tasks: BackgroundTasks,
+  services: BotServices,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
   const body = await req.text();
   const signature = req.headers.get("X-Slack-Signature");
   const timestamp = req.headers.get("X-Slack-Request-Timestamp");
-  if (!signature || !timestamp || !(await verifySlack(body, signature, timestamp, env.SLACK_SIGNING_SECRET))) {
+  if (!signature || !timestamp || !(await verifySlack(body, signature, timestamp, config.slackSigningSecret))) {
     return new Response("invalid request signature", { status: 401 });
   }
 
@@ -32,34 +30,32 @@ export async function handleSlack(
   const responseUrl = form.get("response_url") ?? "";
   const command = form.get("command");
   if (command === "/stock-help") return ephemeral(helpText("slack"));
-  if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx, providers, symbols);
+  if (command === "/stock-alias") return handleAlias(form, responseUrl, config, tasks, services);
   if (command !== "/stock-chart") return ephemeral("알 수 없는 명령입니다.");
 
   const args = parseText(form.get("text") ?? "");
   if (!args.ticker || !responseUrl) return ephemeral(USAGE);
 
-  const origin = new URL(req.url).origin;
-  ctx.waitUntil(serveChart(responseUrl, origin, args, env, providers, symbols));
+  tasks.waitUntil(serveChart(responseUrl, req.url, args, services));
   return ephemeral("차트를 만드는 중입니다…");
 }
 
 async function handleAlias(
   form: URLSearchParams,
   responseUrl: string,
-  env: Env,
-  ctx: ExecutionContext,
-  providers: Providers,
-  symbols: SymbolStore,
+  config: BotConfig,
+  tasks: BackgroundTasks,
+  services: BotServices,
 ): Promise<Response> {
   const args = parseAliasText(form.get("text") ?? "");
   if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
   const report = { platform: "slack" as const, command: "stock-alias", action: args.action, started: Date.now() };
-  if (args.action !== "list" && !isAliasAdmin(form.get("user_id"), env.SLACK_ALIAS_ADMINS)) {
+  if (args.action !== "list" && !isAliasAdmin(form.get("user_id"), config.slackAliasAdmins)) {
     logEvent("warn", "chart.alias.denied", { "chart.platform": "slack", "chart.alias.action": args.action });
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
-  ctx.waitUntil(
-    runAlias(args, symbols, providers).then(
+  tasks.waitUntil(
+    runAlias(args, services.symbols, services.providers).then(
       (text) => reportCommand(report, () => post(responseUrl, { response_type: args.action === "list" ? "ephemeral" : "in_channel", text })),
       (err) => reportCommand({ ...report, error: err }, () => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` })),
     ),
@@ -102,21 +98,19 @@ export function parseText(text: string): Record<string, string | undefined> {
 
 async function serveChart(
   responseUrl: string,
-  origin: string,
+  requestUrl: string,
   args: Record<string, string | undefined>,
-  env: Env,
-  providers: Providers,
-  symbols: SymbolStore,
+  services: BotServices,
 ): Promise<void> {
   const started = Date.now();
   let error: unknown;
   let payload: unknown;
   try {
-    const result = await runChart(args, symbols, providers);
+    const result = await runChart(args, services.symbols, services.providers, services);
     const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text: toMrkdwn(result.text) } }];
     if (result.image) {
-      const key = await storeChart(env.CHARTS, result.image.png);
-      blocks.push({ type: "image", image_url: `${origin}/${key}`, alt_text: stripMarkdown(result.text) });
+      const imageUrl = await services.images.publish(result.image.png, requestUrl);
+      blocks.push({ type: "image", image_url: imageUrl, alt_text: stripMarkdown(result.text) });
     }
     if (result.source) blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: `출처: ${result.source}` }] });
     payload = { response_type: "in_channel", text: stripMarkdown(result.text), blocks };

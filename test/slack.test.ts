@@ -1,6 +1,7 @@
+import type { Env } from "../cloudflare/env";
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import worker from "../src/index";
+import worker from "../cloudflare/index";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../src/core/command";
 import { parseAliasText, parseText } from "../src/platforms/slack";
 import { resetSymbolCache } from "../src/core/symbols";

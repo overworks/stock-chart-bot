@@ -89,7 +89,7 @@ npx wrangler r2 bucket create your-r2-bucket-name --config cloudflare/wrangler.j
 
 저장소에는 `cloudflare/wrangler.jsonc.example`과 `cloudflare/.dev.vars.example`을 포함한다. 실제 설정·시크릿은 Git에서 제외하며, 공통 설정 변경 시 예시 파일도 함께 갱신한다.
 
-기존 루트 설정을 사용하던 체크아웃은 `wrangler.jsonc`와 `.dev.vars`를 `cloudflare/`로 복사하고, 복사한 설정의 `main`을 `../src/index.ts`, `$schema`를 `../node_modules/wrangler/config-schema.json`으로 바꾼다. 이전 브랜치로 돌아갈 때 사용할 루트 원본은 보관한다. 새 위치에 이미 설정이 있다면 덮어쓰지 않고 필요한 항목을 반영한다.
+기존 루트 설정을 사용하던 체크아웃은 `wrangler.jsonc`와 `.dev.vars`를 `cloudflare/`로 복사하고, 복사한 설정의 `main`을 `index.ts`, `$schema`를 `../node_modules/wrangler/config-schema.json`으로 바꾼다. npm 실행·배포 명령과 테스트는 진입점을 명시하므로 이전 `main` 값이 저장된 설정도 사용할 수 있다. 이전 브랜치로 돌아갈 때 사용할 루트 원본은 보관한다. 새 위치에 이미 설정이 있다면 덮어쓰지 않고 필요한 항목을 반영한다.
 
 ### 2. 시크릿 등록 및 종목 데이터 적재
 
@@ -128,7 +128,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ### 5. CI/CD 및 종목 목록 자동 갱신
 
-- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `cloudflare/wrangler.jsonc.example`을 복사해 실행한다. 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 설정 전체를 루트의 Git 제외 파일 `wrangler.jsonc`로 복원하고, `deploy src/index.ts --config wrangler.jsonc`로 진입점을 지정한다. 기존 Variable 값으로 이전 커밋도 배포할 수 있도록 운영 설정의 경로 기준은 저장소 루트로 유지한다(`main: src/index.ts`, `$schema: node_modules/wrangler/config-schema.json`).
+- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `cloudflare/wrangler.jsonc.example`을 복사해 실행한다. 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 설정 전체를 루트의 Git 제외 파일 `wrangler.jsonc`로 복원하고, `deploy cloudflare/index.ts --config wrangler.jsonc`로 진입점을 지정한다. 운영 설정의 경로 기준은 저장소 루트로 유지하며 기존 `main: src/index.ts` 값도 그대로 사용할 수 있다. 기존 Variable을 변경하지 않아도 신·구 커밋을 배포할 수 있다.
 - **운영 설정 등록**: Settings → Secrets and variables → Actions → Variables에 `WRANGLER_CONFIG`를 등록한다. Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 로컬에서 배포를 롤백할 때는 `npx wrangler rollback --config cloudflare/wrangler.jsonc`를 사용한다.
 - **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다. 원격 KV 적재에는 자동 배포와 동일한 Variable 및 두 가지 Secrets가 필요하다.
 

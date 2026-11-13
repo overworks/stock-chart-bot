@@ -42,14 +42,20 @@ npm run build:cloudflare
 
 ```
 cloudflare/
+├─ index.ts              # Workers 진입점, 설정·의존성 조립, AliasWriter export
+├─ env.d.ts              # 명시적으로 import하는 Workers 바인딩 타입
+├─ assets.ts             # Wrangler 바이너리 import 및 지연 초기화 렌더러
+├─ modules.d.ts          # WASM·TTF import 선언
+├─ images.ts             # R2 이미지 공개 및 /charts/ 서빙
+├─ tracing.ts            # Cloudflare tracing 어댑터
 ├─ storage.ts            # SymbolStore·TokenCache의 KV/DO 어댑터, KV 키 정의
 ├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # Cloudflare 리소스·번들 설정 예시 (실제 wrangler.jsonc는 Git 제외)
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 .dev.vars는 Git 제외)
 └─ vitest.config.ts      # workerd 테스트 설정
 src/
-├─ index.ts              # 엔트리포인트: 라우팅 (/discord, /slack, /charts/*), 제공자 목록 조립, AliasWriter export
-├─ env.d.ts              # Env 바인딩 및 *.wasm / *.ttf 모듈 타입 선언
+├─ app.ts                # 공통 라우팅과 설정·기능 주입
+├─ config.ts             # BotConfig (메신저 설정)
 ├─ core/                 # 플랫폼 중립 코어 (플랫폼 SDK·providers·platforms import 금지)
 │  ├─ types.ts           #   공통 데이터 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts         #   커맨드 인자 검증 및 정규화
@@ -59,10 +65,10 @@ src/
 │  ├─ aliases.ts         #   /stock-alias 비즈니스 로직 (add, remove, list, 자동완성)
 │  ├─ display.ts         #   관행 단위 보정(JPYKRW=X → 100엔) 및 지수(^) 통화 단위 생략
 │  ├─ chart.ts           #   차트 SVG 생성 및 등락률 요약
-│  ├─ render.ts          #   resvg-wasm 기반 SVG → PNG 렌더링 (번들 서브셋 폰트 사용)
-│  ├─ store.ts           #   R2 이미지 저장 및 /charts/<key> 서빙 (URL 전용 플랫폼용)
+│  ├─ runtime.ts         #   렌더러·tracer·백그라운드·이미지 공개 계약
 │  ├─ log.ts             #   구조화 로그 (logEvent, exceptionAttributes, errorMessage)
 │  └─ run.ts             #   차트 생성 오케스트레이션 (runChart)
+├─ rendering/resvg.ts    # 자산을 주입받는 공통 SVG → PNG 렌더러
 ├─ providers/            # 데이터 소스 구현체 (외부 API 호출 전담, core만 import)
 │  ├─ index.ts           #   createProviders: 우선순위 순서로 제공자 목록 조립
 │  ├─ upbit.ts           #   업비트 원화 마켓 (KRW-*)
@@ -85,7 +91,8 @@ scripts/
 
 ### 1. 플랫폼 경계 (`core` vs `platforms`)
 
-- `src/core/**`는 메신저 플랫폼 SDK나 전용 타입, `src/providers/**`, `src/platforms/**`를 절대 import하지 않는다.
+- `src/core/**`는 메신저 플랫폼 SDK나 전용 타입, `src/providers/**`, `src/platforms/**`를 절대 import하지 않는다. `src/core/**`와 `src/platforms/**`는 Cloudflare 바인딩·런타임 타입에도 의존하지 않는다.
+- `src/app.ts`의 `createApp(BotConfig, BotServices)`가 공통 라우터를 만든다. `cloudflare/index.ts`가 설정을 변환하고 제공자·저장소·렌더러·이미지 공개·tracer를 조립한다. 요청별 `BackgroundTasks`는 `ctx.waitUntil`을 메서드로 호출하는 래퍼로 연결한다.
 - 서명 검증(반드시 파싱 전의 원본 문자열 `await req.text()` 사용), 플랫폼별 요청·응답 포맷 변환, 3초 이내 초기 응답(ack/deferred), 파일 첨부 또는 이미지 URL 전달은 `src/platforms/<platform>.ts`에서 처리한다.
 - Discord 요청은 서명 시각이 현재 시각과 5분 이내일 때만 허용한다. 별칭 변경에는 interaction ID와 만료 시각을 전달해 DO에서 중복 변경을 차단한다. Slack 별칭 목록도 초기 응답 후 `response_url`로 실행자에게만 전송한다.
 - `/stock-help`는 외부 호출이나 저장소 접근 없이 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`). Discord 본문은 2,000자 이내로 유지한다.
@@ -93,7 +100,7 @@ scripts/
 
 ### 2. 데이터 소스 (`src/providers/`)
 
-`MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. `src/index.ts`는 동일 `env`에서 제공자와 종목 저장소 인스턴스를 재사용해 각 메모리 캐시를 유지한다. KIS에는 `cloudflare/storage.ts`가 구현한 `TokenCache`를 주입하고, 제공자는 KV 타입이나 저장 키를 알지 않는다.
+`MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. `cloudflare/index.ts`는 동일 `env`에서 앱·제공자·종목 저장소 인스턴스를 재사용해 각 메모리 캐시를 유지한다. KIS에는 `cloudflare/storage.ts`가 구현한 `TokenCache`를 주입하고, 제공자는 KV 타입이나 저장 키를 알지 않는다.
 
 - **선택·폴백 및 에러 구분**: `getPrices`는 `supports(symbol)`가 참(또는 미정의)인 제공자를 순서대로 시도하며, 실패 시 다음 제공자로 넘어간다. 존재하지 않는 심볼은 `SymbolNotFoundError`를, 그 외 오류는 일반 `Error`를 던진다. `runChart`의 영문 검색 재시도는 `SymbolNotFoundError`에만 반응한다.
 - **업비트 (`upbit.ts`)**: `KRW-*` 마켓만 전담한다. 24시간 거래 상품이므로 `continuous: true`(KST 표시)를 반환하며, 커스텀 날짜(`from`~`to`) 조회는 최대 2,000일까지 허용한다. `search`는 한글 질의나 `KRW-` 접두사일 때만 동작한다.
@@ -117,12 +124,12 @@ scripts/
 
 - 중복 방지 키가 주어진 변경은 처리 기록과 별칭을 같은 트랜잭션에 저장한다. 기록은 DO 재시작 후에도 유지하며 만료되면 알람으로 정리한다. KV 복제 실패의 재시도와 기록 정리를 같은 알람에서 구분한다.
 
-### 5. 렌더링 및 이미지 전달 (`chart.ts`, `render.ts`, `store.ts`)
+### 5. 렌더링 및 이미지 전달 (`src/rendering/resvg.ts`, `cloudflare/images.ts`)
 
-- **SVG 및 WASM 렌더링**: `chart.ts`가 SVG를 생성하고 `render.ts`가 `@resvg/resvg-wasm`으로 PNG를 렌더링한다. 서브셋 폰트 `fonts/NanumSquare{R,B}.ttf`를 번들하며, 굵은 글씨는 `font-family`(`FONT_BOLD = "NanumSquare Bold"`)로 지정한다. `Resvg` 인스턴스와 `RenderedImage`는 GC 대상이 아니므로 반드시 `try ... finally`에서 `free()`를 호출한다.
+- **SVG 및 WASM 렌더링**: `chart.ts`가 SVG를 생성하고 `runChart`가 주입된 `ChartRenderer`를 호출한다. `src/rendering/resvg.ts`의 `createResvgRenderer`는 비동기 자산 로더를 받는다. Cloudflare는 `cloudflare/assets.ts`에서 WASM·TTF를 import하고 Node smoke는 파일에서 읽는다. 자산은 최초 렌더링 때 로드하고 WASM 초기화는 렌더러 간에 공유하며, 실패한 초기화는 재시도할 수 있다. 서브셋 폰트 `fonts/NanumSquare{R,B}.ttf`를 사용하고 굵은 글씨는 `font-family`(`FONT_BOLD = "NanumSquare Bold"`)로 지정한다. `Resvg` 인스턴스와 `RenderedImage`는 GC 대상이 아니므로 반드시 `try ... finally`에서 `free()`를 호출한다.
 - **시간외 구간 음영**: `PriceSeries.regularHours`가 주어지면 `extendedRuns`가 정규장 밖의 연속된 봉 구간에 회색 음영과 `프리마켓`·`애프터마켓` 라벨을 넣는다.
 - **제목과 기간**: `buildSvg`에 제목과 `period`를 나눠 전달한다. 날짜 지정 기간은 헤더 아래 별도 줄에 표시하고, 제목은 심볼 접미사가 길어도 현재가 영역을 넘지 않도록 말줄임한다.
-- **이미지 전달**: Discord는 PNG 바이트를 multipart 응답으로 직접 첨부하고, Slack은 `storeChart`로 R2에 저장한 뒤 `${origin}/charts/<key>` URL을 전달한다.
+- **이미지 전달**: Discord는 PNG 바이트를 multipart 응답으로 직접 첨부한다. Slack은 `ImagePublisher.publish(png, requestUrl)`가 반환하는 완성된 URL을 사용한다. Cloudflare 구현은 R2에 저장한 뒤 요청의 origin을 기준으로 `/charts/<key>` URL을 발급하며, 같은 모듈이 기존 캐시·ETag 헤더로 이미지를 서빙한다. 공통 라우터의 이미지 서빙 기능은 선택적으로 주입한다.
 
 ### 6. 관측 (`log.ts`, `platforms/report.ts`, `run.ts`)
 
@@ -141,7 +148,7 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 | `chart.alias.changed`, `chart.alias.denied` | log / warn | `chart.alias.action`, `chart.alias.name`, `chart.symbol` · `chart.platform`, `chart.alias.action` | 별칭 추가·삭제 성공, 권한 없는 변경 시도 |
 | `chart.alias.publish_deferred`, `chart.alias.publish_failed` | warn / error | `exception.*` | 별칭 KV 복제 지연 또는 알람 재시도 실패 |
 
-- **커스텀 스팬**: `run.ts`가 `cloudflare:workers`의 `tracing.enterSpan`으로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render` 스팬을 기록한다. `scripts/smoke.ts`가 Node에서 `src/core/market.ts`와 `src/providers/*`를 직접 불러오므로 이 파일들에는 `cloudflare:workers`를 import하지 않는다.
+- **커스텀 스팬**: `run.ts`가 주입된 `Tracer`로 `chart` 아래에 `chart.resolve`, `chart.prices`, `chart.render` 스팬을 기록한다. `cloudflare/tracing.ts`가 `cloudflare:workers`의 `tracing.enterSpan`을 연결하며, tracer를 생략한 환경은 기본 무동작 구현을 사용한다. 공통 소스에서는 `cloudflare:workers`를 import하지 않는다.
 - **자동완성**: 입력마다 호출되므로 성공 경로에는 로그를 남기지 않는다.
 
 ## 확장 가이드
@@ -149,7 +156,7 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 ### 새 메신저 플랫폼 추가
 
 1. `src/platforms/<name>.ts`에 어댑터를 작성한다(원본 본문 서명 검증 → 인자 파싱 → `runChart` / `runAlias` 호출 → 응답 전송). 결과 전송은 `reportCommand`로 감싼다.
-2. `src/index.ts`에 라우트를 추가한다(`src/core/**`는 수정하지 않는다).
+2. `src/app.ts`에 라우트를 추가한다(`src/core/**`는 수정하지 않는다).
 
 ### 새 데이터 소스 추가
 
@@ -159,5 +166,5 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 ## 코딩 컨벤션 및 보안
 
 - **스타일 및 타입**: TypeScript `strict` 모드와 2칸 들여쓰기를 사용한다. 주석은 코드만으로 파악하기 어려운 배경 지식이나 제약 조건에만 간결하게 남기며, 사용자 노출 메시지는 한국어로 작성한다.
-- **Wrangler 설정**: 로컬 설정은 Git에서 제외한 `cloudflare/wrangler.jsonc`, 추적하는 예시는 `cloudflare/wrangler.jsonc.example`이다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. 운영 배포는 진입점 `src/index.ts`도 명시해 변수의 기존 `main` 경로와 호환한다. 설정 파일에는 비밀값을 넣지 않는다.
+- **Wrangler 설정**: 로컬 설정은 Git에서 제외한 `cloudflare/wrangler.jsonc`, 추적하는 예시는 `cloudflare/wrangler.jsonc.example`이다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`도 명시해 기존 설정의 `main` 값과 호환한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬), `wrangler secret`(운영), GitHub Actions Secrets(CI)만 사용하며 코드·설정·로그에 노출하지 않는다. 실제 `wrangler.jsonc`와 `.dev.vars`는 이전 위치인 루트에서도 Git 제외를 유지한다. 생성물(`node_modules/`, `dist/`, `wasm/*.wasm`)은 커밋하지 않는다.

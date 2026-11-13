@@ -1,3 +1,5 @@
+import { renderPng } from "../cloudflare/assets";
+import type { Env } from "../cloudflare/env";
 import { createSymbolStore, SYMBOLS_KEY } from "../cloudflare/storage";
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +10,7 @@ import { PROVIDERS } from "./providers";
 
 const ENV = env as unknown as Env;
 const STORE = createSymbolStore(ENV);
+const RUNTIME = { render: renderPng };
 
 const series = {
   chart: {
@@ -47,7 +50,7 @@ describe("runChart", () => {
   it("uses the KV alias directly", async () => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "삼성전자", value: "005930.KS" }]));
     const urls = stub(() => series);
-    const msg = await runChart({ ticker: "삼성전자", range: "1m" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "삼성전자", range: "1m" }, STORE, PROVIDERS, RUNTIME);
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/005930.KS"]);
     expect(msg.text).toBe("**삼성전자 (005930.KS)** 1m · 109 KRW ▲ +9 (+9.00%)");
     expect(msg.color).toBe("#dc2626");
@@ -68,7 +71,7 @@ describe("runChart", () => {
         ],
       },
     }));
-    const msg = await runChart({ ticker: "AAPL" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "AAPL" }, STORE, PROVIDERS, RUNTIME);
     expect(msg.text).toBe("**Apple Inc. (AAPL)** 1d · 103.00 USD ▲ +3.00 (+3.00%)");
   });
 
@@ -85,7 +88,7 @@ describe("runChart", () => {
         ],
       },
     }));
-    const msg = await runChart({ ticker: "AAPL", range: "1m" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "AAPL", range: "1m" }, STORE, PROVIDERS, RUNTIME);
     expect(msg.text).toBe("**애플 (AAPL)** 1m · 104.00 USD ▲ +4.00 (+4.00%)");
   });
 
@@ -102,7 +105,7 @@ describe("runChart", () => {
         ],
       },
     }));
-    const msg = await runChart({ ticker: "엔화" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "엔화" }, STORE, PROVIDERS, RUNTIME);
     expect(msg.text).toBe("**엔/원 (JPYKRW=X, 100엔)** 1d · 869.70 KRW ▼ -1.90 (-0.22%)");
   });
 
@@ -119,7 +122,7 @@ describe("runChart", () => {
         ],
       },
     }));
-    const msg = await runChart({ ticker: "나스닥", range: "1m" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "나스닥", range: "1m" }, STORE, PROVIDERS, RUNTIME);
     expect(msg.text).toBe("**나스닥 (^IXIC)** 1m · 2,525.25 ▲ +25.25 (+1.01%)");
   });
 
@@ -130,7 +133,7 @@ describe("runChart", () => {
       if (u.pathname.endsWith("/finance/search")) return { quotes: [{ symbol: "000660.KS", shortname: "SK hynix", quoteType: "EQUITY" }] };
       return series;
     });
-    const msg = await runChart({ ticker: "hynix", range: "1y" }, STORE, PROVIDERS);
+    const msg = await runChart({ ticker: "hynix", range: "1y" }, STORE, PROVIDERS, RUNTIME);
     expect(urls.map((u) => u.pathname)).toEqual([
       "/v8/finance/chart/hynix",
       "/v1/finance/search",
@@ -142,12 +145,12 @@ describe("runChart", () => {
 
   it("logs why a chart failed and reserves the error level for upstream faults", async () => {
     const logs = captureLogs();
-    await expect(runChart({ ticker: " " }, STORE, PROVIDERS)).rejects.toThrow("종목");
-    await expect(runChart({ ticker: "AAPL", from: "2026-01-01" }, STORE, PROVIDERS)).rejects.toThrow("함께");
+    await expect(runChart({ ticker: " " }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("종목");
+    await expect(runChart({ ticker: "AAPL", from: "2026-01-01" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("함께");
     stub((u) => (u.pathname.endsWith("/finance/search") ? { quotes: [] } : notFound));
-    await expect(runChart({ ticker: "zzzz" }, STORE, PROVIDERS)).rejects.toThrow("찾지 못했습니다");
+    await expect(runChart({ ticker: "zzzz" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("찾지 못했습니다");
     stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
-    await expect(runChart({ ticker: "AAPL", range: "1m" }, STORE, PROVIDERS)).rejects.toThrow("부족");
+    await expect(runChart({ ticker: "AAPL", range: "1m" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("부족");
     expect(logs("chart.failed").map((e) => [e.level, e["error.type"], e["chart.ticker"]])).toEqual([
       ["warn", "invalid_args", " "],
       ["warn", "invalid_args", "AAPL"],
@@ -158,26 +161,26 @@ describe("runChart", () => {
 
   it("surfaces the original error when search finds nothing", async () => {
     stub((u) => (u.pathname.endsWith("/finance/search") ? { quotes: [] } : notFound));
-    await expect(runChart({ ticker: "zzzz" }, STORE, PROVIDERS)).rejects.toThrow("'zzzz' 시세를 찾지 못했습니다.");
+    await expect(runChart({ ticker: "zzzz" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("'zzzz' 시세를 찾지 못했습니다.");
   });
 
   it("does not search when KV resolved the alias, even if the symbol is missing upstream", async () => {
     await ENV.KV.put(SYMBOLS_KEY, JSON.stringify([{ key: "LG", value: "003550.KS" }]));
     const urls = stub(() => notFound);
-    await expect(runChart({ ticker: "LG" }, STORE, PROVIDERS)).rejects.toThrow("찾지 못했습니다");
+    await expect(runChart({ ticker: "LG" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("찾지 못했습니다");
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/003550.KS"]);
   });
 
   it("does not search when the error is 'not enough data'", async () => {
     const urls = stub(() => ({ chart: { result: [{ meta: {}, timestamp: [1], indicators: { quote: [{ close: [1] }] } }] } }));
-    await expect(runChart({ ticker: "AAPL" }, STORE, PROVIDERS)).rejects.toThrow("부족");
+    await expect(runChart({ ticker: "AAPL" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("부족");
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/AAPL", "/v8/finance/chart/AAPL"]);
     expect(urls.map((u) => u.searchParams.get("range"))).toEqual(["1d", "5d"]);
   });
 
   it("does not search for Hangul tickers that miss KV", async () => {
     const urls = stub(() => notFound);
-    await expect(runChart({ ticker: "없는종목" }, STORE, PROVIDERS)).rejects.toThrow("찾지 못했습니다");
+    await expect(runChart({ ticker: "없는종목" }, STORE, PROVIDERS, RUNTIME)).rejects.toThrow("찾지 못했습니다");
     expect(urls.map((u) => u.pathname)).toEqual(["/v8/finance/chart/%EC%97%86%EB%8A%94%EC%A2%85%EB%AA%A9"]);
   });
 });

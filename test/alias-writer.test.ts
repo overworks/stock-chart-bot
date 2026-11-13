@@ -1,3 +1,4 @@
+import type { Env } from "../cloudflare/env";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, expect, it, vi } from "vitest";
 import { AliasWriter } from "../cloudflare/alias-writer";

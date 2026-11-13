@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "npm run dev:cloudflare --",
-    "dev:cloudflare": "wrangler dev --config cloudflare/wrangler.jsonc --persist-to .wrangler/state",
+    "dev:cloudflare": "wrangler dev cloudflare/index.ts --config cloudflare/wrangler.jsonc --persist-to .wrangler/state",
     "deploy": "npm run deploy:cloudflare --",
-    "deploy:cloudflare": "wrangler deploy --config cloudflare/wrangler.jsonc",
-    "build:cloudflare": "wrangler deploy --config cloudflare/wrangler.jsonc --dry-run --outdir dist",
+    "deploy:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc",
+    "build:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc --dry-run --outdir dist",
     "typecheck": "tsc --noEmit",
     "setup:wasm": "mkdir -p wasm && cp node_modules/@resvg/resvg-wasm/index_bg.wasm wasm/resvg.wasm",
     "postinstall": "npm run setup:wasm",

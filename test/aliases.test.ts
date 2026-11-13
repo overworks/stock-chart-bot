@@ -1,3 +1,4 @@
+import type { Env } from "../cloudflare/env";
 import { createSymbolStore, ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

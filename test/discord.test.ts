@@ -1,6 +1,7 @@
+import type { Env } from "../cloudflare/env";
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import worker from "../src/index";
+import worker from "../cloudflare/index";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
 import { resetSymbolCache } from "../src/core/symbols";
 import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";

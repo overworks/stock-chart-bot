@@ -7,6 +7,7 @@ export default defineConfig({
   root: fileURLToPath(new URL("../", import.meta.url)),
   plugins: [
     cloudflareTest({
+      main: fileURLToPath(new URL("./index.ts", import.meta.url)),
       wrangler: { configPath: fileURLToPath(new URL("./wrangler.jsonc", import.meta.url)) },
       miniflare: {
         bindings: {

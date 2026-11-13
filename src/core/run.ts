@@ -1,10 +1,9 @@
-import { tracing } from "cloudflare:workers";
 import { parseChartArgs } from "./command";
 import { buildSvg, summarizeChange } from "./chart";
 import { buildTitle, displayCurrency, displayRule, scaleSeries } from "./display";
 import { exceptionAttributes, logEvent } from "./log";
 import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market";
-import { svgToPng } from "./render";
+import { noopTracer, type ChartRuntime } from "./runtime";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { ChartRequest, OutgoingMessage } from "./types";
 import type { SymbolReader } from "./storage";
@@ -17,7 +16,9 @@ export function runChart(
   args: Record<string, string | undefined>,
   symbols: SymbolReader,
   providers: Providers,
+  runtime: ChartRuntime,
 ): Promise<OutgoingMessage> {
+  const tracing = runtime.tracer ?? noopTracer;
   return tracing.enterSpan("chart", async (span) => {
     const started = Date.now();
     let req: ChartRequest | undefined;
@@ -51,7 +52,7 @@ export function runChart(
       const title = buildTitle(symbol, name, rule?.label);
       const reference = parsed.range === "1d" && !parsed.from ? previousClose : undefined;
       const png = await tracing.enterSpan("chart.render", () =>
-        svgToPng(buildSvg(bars, title, { period: label, timeZone, currency, style: parsed.style, volume: parsed.volume, reference, source, intraday, regularHours })),
+        runtime.render(buildSvg(bars, title, { period: label, timeZone, currency, style: parsed.style, volume: parsed.volume, reference, source, intraday, regularHours })),
       );
       const change = summarizeChange(bars, currency, reference);
 

@@ -1,8 +1,9 @@
 import { verifyKey } from "discord-interactions";
-import type { MutationIdentity, SymbolStore } from "../core/storage";
+import type { MutationIdentity } from "../core/storage";
 import { runAlias, searchAliases } from "../core/aliases";
 import { errorMessage, logEvent } from "../core/log";
-import type { Providers } from "../core/market";
+import type { BotConfig } from "../config";
+import type { BackgroundTasks, BotServices } from "../core/runtime";
 import { runChart } from "../core/run";
 import { searchSymbols } from "../core/symbols";
 import { helpText } from "./help";
@@ -16,10 +17,9 @@ const MAX_CONTENT_LENGTH = 2000;
 
 export async function handleDiscord(
   req: Request,
-  env: Env,
-  ctx: ExecutionContext,
-  providers: Providers,
-  symbols: SymbolStore,
+  config: BotConfig,
+  tasks: BackgroundTasks,
+  services: BotServices,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
@@ -33,7 +33,7 @@ export async function handleDiscord(
     !/^\d+$/.test(timestamp) ||
     !Number.isSafeInteger(Number(timestamp)) ||
     Math.abs(Date.now() / 1000 - Number(timestamp)) > TOLERANCE_SEC ||
-    !(await verifyKey(body, signature, timestamp, env.DISCORD_PUBLIC_KEY))
+    !(await verifyKey(body, signature, timestamp, config.discordPublicKey))
   ) {
     return new Response("invalid request signature", { status: 401 });
   }
@@ -52,8 +52,8 @@ export async function handleDiscord(
     const query = String(focused?.value ?? "");
     const choices =
       isAliasCommand && focused?.name === "alias"
-        ? await searchAliases(query, symbols)
-        : await searchSymbols(query, symbols, providers);
+        ? await searchAliases(query, services.symbols)
+        : await searchSymbols(query, services.symbols, services.providers);
     return json({ type: 8, data: { choices } });
   }
 
@@ -63,7 +63,7 @@ export async function handleDiscord(
   }
 
   if (interaction.type === 2 && name === "stock-chart") {
-    ctx.waitUntil(serveChart(interaction, args, env, providers, symbols));
+    tasks.waitUntil(serveChart(interaction, args, config, services));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }
 
@@ -79,7 +79,7 @@ export async function handleDiscord(
       key: `discord:${interaction.id}`,
       expiresAt: (Number(timestamp) + TOLERANCE_SEC + 1) * 1000,
     };
-    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers, symbols, request));
+    tasks.waitUntil(serveAlias(interaction, { action, ...args }, config, services, request));
     return json({ type: 5 });
   }
 
@@ -114,22 +114,22 @@ function canManage(interaction: any): boolean {
   }
 }
 
-async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers, symbols: SymbolStore, request?: MutationIdentity): Promise<void> {
+async function serveAlias(interaction: any, args: Record<string, string | undefined>, config: BotConfig, services: BotServices, request?: MutationIdentity): Promise<void> {
   const started = Date.now();
   let content: string;
   let error: unknown;
   try {
-    content = await runAlias(args, symbols, providers, request);
+    content = await runAlias(args, services.symbols, services.providers, request);
   } catch (err) {
     error = err;
     content = `⚠️ ${errorMessage(err)}`;
   }
   await reportCommand({ platform: "discord", command: "stock-alias", action: args.action, started, error }, () =>
-    sendAliasContent(interaction, env, content),
+    sendAliasContent(interaction, config, content),
   );
 }
 
-async function sendAliasContent(interaction: any, env: Env, content: string): Promise<Response> {
+async function sendAliasContent(interaction: any, config: BotConfig, content: string): Promise<Response> {
   const chunks: string[] = [];
   while (content.length > MAX_CONTENT_LENGTH) {
     let end = content.lastIndexOf("\n", MAX_CONTENT_LENGTH);
@@ -143,10 +143,10 @@ async function sendAliasContent(interaction: any, env: Env, content: string): Pr
     if (content.startsWith("\n")) content = content.slice(1);
   }
   chunks.push(content);
-  let response = await patchOriginal(interaction, env, { content: chunks[0] });
+  let response = await patchOriginal(interaction, config, { content: chunks[0] });
   for (const chunk of chunks.slice(1)) {
     if (!response.ok) break;
-    response = await fetch(`${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}?wait=true`, {
+    response = await fetch(`${API}/webhooks/${config.discordApplicationId}/${interaction.token}?wait=true`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ content: chunk }),
@@ -158,17 +158,16 @@ async function sendAliasContent(interaction: any, env: Env, content: string): Pr
 async function serveChart(
   interaction: any,
   args: Record<string, string | undefined>,
-  env: Env,
-  providers: Providers,
-  symbols: SymbolStore,
+  config: BotConfig,
+  services: BotServices,
 ): Promise<void> {
-  const endpoint = `${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
+  const endpoint = `${API}/webhooks/${config.discordApplicationId}/${interaction.token}/messages/@original`;
   const started = Date.now();
   let error: unknown;
   let send: () => Promise<Response>;
   let fallback: (() => Promise<Response>) | undefined;
   try {
-    const result = await runChart(args, symbols, providers);
+    const result = await runChart(args, services.symbols, services.providers, services);
     const form = new FormData();
     form.append(
       "payload_json",
@@ -190,16 +189,16 @@ async function serveChart(
       );
     }
     send = () => fetch(endpoint, { method: "PATCH", body: form });
-    fallback = () => patchOriginal(interaction, env, { content: DELIVERY_FAILED_TEXT });
+    fallback = () => patchOriginal(interaction, config, { content: DELIVERY_FAILED_TEXT });
   } catch (err) {
     error = err;
-    send = () => patchOriginal(interaction, env, { content: `⚠️ ${errorMessage(err)}` });
+    send = () => patchOriginal(interaction, config, { content: `⚠️ ${errorMessage(err)}` });
   }
   await reportCommand({ platform: "discord", command: "stock-chart", started, error }, send, fallback);
 }
 
-function patchOriginal(interaction: any, env: Env, payload: unknown): Promise<Response> {
-  return fetch(`${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`, {
+function patchOriginal(interaction: any, config: BotConfig, payload: unknown): Promise<Response> {
+  return fetch(`${API}/webhooks/${config.discordApplicationId}/${interaction.token}/messages/@original`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
