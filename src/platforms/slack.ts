@@ -2,6 +2,7 @@ import { ALIAS_USAGE, runAlias } from "../core/aliases";
 import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
 import { errorMessage, logEvent } from "../core/log";
 import type { Providers } from "../core/market";
+import type { SymbolStore } from "../core/storage";
 import { runChart } from "../core/run";
 import { storeChart } from "../core/store";
 import { helpText } from "./help";
@@ -16,6 +17,7 @@ export async function handleSlack(
   env: Env,
   ctx: ExecutionContext,
   providers: Providers,
+  symbols: SymbolStore,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
@@ -30,14 +32,14 @@ export async function handleSlack(
   const responseUrl = form.get("response_url") ?? "";
   const command = form.get("command");
   if (command === "/stock-help") return ephemeral(helpText("slack"));
-  if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx, providers);
+  if (command === "/stock-alias") return handleAlias(form, responseUrl, env, ctx, providers, symbols);
   if (command !== "/stock-chart") return ephemeral("알 수 없는 명령입니다.");
 
   const args = parseText(form.get("text") ?? "");
   if (!args.ticker || !responseUrl) return ephemeral(USAGE);
 
   const origin = new URL(req.url).origin;
-  ctx.waitUntil(serveChart(responseUrl, origin, args, env, providers));
+  ctx.waitUntil(serveChart(responseUrl, origin, args, env, providers, symbols));
   return ephemeral("차트를 만드는 중입니다…");
 }
 
@@ -47,6 +49,7 @@ async function handleAlias(
   env: Env,
   ctx: ExecutionContext,
   providers: Providers,
+  symbols: SymbolStore,
 ): Promise<Response> {
   const args = parseAliasText(form.get("text") ?? "");
   if (!args.action || !responseUrl) return ephemeral(ALIAS_USAGE);
@@ -56,7 +59,7 @@ async function handleAlias(
     return ephemeral("⚠️ 별칭 변경 권한이 없습니다. `SLACK_ALIAS_ADMINS`에 등록된 사용자만 바꿀 수 있습니다.");
   }
   ctx.waitUntil(
-    runAlias(args, env, providers).then(
+    runAlias(args, symbols, providers).then(
       (text) => reportCommand(report, () => post(responseUrl, { response_type: args.action === "list" ? "ephemeral" : "in_channel", text })),
       (err) => reportCommand({ ...report, error: err }, () => post(responseUrl, { response_type: "ephemeral", text: `⚠️ ${errorMessage(err)}` })),
     ),
@@ -103,12 +106,13 @@ async function serveChart(
   args: Record<string, string | undefined>,
   env: Env,
   providers: Providers,
+  symbols: SymbolStore,
 ): Promise<void> {
   const started = Date.now();
   let error: unknown;
   let payload: unknown;
   try {
-    const result = await runChart(args, env, providers);
+    const result = await runChart(args, symbols, providers);
     const blocks: unknown[] = [{ type: "section", text: { type: "mrkdwn", text: toMrkdwn(result.text) } }];
     if (result.image) {
       const key = await storeChart(env.CHARTS, result.image.png);

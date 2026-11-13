@@ -1,8 +1,7 @@
-import { mutateAlias, type MutationIdentity } from "./alias-writer";
+import type { MutationIdentity, SymbolReader, SymbolStore } from "./storage";
 import { logEvent } from "./log";
 import { getPrices, SymbolNotFoundError, type Providers } from "./market";
 import {
-  ALIASES_KEY,
   isAsciiQuery,
   loadSymbols,
   looksLikeSymbol,
@@ -23,16 +22,15 @@ const LIST_LIMIT = 50;
 export const ALIAS_USAGE =
   "사용법: `/stock-alias add <별칭> <종목명|심볼>`, `/stock-alias remove <별칭>`, `/stock-alias list`";
 
-export async function listAliases(kv: KVNamespace): Promise<SymbolEntry[]> {
-  return (await kv.get<SymbolEntry[]>(ALIASES_KEY, "json")) ?? [];
+export async function listAliases(store: SymbolReader): Promise<SymbolEntry[]> {
+  return store.readAliases();
 }
 
 /** 사용자 별칭을 추가한다. 종목은 이름·심볼 어느 쪽이든 받고, 실제 심볼로 확정해 저장한다. */
 export async function addAlias(
-  kv: KVNamespace,
+  store: SymbolStore,
   aliasInput: string,
   targetInput: string,
-  writer: DurableObjectNamespace,
   providers: Providers,
   request?: MutationIdentity,
 ): Promise<{ alias: string; symbol: string; display: string }> {
@@ -42,30 +40,30 @@ export async function addAlias(
   if (alias.length > MAX_ALIAS_LEN) throw new Error(`별칭은 ${MAX_ALIAS_LEN}자 이하여야 합니다.`);
   if (looksLikeSymbol(alias)) throw new Error("심볼 형식(005930.KS, KRW=X 등)은 별칭으로 쓸 수 없습니다.");
 
-  const user = await listAliases(kv);
-  const { byKey, byValue } = await loadSymbols(kv);
+  const user = await listAliases(store);
+  const { byKey, byValue } = await loadSymbols(store);
   const existing = byKey.get(alias);
   if (existing !== undefined && !user.some((e) => e.key === alias)) {
     throw new Error(`'${alias}'은(는) 이미 종목명으로 등록돼 있습니다 (${existing}).`);
   }
 
-  const { symbol, display } = await resolveTarget(target, kv, byKey, byValue, providers);
-  await mutateAlias(writer, { key: alias, value: symbol, request });
-  resetSymbolCache();
+  const { symbol, display } = await resolveTarget(target, store, byKey, byValue, providers);
+  await store.mutateAlias({ key: alias, value: symbol, request });
+  resetSymbolCache(store);
   return { alias, symbol, display };
 }
 
-export async function removeAlias(aliasInput: string, writer: DurableObjectNamespace, request?: MutationIdentity): Promise<SymbolEntry> {
+export async function removeAlias(aliasInput: string, store: SymbolStore, request?: MutationIdentity): Promise<SymbolEntry> {
   const alias = aliasInput.trim();
   if (!alias) throw new Error(ALIAS_USAGE);
-  const hit = await mutateAlias(writer, { key: alias, request });
-  resetSymbolCache();
+  const hit = await store.mutateAlias({ key: alias, request });
+  resetSymbolCache(store);
   return hit;
 }
 
 async function resolveTarget(
   target: string,
-  kv: KVNamespace,
+  store: SymbolReader,
   byKey: Map<string, string>,
   byValue: Map<string, string>,
   providers: Providers,
@@ -84,7 +82,7 @@ async function resolveTarget(
       if (symbolInput) throw notFound;
     }
   }
-  const hit = (await searchSymbols(target, kv, providers))[0];
+  const hit = (await searchSymbols(target, store, providers))[0];
   if (hit) return { symbol: hit.value, display: byValue.has(hit.value) ? label(hit.value, byValue) : hit.name };
   throw notFound;
 }
@@ -97,25 +95,25 @@ function label(symbol: string, byValue: Map<string, string>, fallback?: string):
 /** 어댑터 공용 진입점. 결과 메시지를 돌려주고 실패는 Error로 던진다. */
 export async function runAlias(
   args: AliasArgs,
-  env: { KV: KVNamespace; ALIAS_WRITER: DurableObjectNamespace },
+  store: SymbolStore,
   providers: Providers,
   request?: MutationIdentity,
 ): Promise<string> {
   switch (args.action) {
     case "add": {
-      const r = await addAlias(env.KV, args.alias ?? "", args.target ?? "", env.ALIAS_WRITER, providers, request);
+      const r = await addAlias(store, args.alias ?? "", args.target ?? "", providers, request);
       logEvent("log", "chart.alias.changed", { "chart.alias.action": "add", "chart.alias.name": r.alias, "chart.symbol": r.symbol });
       return `✅ 별칭 추가: ${r.alias} → ${r.display}`;
     }
     case "remove": {
-      const r = await removeAlias(args.alias ?? "", env.ALIAS_WRITER, request);
+      const r = await removeAlias(args.alias ?? "", store, request);
       logEvent("log", "chart.alias.changed", { "chart.alias.action": "remove", "chart.alias.name": r.key, "chart.symbol": r.value });
       return `🗑️ 별칭 삭제: ${r.key} → ${r.value}`;
     }
     case "list": {
-      const user = await listAliases(env.KV);
+      const user = await listAliases(store);
       if (!user.length) return "등록된 별칭이 없습니다.";
-      const { byValue } = await loadSymbols(env.KV);
+      const { byValue } = await loadSymbols(store);
       const lines = user.slice(0, LIST_LIMIT).map((e) => `• ${e.key} → ${label(e.value, byValue)}`);
       if (user.length > LIST_LIMIT) lines.push(`… 외 ${user.length - LIST_LIMIT}개`);
       return lines.join("\n");
@@ -126,10 +124,10 @@ export async function runAlias(
 }
 
 /** `/stock-alias remove` 자동완성용 */
-export async function searchAliases(query: string, kv: KVNamespace): Promise<{ name: string; value: string }[]> {
+export async function searchAliases(query: string, store: SymbolReader): Promise<{ name: string; value: string }[]> {
   const q = query.trim().toLowerCase();
-  const user = await listAliases(kv);
-  const { byValue } = await loadSymbols(kv);
+  const user = await listAliases(store);
+  const { byValue } = await loadSymbols(store);
   return user
     .filter((e) => !q || e.key.toLowerCase().includes(q))
     .slice(0, 25)

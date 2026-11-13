@@ -29,6 +29,8 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 
 ```
 cloudflare/
+├─ storage.ts            # KV 종목·별칭 읽기, DO 변경 호출, KIS 토큰 캐시
+├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # 리소스·번들 설정 예시 (실제 설정은 Git 제외)
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 시크릿은 Git 제외)
 └─ vitest.config.ts      # 저장소 루트의 test/**를 실행
@@ -39,9 +41,9 @@ src/
 │  ├─ types.ts         #   공통 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts       #   인자 검증·정규화
 │  ├─ market.ts        #   MarketProvider 인터페이스, SymbolNotFoundError, 시세 조회·검색 폴백
-│  ├─ symbols.ts       #   종목 목록(KV 단일 키 + 메모리 캐시) 검색 및 원격 검색 폴백
+│  ├─ storage.ts       #   SymbolReader·SymbolStore·TokenCache 및 공통 저장 타입
+│  ├─ symbols.ts       #   저장소별 메모리 캐시, 종목 검색 및 원격 검색 폴백
 │  ├─ aliases.ts       #   /stock-alias add|remove|list 비즈니스 로직
-│  ├─ alias-writer.ts  #   별칭 변경 직렬화 및 KV 복제를 담당하는 SQLite Durable Object
 │  ├─ display.ts       #   관행 단위 보정(JPYKRW=X → 100엔) 및 지수(^) 통화 단위 생략
 │  ├─ chart.ts         #   SVG 차트 생성 및 등락 요약
 │  ├─ render.ts        #   resvg-wasm SVG→PNG 변환 (fonts/ 번들 폰트 사용)
@@ -78,8 +80,10 @@ src/
   - 심볼당 정식명은 하나이며 나머지는 `alias: true`로 표시된다. 자동완성 표시명과 차트 제목에는 항상 정식명을 쓴다.
   - 실행 시 별칭은 **정확 일치**만 매핑하며, 심볼 형식 입력(`005930.KS`, `KRW=X`, `BTC-USD`, `^KS11` 등)은 별칭 매핑을 거치지 않는다.
 - **KV 및 Durable Object 사용**:
-  - 시드 종목 목록은 KV `symbols:v1`, 사용자 별칭은 `aliases:v1` 단일 키에 JSON 배열로 저장하며 KV `list`는 호출하지 않는다.
-  - 사용자 별칭(`aliases:v1`) 추가·삭제는 반드시 `ALIAS_WRITER` Durable Object(`mutateAlias`)를 거치며 KV를 직접 수정하지 않는다.
+  - 공통 종목·별칭 로직은 `src/core/storage.ts`의 `SymbolReader`·`SymbolStore`, KIS 토큰은 `TokenCache`를 주입받는다. KV 키와 Cloudflare 타입·접근 구현은 `cloudflare/storage.ts`에 둔다.
+  - Cloudflare 시드 종목 목록은 KV `symbols:v1`, 사용자 별칭은 `aliases:v1` 단일 키에 JSON 배열로 저장하며 KV `list`는 호출하지 않는다.
+  - Cloudflare 사용자 별칭(`aliases:v1`) 추가·삭제는 `SymbolStore.mutateAlias`의 Cloudflare 구현을 통해 반드시 `ALIAS_WRITER` Durable Object를 거치며 KV를 직접 수정하지 않는다. DO 클래스명 `AliasWriter`, 인스턴스명 `aliases:v1`, 기존 마이그레이션을 유지한다.
+  - 종목 메모리 캐시는 저장소 인스턴스별로 유지하며, 별칭 변경 성공 후 해당 저장소 캐시만 무효화한다. 동일 env의 제공자와 저장소 인스턴스는 진입점에서 재사용한다.
   - `/stock-alias` 변경 권한: Discord는 `ADMINISTRATOR`/`MANAGE_GUILD`, Slack은 `SLACK_ALIAS_ADMINS`로 검사한다(`list`는 전체 허용).
 - **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
 - **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. 운영 배포는 진입점 `src/index.ts`도 명시한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.

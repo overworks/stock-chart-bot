@@ -42,6 +42,8 @@ npm run build:cloudflare
 
 ```
 cloudflare/
+├─ storage.ts            # SymbolStore·TokenCache의 KV/DO 어댑터, KV 키 정의
+├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # Cloudflare 리소스·번들 설정 예시 (실제 wrangler.jsonc는 Git 제외)
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 .dev.vars는 Git 제외)
 └─ vitest.config.ts      # workerd 테스트 설정
@@ -52,9 +54,9 @@ src/
 │  ├─ types.ts           #   공통 데이터 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts         #   커맨드 인자 검증 및 정규화
 │  ├─ market.ts          #   MarketProvider 인터페이스, SymbolNotFoundError, 시세 조회·원격 검색 폴백
-│  ├─ symbols.ts         #   종목 목록 로드(KV 캐시), 별칭 해석, 초성·부분 일치 검색
+│  ├─ storage.ts         #   SymbolReader·SymbolStore·TokenCache 및 공통 저장 타입
+│  ├─ symbols.ts         #   저장소별 종목 캐시, 별칭 해석, 초성·부분 일치 검색
 │  ├─ aliases.ts         #   /stock-alias 비즈니스 로직 (add, remove, list, 자동완성)
-│  ├─ alias-writer.ts    #   별칭 변경 직렬화 및 KV 복제를 담당하는 SQLite Durable Object
 │  ├─ display.ts         #   관행 단위 보정(JPYKRW=X → 100엔) 및 지수(^) 통화 단위 생략
 │  ├─ chart.ts           #   차트 SVG 생성 및 등락률 요약
 │  ├─ render.ts          #   resvg-wasm 기반 SVG → PNG 렌더링 (번들 서브셋 폰트 사용)
@@ -91,7 +93,7 @@ scripts/
 
 ### 2. 데이터 소스 (`src/providers/`)
 
-`MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. `src/index.ts`는 KIS 토큰 메모리 캐시가 유지되도록 동일 `env`에서 조립 결과를 재사용해 어댑터에 주입한다.
+`MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. `src/index.ts`는 동일 `env`에서 제공자와 종목 저장소 인스턴스를 재사용해 각 메모리 캐시를 유지한다. KIS에는 `cloudflare/storage.ts`가 구현한 `TokenCache`를 주입하고, 제공자는 KV 타입이나 저장 키를 알지 않는다.
 
 - **선택·폴백 및 에러 구분**: `getPrices`는 `supports(symbol)`가 참(또는 미정의)인 제공자를 순서대로 시도하며, 실패 시 다음 제공자로 넘어간다. 존재하지 않는 심볼은 `SymbolNotFoundError`를, 그 외 오류는 일반 `Error`를 던진다. `runChart`의 영문 검색 재시도는 `SymbolNotFoundError`에만 반응한다.
 - **업비트 (`upbit.ts`)**: `KRW-*` 마켓만 전담한다. 24시간 거래 상품이므로 `continuous: true`(KST 표시)를 반환하며, 커스텀 날짜(`from`~`to`) 조회는 최대 2,000일까지 허용한다. `search`는 한글 질의나 `KRW-` 접두사일 때만 동작한다.
@@ -102,15 +104,16 @@ scripts/
 
 ### 3. 종목 목록과 검색 (`src/core/symbols.ts`)
 
-- **시드 및 캐시**: `scripts/fetch-krx-symbols.ts`가 KIND 상장법인(KOSPI·KOSDAQ), 네이버 금융 ETF·ETN, 업비트 원화 마켓, 수동 별칭(`scripts/symbols.manual.json`)을 병합해 `scripts/symbols.json`을 생성한다(영문 혼합 6자리 종목코드 포함). 시드 데이터는 KV 단일 키 `symbols:v1`에 저장하고 워커 메모리에 10분간 캐시하며, 무료 플랜 한도 보호를 위해 KV `list`는 사용하지 않는다.
+- **저장소 경계**: `src/core/storage.ts`의 `SymbolReader`는 `readSeed`·`readAliases`, `SymbolStore`는 여기에 `mutateAlias`를 제공한다. 검색·별칭·차트 로직은 이 계약을 받으며, KV 키와 DO 호출은 `cloudflare/storage.ts`가 담당한다. 시드가 비어 있다는 이벤트도 저장소 어댑터가 키 정보와 함께 기록한다.
+- **시드 및 캐시**: `scripts/fetch-krx-symbols.ts`가 KIND 상장법인(KOSPI·KOSDAQ), 네이버 금융 ETF·ETN, 업비트 원화 마켓, 수동 별칭(`scripts/symbols.manual.json`)을 병합해 `scripts/symbols.json`을 생성한다(영문 혼합 6자리 종목코드 포함). Cloudflare 시드 데이터는 KV 단일 키 `symbols:v1`에 저장하고 저장소 인스턴스별 메모리에 10분간 캐시하며, 무료 플랜 한도 보호를 위해 KV `list`는 사용하지 않는다. 동시 조회는 진행 중인 Promise를 공유하고, 조회 실패 시 다음 호출에서 재시도한다. 별칭 변경 성공 후 해당 저장소의 캐시를 무효화한다.
 - **정식명과 별칭**: 심볼당 정식명(`alias`가 없는 항목)은 하나뿐이며(KRX·업비트 등록명 우선, 없으면 수동 목록 첫 항목), 나머지는 `alias: true`로 표시된다. 자동완성 목록과 차트 제목에는 항상 정식명을 사용한다.
 - **검색**: 공백·대소문자를 무시한 **정확 일치 → 접두사 일치 → 부분 일치** 순으로 정렬하며 한글 초성 검색도 지원한다. 결과가 25개 미만이고 2자 이상의 ASCII 질의면 원격 검색(`searchRemote`)으로 보충한다.
 
-### 4. 사용자 별칭과 동시성 제어 (`src/core/aliases.ts`, `src/core/alias-writer.ts`)
+### 4. 사용자 별칭과 동시성 제어 (`src/core/aliases.ts`, `cloudflare/alias-writer.ts`)
 
 - 채팅에서 `/stock-alias`로 추가한 별칭은 KV의 `aliases:v1`에 저장되며 `loadSymbols`가 시드 목록 뒤에 합친다.
 - 별칭 대상은 정확히 일치하는 등록명을 먼저 확인하고, 영문 입력은 직접 시세 조회를 우선한다. 없는 심볼일 때만 부분 이름 검색으로 폴백하며, 시세 제공자 장애를 다른 종목으로 대체하지 않는다.
-- 별칭 추가·삭제는 단일 인스턴스 SQLite Durable Object인 `AliasWriter`(`ALIAS_WRITER` 바인딩)를 통해 직렬화한다. DO 내부 스토리지를 원본(source of truth)으로 삼고, KV 동일 키 쓰기 제한(초당 1회)을 준수하기 위해 최소 1.1초 간격으로 `aliases:v1`에 복제하며 실패 시 DO Alarm으로 재시도한다. 외부에서 `KV.put`으로 `aliases:v1`을 직접 수정하지 않는다.
+- 별칭 추가·삭제는 `SymbolStore.mutateAlias`에 변경 내용과 선택적인 요청 식별자·만료 시각을 전달한다. Cloudflare 어댑터는 단일 인스턴스 SQLite Durable Object인 `AliasWriter`(`ALIAS_WRITER` 바인딩, 인스턴스명 `aliases:v1`)를 호출해 직렬화한다. DO 내부 스토리지를 원본(source of truth)으로 삼고, KV 동일 키 쓰기 제한(초당 1회)을 준수하기 위해 최소 1.1초 간격으로 `aliases:v1`에 복제하며 실패 시 DO Alarm으로 재시도한다. 외부에서 `KV.put`으로 `aliases:v1`을 직접 수정하지 않는다.
 
 - 중복 방지 키가 주어진 변경은 처리 기록과 별칭을 같은 트랜잭션에 저장한다. 기록은 DO 재시작 후에도 유지하며 만료되면 알람으로 정리한다. KV 복제 실패의 재시도와 기록 정리를 같은 알람에서 구분한다.
 

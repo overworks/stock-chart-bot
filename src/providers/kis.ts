@@ -1,4 +1,5 @@
 import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
+import type { CachedToken, TokenCache } from "../core/storage";
 import { exceptionAttributes, logEvent } from "../core/log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries } from "../core/market";
 
@@ -12,7 +13,6 @@ const INDEX = new Map([
   ["^KQ11", "1001"],
   ["^KS200", "2001"],
 ]);
-const TOKEN_KEY = "kis:token:v1";
 const TOKEN_MARGIN = 3600;
 const MINUTE_PAGE = 120;
 const MAX_DAILY_PAGES = 20;
@@ -33,12 +33,7 @@ const EXTENDED: Session = { market: "UN", open: "080000", close: "200000" };
 export interface KisConfig {
   appKey: string;
   appSecret: string;
-  kv?: KVNamespace;
-}
-
-interface Token {
-  token: string;
-  expiresAt: number;
+  tokenCache?: TokenCache;
 }
 
 interface Row {
@@ -101,8 +96,8 @@ const RANGE: Record<string, { period: "D" | "W" | "M"; days: number } | { minute
 
 /** 한국투자증권 Open API. KRX 종목(.KS/.KQ)과 국내 지수(^KS11 등)를 맡는다. */
 export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketProvider {
-  let cached: Token | undefined;
-  let pending: Promise<Token> | undefined;
+  let cached: CachedToken | undefined;
+  let pending: Promise<CachedToken> | undefined;
 
   async function token(cfg: KisConfig): Promise<string> {
     const nowSec = Math.floor(now() / 1000);
@@ -300,15 +295,15 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
       return { bars, label, intraday, timeZone: "Asia/Seoul", currency: "KRW", source: provider.name, name, previousClose, regularHours } satisfies PriceSeries;
     },
 
-    // 종목 검색은 KV 목록과 Yahoo가 맡는다.
+    // 종목 검색은 시드 목록과 Yahoo가 맡는다.
     async search() {
       return [];
     },
   };
   return provider;
 
-  async function loadToken(cfg: KisConfig, nowSec: number): Promise<Token> {
-    const stored = await cfg.kv?.get<Token>(TOKEN_KEY, "json").catch((err) => {
+  async function loadToken(cfg: KisConfig, nowSec: number): Promise<CachedToken> {
+    const stored = await cfg.tokenCache?.get().catch((err) => {
       logEvent("warn", "chart.kis.token.cache_failed", { "chart.kis.token.cache_operation": "get", ...exceptionAttributes(err) });
       return null;
     });
@@ -326,7 +321,7 @@ export function createKis(cfg: KisConfig, now: () => number = Date.now): MarketP
     }
     const fresh = { token: access, expiresAt: nowSec + ttl };
     logEvent("log", "chart.kis.token.issued", { "chart.kis.token.ttl": ttl });
-    await cfg.kv?.put(TOKEN_KEY, JSON.stringify(fresh), { expirationTtl: Math.max(60, ttl - TOKEN_MARGIN) }).catch((err) => {
+    await cfg.tokenCache?.put(fresh, Math.max(60, ttl - TOKEN_MARGIN)).catch((err) => {
       logEvent("warn", "chart.kis.token.cache_failed", { "chart.kis.token.cache_operation": "put", ...exceptionAttributes(err) });
     });
     return fresh;

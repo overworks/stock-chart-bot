@@ -7,18 +7,15 @@ import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Pr
 import { svgToPng } from "./render";
 import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
 import type { ChartRequest, OutgoingMessage } from "./types";
+import type { SymbolReader } from "./storage";
 
 export { buildTitle };
-
-export interface CoreEnv {
-  KV: KVNamespace;
-}
 
 const DISPLAY_TZ = "Asia/Seoul";
 
 export function runChart(
   args: Record<string, string | undefined>,
-  env: CoreEnv,
+  symbols: SymbolReader,
   providers: Providers,
 ): Promise<OutgoingMessage> {
   return tracing.enterSpan("chart", async (span) => {
@@ -28,7 +25,7 @@ export function runChart(
     let resolved: "direct" | "alias" | "search" = "direct";
     try {
       const parsed = (req = parseChartArgs(args));
-      symbol = await tracing.enterSpan("chart.resolve", () => resolveSymbol(parsed.ticker, env.KV));
+      symbol = await tracing.enterSpan("chart.resolve", () => resolveSymbol(parsed.ticker, symbols));
       if (symbol !== parsed.ticker) resolved = "alias";
 
       let series = await tracing.enterSpan("chart.prices", async (): Promise<PriceSeries> => {
@@ -50,7 +47,7 @@ export function runChart(
       const { bars, label, previousClose, source, intraday, regularHours } = series;
       const currency = displayCurrency(symbol, series.currency);
       const timeZone = series.continuous ? DISPLAY_TZ : series.timeZone;
-      const name = (await symbolName(symbol, env.KV)) ?? series.name;
+      const name = (await symbolName(symbol, symbols)) ?? series.name;
       const title = buildTitle(symbol, name, rule?.label);
       const reference = parsed.range === "1d" && !parsed.from ? previousClose : undefined;
       const png = await tracing.enterSpan("chart.render", () =>

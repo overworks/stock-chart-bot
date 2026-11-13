@@ -1,7 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, expect, it, vi } from "vitest";
-import { AliasWriter } from "../src/core/alias-writer";
-import { ALIASES_KEY } from "../src/core/symbols";
+import { AliasWriter } from "../cloudflare/alias-writer";
+import { ALIASES_KEY } from "../cloudflare/storage";
 import { captureLogs } from "./logs";
 
 afterEach(() => vi.restoreAllMocks());

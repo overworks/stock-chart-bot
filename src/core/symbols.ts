@@ -1,17 +1,8 @@
-import { logEvent } from "./log";
 import { searchRemote, type Providers, type SymbolChoice } from "./market";
+import type { SymbolEntry, SymbolReader } from "./storage";
 
 export type { SymbolChoice };
-
-export interface SymbolEntry {
-  key: string;
-  value: string;
-  /** 검색에만 쓰고 표시명으로는 쓰지 않는 별칭 */
-  alias?: boolean;
-}
-
-export const SYMBOLS_KEY = "symbols:v1";
-export const ALIASES_KEY = "aliases:v1";
+export type { SymbolEntry } from "./storage";
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX = 25;
 
@@ -19,13 +10,18 @@ interface Loaded {
   entries: SymbolEntry[];
   byKey: Map<string, string>;
   byValue: Map<string, string>;
-  at: number;
 }
 
-let cache: Promise<Loaded> | null = null;
+interface CachedSymbols {
+  promise: Promise<Loaded>;
+  expiresAt: number;
+}
 
-export function resetSymbolCache(): void {
-  cache = null;
+let cache = new WeakMap<SymbolReader, CachedSymbols>();
+
+export function resetSymbolCache(store?: SymbolReader): void {
+  if (store) cache.delete(store);
+  else cache = new WeakMap();
 }
 
 /** Yahoo 심볼 형식(005930.KS, KRW=X, BTC-USD, ^KS11)이면 별칭 매핑을 건너뛴다. */
@@ -69,18 +65,15 @@ function jamoPattern(q: string): RegExp | null {
   }
 }
 
-export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
-  if (cache) {
-    const loaded = await cache;
-    if (Date.now() - loaded.at < CACHE_TTL_MS) return loaded;
-  }
-  cache = (async () => {
+export async function loadSymbols(store: SymbolReader): Promise<Loaded> {
+  const cached = cache.get(store);
+  if (cached && Date.now() < cached.expiresAt) return cached.promise;
+  const promise = (async () => {
     const [base, user] = await Promise.all([
-      kv.get<SymbolEntry[]>(SYMBOLS_KEY, "json"),
-      kv.get<SymbolEntry[]>(ALIASES_KEY, "json"),
+      store.readSeed(),
+      store.readAliases(),
     ]);
-    if (!base?.length) logEvent("error", "chart.symbols.missing", { "chart.symbols.key": SYMBOLS_KEY });
-    const entries = [...(base ?? []), ...(user ?? []).map((e) => ({ ...e, alias: true }))];
+    const entries = [...base, ...user.map((e) => ({ ...e, alias: true }))];
     const byKey = new Map<string, string>();
     const byValue = new Map<string, string>();
     for (const e of entries) {
@@ -89,34 +82,38 @@ export async function loadSymbols(kv: KVNamespace): Promise<Loaded> {
     }
     // 정식명이 없는 심볼은 첫 별칭을 표시명으로 쓴다.
     for (const e of entries) if (!byValue.has(e.value)) byValue.set(e.value, e.key);
-    return { entries, byKey, byValue, at: Date.now() };
+    return { entries, byKey, byValue };
   })();
+  const entry = { promise, expiresAt: Infinity };
+  cache.set(store, entry);
   try {
-    return await cache;
+    const loaded = await promise;
+    entry.expiresAt = Date.now() + CACHE_TTL_MS;
+    return loaded;
   } catch (err) {
-    cache = null;
+    if (cache.get(store) === entry) cache.delete(store);
     throw err;
   }
 }
 
-export async function symbolName(symbol: string, kv: KVNamespace): Promise<string | undefined> {
-  const { byValue } = await loadSymbols(kv);
+export async function symbolName(symbol: string, store: SymbolReader): Promise<string | undefined> {
+  const { byValue } = await loadSymbols(store);
   return byValue.get(symbol);
 }
 
 /** 별칭은 정확히 일치할 때만 적용한다. 심볼 형식 입력은 그대로 둔다. */
-export async function resolveSymbol(ticker: string, kv: KVNamespace): Promise<string> {
+export async function resolveSymbol(ticker: string, store: SymbolReader): Promise<string> {
   const t = ticker.trim();
   if (looksLikeSymbol(t)) return t;
-  const { byKey } = await loadSymbols(kv);
+  const { byKey } = await loadSymbols(store);
   return byKey.get(t) ?? t;
 }
 
-export async function searchSymbols(query: string, kv: KVNamespace, providers: Providers): Promise<SymbolChoice[]> {
+export async function searchSymbols(query: string, store: SymbolReader, providers: Providers): Promise<SymbolChoice[]> {
   const q = norm(query);
   if (!q) return [];
 
-  const { entries, byValue } = await loadSymbols(kv);
+  const { entries, byValue } = await loadSymbols(store);
   const jamo = hasJamo(q) ? jamoPattern(q) : null;
   const ranked: { score: number; e: SymbolEntry }[] = [];
   for (const e of entries) {

@@ -1,5 +1,5 @@
 import { verifyKey } from "discord-interactions";
-import type { MutationIdentity } from "../core/alias-writer";
+import type { MutationIdentity, SymbolStore } from "../core/storage";
 import { runAlias, searchAliases } from "../core/aliases";
 import { errorMessage, logEvent } from "../core/log";
 import type { Providers } from "../core/market";
@@ -19,6 +19,7 @@ export async function handleDiscord(
   env: Env,
   ctx: ExecutionContext,
   providers: Providers,
+  symbols: SymbolStore,
 ): Promise<Response> {
   if (req.method !== "POST") return new Response("", { status: 405 });
 
@@ -51,8 +52,8 @@ export async function handleDiscord(
     const query = String(focused?.value ?? "");
     const choices =
       isAliasCommand && focused?.name === "alias"
-        ? await searchAliases(query, env.KV)
-        : await searchSymbols(query, env.KV, providers);
+        ? await searchAliases(query, symbols)
+        : await searchSymbols(query, symbols, providers);
     return json({ type: 8, data: { choices } });
   }
 
@@ -62,7 +63,7 @@ export async function handleDiscord(
   }
 
   if (interaction.type === 2 && name === "stock-chart") {
-    ctx.waitUntil(serveChart(interaction, args, env, providers));
+    ctx.waitUntil(serveChart(interaction, args, env, providers, symbols));
     return json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
   }
 
@@ -78,7 +79,7 @@ export async function handleDiscord(
       key: `discord:${interaction.id}`,
       expiresAt: (Number(timestamp) + TOLERANCE_SEC + 1) * 1000,
     };
-    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers, request));
+    ctx.waitUntil(serveAlias(interaction, { action, ...args }, env, providers, symbols, request));
     return json({ type: 5 });
   }
 
@@ -113,12 +114,12 @@ function canManage(interaction: any): boolean {
   }
 }
 
-async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers, request?: MutationIdentity): Promise<void> {
+async function serveAlias(interaction: any, args: Record<string, string | undefined>, env: Env, providers: Providers, symbols: SymbolStore, request?: MutationIdentity): Promise<void> {
   const started = Date.now();
   let content: string;
   let error: unknown;
   try {
-    content = await runAlias(args, env, providers, request);
+    content = await runAlias(args, symbols, providers, request);
   } catch (err) {
     error = err;
     content = `⚠️ ${errorMessage(err)}`;
@@ -159,6 +160,7 @@ async function serveChart(
   args: Record<string, string | undefined>,
   env: Env,
   providers: Providers,
+  symbols: SymbolStore,
 ): Promise<void> {
   const endpoint = `${API}/webhooks/${env.DISCORD_APPLICATION_ID}/${interaction.token}/messages/@original`;
   const started = Date.now();
@@ -166,7 +168,7 @@ async function serveChart(
   let send: () => Promise<Response>;
   let fallback: (() => Promise<Response>) | undefined;
   try {
-    const result = await runChart(args, env, providers);
+    const result = await runChart(args, symbols, providers);
     const form = new FormData();
     form.append(
       "payload_json",

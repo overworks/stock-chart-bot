@@ -2,7 +2,8 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
-import { ALIASES_KEY, resetSymbolCache, SYMBOLS_KEY } from "../src/core/symbols";
+import { resetSymbolCache } from "../src/core/symbols";
+import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";
 import keypair from "./keypair.json" with { type: "json" };
 import { captureLogs } from "./logs";
 

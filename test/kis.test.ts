@@ -1,8 +1,10 @@
+import { createKisTokenCache } from "../cloudflare/storage";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProviders } from "../src/providers";
 import { createKis } from "../src/providers/kis";
 import { yahoo } from "../src/providers/yahoo";
 import { getPrices, SymbolNotFoundError } from "../src/core/market";
+import type { TokenCache } from "../src/core/storage";
 import { captureLogs } from "./logs";
 
 const NOW = Date.parse("2026-09-04T01:00:00Z"); // 10:00 KST
@@ -24,7 +26,7 @@ function memoryKv() {
 }
 
 function provider(kv?: KVNamespace, now = NOW) {
-  return createKis({ appKey: "key", appSecret: "secret", kv }, () => now);
+  return createKis({ appKey: "key", appSecret: "secret", tokenCache: kv && createKisTokenCache(kv) }, () => now);
 }
 
 type Handler = (url: URL, init: RequestInit) => { status?: number; body: unknown };
@@ -60,6 +62,27 @@ afterEach(() => {
 });
 
 describe("kis provider", () => {
+  it("uses a token cache without KV bindings and refreshes near expiry", async () => {
+    const tokenCache: TokenCache = {
+      get: vi.fn(async () => ({ token: "cached", expiresAt: NOW / 1000 + 7200 })),
+      put: vi.fn(async () => {}),
+    };
+    const calls = stub(() => ({ body: ok([day("20260904", 105), day("20260903", 100)]) }));
+    const cfg = { appKey: "key", appSecret: "secret", tokenCache };
+    const first = createKis(cfg, () => NOW);
+    await first.getPrices("005930.KS", { ticker: "x", range: "1m" });
+    expect(calls[0].init.headers).toMatchObject({ authorization: "Bearer cached" });
+    expect(calls.filter((call) => call.url.pathname === "/oauth2/tokenP")).toHaveLength(0);
+
+    const next = createKis(cfg, () => NOW + 3600_000);
+    await Promise.all([
+      next.getPrices("005930.KS", { ticker: "x", range: "1m" }),
+      next.getPrices("005930.KS", { ticker: "x", range: "1m" }),
+    ]);
+    expect(calls.filter((call) => call.url.pathname === "/oauth2/tokenP")).toHaveLength(1);
+    expect(tokenCache.put).toHaveBeenCalledWith({ token: "tok", expiresAt: NOW / 1000 + 3600 + 86_400 }, 82_800);
+  });
+
   it("only claims KRX symbols", () => {
     const p = provider();
     expect(p.supports!("005930.KS")).toBe(true);

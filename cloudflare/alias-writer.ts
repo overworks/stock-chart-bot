@@ -1,28 +1,8 @@
-import { exceptionAttributes, logEvent } from "./log";
-import { ALIASES_KEY, type SymbolEntry } from "./symbols";
+import { exceptionAttributes, logEvent } from "../src/core/log";
+import type { AliasMutation, SymbolEntry } from "../src/core/storage";
+import { ALIASES_KEY } from "./storage";
 
 const REQUEST_PREFIX = "request:";
-
-export interface MutationIdentity {
-  key: string;
-  expiresAt: number;
-}
-
-interface Mutation {
-  key: string;
-  value?: string;
-  request?: MutationIdentity;
-}
-
-export async function mutateAlias(namespace: DurableObjectNamespace, mutation: Mutation): Promise<SymbolEntry> {
-  const stub = namespace.get(namespace.idFromName(ALIASES_KEY));
-  const response = await stub.fetch("https://aliases/mutate", {
-    method: "POST",
-    body: JSON.stringify(mutation),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json<SymbolEntry>();
-}
 
 export class AliasWriter {
   private pending: Promise<unknown> = Promise.resolve();
@@ -36,7 +16,7 @@ export class AliasWriter {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const mutation = await request.json<Mutation>();
+    const mutation = await request.json<AliasMutation>();
     return this.enqueue(async () => {
       const storage = this.state.storage;
       const requestKey = mutation.request && `${REQUEST_PREFIX}${mutation.request.key}`;

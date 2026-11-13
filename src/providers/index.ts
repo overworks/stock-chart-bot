@@ -1,4 +1,5 @@
 import type { Providers } from "../core/market";
+import type { TokenCache } from "../core/storage";
 import { createKis } from "./kis";
 import { upbit } from "./upbit";
 import { yahoo } from "./yahoo";
@@ -7,11 +8,11 @@ export interface ProvidersConfig {
   kisAppKey?: string;
   kisAppSecret?: string;
   /** KIS 접근 토큰 캐시용 */
-  kv?: KVNamespace;
+  tokenCache?: TokenCache;
 }
 
 /** 앞에서부터 시도한다. KIS는 앱키와 시크릿이 모두 있을 때만 넣는다. */
-export function createProviders({ kisAppKey, kisAppSecret, kv }: ProvidersConfig = {}): Providers {
-  const kis = kisAppKey && kisAppSecret ? [createKis({ appKey: kisAppKey, appSecret: kisAppSecret, kv })] : [];
+export function createProviders({ kisAppKey, kisAppSecret, tokenCache }: ProvidersConfig = {}): Providers {
+  const kis = kisAppKey && kisAppSecret ? [createKis({ appKey: kisAppKey, appSecret: kisAppSecret, tokenCache })] : [];
   return [upbit, ...kis, yahoo];
 }
