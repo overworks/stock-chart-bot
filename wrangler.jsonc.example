@@ -18,13 +18,14 @@
     }
   },
   "kv_namespaces": [
-    { "binding": "KV", "id": "536161eca4ca4abcbdf454cd8f252b36" }
+    // 로컬 검증용 ID이며, 배포 전 본인의 KV 네임스페이스 ID로 변경한다.
+    { "binding": "KV", "id": "00000000000000000000000000000000" }
   ],
   "durable_objects": {
     "bindings": [{ "name": "ALIAS_WRITER", "class_name": "AliasWriter" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AliasWriter"] }],
   "r2_buckets": [
-    { "binding": "CHARTS", "bucket_name": "stock-chart-bot-charts" }
+    { "binding": "CHARTS", "bucket_name": "your-r2-bucket-name" }
   ]
 }

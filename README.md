@@ -78,13 +78,16 @@ Discord Developer Portal에서 앱을 생성해 **Application ID**, **Public Key
 
 ```bash
 npm install                                # postinstall에서 wasm/resvg.wasm 자동 복사
+cp wrangler.jsonc.example wrangler.jsonc    # 본인 Cloudflare 리소스 설정용 (Git 추적 제외)
+cp .dev.vars.example .dev.vars             # 로컬 개발 및 커맨드 등록용 환경변수 입력
 npx wrangler login
 npx wrangler kv namespace create stock-chart-bot --binding KV
-npx wrangler r2 bucket create stock-chart-bot-charts
-cp .dev.vars.example .dev.vars             # 로컬 개발 및 커맨드 등록용 환경변수 입력
+npx wrangler r2 bucket create your-r2-bucket-name
 ```
 
-`wrangler.jsonc`의 KV 네임스페이스 `id`를 생성된 값으로 변경한다.
+`wrangler.jsonc`의 KV 네임스페이스 `id`와 R2 `bucket_name`을 본인이 생성한 리소스 값으로 변경한다. 예시 파일의 KV ID는 로컬 테스트·빌드 검증용이므로 실제 배포·원격 KV 적재 전에 반드시 교체한다. Worker 이름도 필요에 따라 변경한다.
+
+저장소에는 `wrangler.jsonc.example`만 포함한다. 개인·운영 설정은 Git 추적에서 제외된 `wrangler.jsonc`에서 관리하며, 공통 설정 변경 시 예시 파일도 함께 갱신한다.
 
 ### 2. 시크릿 등록 및 종목 데이터 적재
 
@@ -96,7 +99,7 @@ npx wrangler secret put SLACK_SIGNING_SECRET      # Slack 연동 시
 npx wrangler secret put SLACK_ALIAS_ADMINS        # Slack 별칭 관리자 멤버 ID (쉼표 구분, 선택)
 npx wrangler secret put KIS_APP_KEY               # 한국투자증권 Open API (선택)
 npx wrangler secret put KIS_APP_SECRET            # 한국투자증권 Open API (선택)
-npx wrangler r2 bucket lifecycle add stock-chart-bot-charts expire-charts charts/ --expire-days 7
+npx wrangler r2 bucket lifecycle add your-r2-bucket-name expire-charts charts/ --expire-days 7
 npm run fetch:symbols                             # KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → scripts/symbols.json
 npm run seed:symbols                              # KV의 symbols:v1 키에 적재
 ```
@@ -123,8 +126,8 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ### 5. CI/CD 및 종목 목록 자동 갱신
 
-- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`를 등록해야 한다. 롤백은 `npx wrangler rollback`을 사용한다.
-- **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다.
+- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `wrangler.jsonc.example`을 복사해 실행하며, 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 `wrangler.jsonc` 전체 내용으로 설정 파일을 복원한다(Settings → Secrets and variables → Actions → Variables). Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 롤백은 `npx wrangler rollback`을 사용한다.
+- **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다. 원격 KV 적재에는 자동 배포와 동일한 Variable 및 두 가지 Secrets가 필요하다.
 
 ## 개발 및 기여
 

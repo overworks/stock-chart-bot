@@ -8,7 +8,7 @@
 ## 개발 환경 및 명령
 
 - **요구 사항**: Node.js 20.12 이상 (CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`)
-- **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp .dev.vars.example .dev.vars`로 로컬 시크릿을 설정한다. Cloudflare 리소스 생성 및 배포 절차는 [README.md](./README.md)를 참고한다.
+- **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp wrangler.jsonc.example wrangler.jsonc`로 로컬 설정을 만들고, `cp .dev.vars.example .dev.vars`로 로컬 시크릿을 설정한다. 예시 설정 그대로 로컬 테스트와 빌드 검증이 가능하며, 실제 배포·원격 KV 적재 전에는 본인의 리소스 값을 입력한다. Cloudflare 리소스 생성 및 배포 절차는 [README.md](./README.md)를 참고한다.
 
 | 명령 | 설명 |
 |---|---|
@@ -149,4 +149,5 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 ## 코딩 컨벤션 및 보안
 
 - **스타일 및 타입**: TypeScript `strict` 모드와 2칸 들여쓰기를 사용한다. 주석은 코드만으로 파악하기 어려운 배경 지식이나 제약 조건에만 간결하게 남기며, 사용자 노출 메시지는 한국어로 작성한다.
+- **Wrangler 설정**: `wrangler.jsonc`는 Git 추적에서 제외하며 `wrangler.jsonc.example`만 커밋한다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일, 운영 배포·KV 적재는 GitHub Actions Variable `WRANGLER_CONFIG`에 저장된 설정을 사용한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **시크릿 및 생성물**: 시크릿은 `.dev.vars`(로컬), `wrangler secret`(운영), GitHub Actions Secrets(CI)만 사용하며 코드·설정·로그에 노출하지 않는다. 생성물(`node_modules/`, `dist/`, `.dev.vars`, `wasm/*.wasm`)은 커밋하지 않는다.

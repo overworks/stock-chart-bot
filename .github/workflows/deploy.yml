@@ -14,6 +14,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - run: cp wrangler.jsonc.example wrangler.jsonc
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -29,6 +30,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Restore Wrangler configuration
+        env:
+          WRANGLER_CONFIG: ${{ vars.WRANGLER_CONFIG }}
+        run: |
+          if [ -z "$WRANGLER_CONFIG" ]; then
+            echo "::error::GitHub Actions Variables에 WRANGLER_CONFIG를 등록해야 합니다."
+            exit 1
+          fi
+          printf '%s\n' "$WRANGLER_CONFIG" > wrangler.jsonc
       - run: npm ci
       - uses: cloudflare/wrangler-action@v4
         with:

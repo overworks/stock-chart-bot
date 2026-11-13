@@ -2,6 +2,7 @@ node_modules/
 .wrangler/
 dist/
 .dev.vars
+/wrangler.jsonc
 *.log
 .DS_Store
 wasm/*.wasm

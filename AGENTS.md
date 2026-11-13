@@ -76,6 +76,7 @@ src/
   - 사용자 별칭(`aliases:v1`) 추가·삭제는 반드시 `ALIAS_WRITER` Durable Object(`mutateAlias`)를 거치며 KV를 직접 수정하지 않는다.
   - `/stock-alias` 변경 권한: Discord는 `ADMINISTRATOR`/`MANAGE_GUILD`, Slack은 `SLACK_ALIAS_ADMINS`로 검사한다(`list`는 전체 허용).
 - **시크릿 및 생성물**: 시크릿은 `.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
+- **Wrangler 설정**: `wrangler.jsonc`는 Git 추적에서 제외하고 `wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일, 운영 배포·KV 적재는 GitHub Actions Variable `WRANGLER_CONFIG`를 사용한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행하며 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.
 
 ## 완료 전 확인
@@ -88,4 +89,4 @@ src/
 ## 하지 말 것
 
 - 요청 없이 커밋하거나 push하지 않는다.
-- `.dev.vars`, `dist/`, `node_modules/`, `wasm/*.wasm`을 커밋하지 않는다.
+- `.dev.vars`, `wrangler.jsonc`, `dist/`, `node_modules/`, `wasm/*.wasm`을 커밋하지 않는다.
