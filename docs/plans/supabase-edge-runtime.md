@@ -3,7 +3,7 @@
 - 작성일: 2026-11-14
 - 기준 커밋: `cedd35f` (`main`)
 - 작업 브랜치: `feat/supabase-edge-runtime`
-- 현재 단계: 5단계 공통 타입 검사 및 import 경로 정리 완료. 다음 작업은 6단계 Supabase 저장소 어댑터 구현이다.
+- 현재 단계: 6단계 Supabase 저장소 어댑터 및 로컬 DB·Storage 검증 완료. 다음 작업은 7단계 Edge Functions 실행 연결이다.
 - 진행 방식: 한 번에 한 단계씩 구현·검증·커밋한 뒤 결과를 보고한다.
 
 ## 목표와 범위
@@ -206,7 +206,8 @@
 | 구현 3 | 완료 | `refactor: inject runtime services`, 아래 검증 기록 참고 |
 | 구현 4 | 완료 | `refactor: isolate provider HTTP cache options`, 아래 검증 기록 참고 |
 | 구현 5 | 완료 | `refactor: make shared code runtime independent`, 아래 검증 기록 참고 |
-| 구현 6–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
+| 구현 6 | 완료 | `feat: add Supabase persistence adapters`, 아래 검증 기록 참고 |
+| 구현 7–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
 
 기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기준 시점에 있던 `core`의 Cloudflare 의존성 제거 결과는 각 단계의 기록에서 확인한다.
 
@@ -264,6 +265,19 @@
 - `npm run typecheck`, `npm test`(16개 파일, 225개 테스트), `npm run build:cloudflare`를 통과했다. Node smoke도 외부 시세 호출을 고정 응답으로 대체해 한글 제목·캔들·거래량이 포함된 960×540 PNG를 생성했다.
 - Supabase의 실제 Deno 의존성 매핑과 Edge Runtime 실행 검증은 해당 구현 단계에서 진행한다.
 
+### 6단계 완료 기록
+
+- `supabase/migrations/`에 시드 문서·정렬된 별칭·요청 기록·토큰 캐시 테이블과 서버 역할 전용 RPC를 추가했다. RLS를 활성화하고 익명·일반 사용자의 테이블·함수·시퀀스 권한을 회수했다.
+- `mutate_chart_alias`는 트랜잭션 잠금으로 변경을 직렬화하고 별칭과 요청 기록을 함께 저장한다. 중복 요청의 만료 연장은 오류 결과와 함께 커밋하며, 예상하지 못한 SQL 오류는 변경 전체를 롤백한다. 만료 요청 기록은 변경 시 최대 128개씩 정리한다.
+- `read_chart_aliases`는 단일 JSON 스냅샷을 반환해 1,000행 제한 없이 원자적인 전체 목록을 읽는다. 별칭 갱신 순서·삭제 반환값·재전송 방지의 기존 의미를 보존했다.
+- `adapters.ts`가 공통 저장소·캐시·이미지 공개 계약을 구현한다. 토큰 만료와 캐시 TTL의 시간 단위를 구분하고, SDK 오류 원문을 사용자 메시지·로그에 전달하지 않는다. Storage는 공개 읽기 PNG 버킷, 5MiB 제한, 임의 객체 키, 86,400초 캐시 헤더를 사용한다.
+- 실제 로컬 스키마에서 DB 타입을 생성해 별도 Web 표준 타입 검사에 포함했다. 현재 SDK 2.119.0의 요구사항에 맞춰 개발 Node 최소 버전을 22로 명시했다. CI의 Node 버전은 기존 22를 유지한다.
+- SDK 단위 테스트 6개를 추가했다. 전체 `npm test`는 17개 파일·231개 테스트를 통과했고, `npm run typecheck`와 Cloudflare 배포 dry-run도 통과했다.
+- `npm run test:supabase`는 CLI 3.1.0·Docker로 임시 프로젝트와 임의 포트를 준비하고 마이그레이션을 적용한 뒤 별도 workerd 설정에서 실제 API를 검증한다. 자격증명은 테스트 바인딩에만 전달하고 종료 시 소유한 컨테이너·볼륨을 정리한다.
+- 실제 DB·Storage 통합 테스트 11개가 통과했다. 동시 추가·혼합 변경, 목록 순서, 프로세스 재생성 후 재전송·중복 만료 연장, SQL 실패 시 롤백, 만료 기록 정리, 1,005개 목록, 캐시 만료, 익명·인증 사용자의 접근 거부, 공개 PNG 바이트와 MIME 정책을 확인했다.
+- 개발 프로젝트 ID와 포트를 바꾼 복제 작업 공간에서도 11개 통합 테스트가 통과했다. 검증용 초기 스택과 테스트 스택을 모두 정리했고 기존 Docker 서비스는 유지했다.
+- Edge Functions 진입점·Deno 매핑은 7단계, 시드 적재·이미지 7일 정리·운영 CI는 8단계에서 연결한다. 원격 Supabase 프로젝트 변경이나 운영 웹훅 전환은 수행하지 않았다.
+
 ## 확인한 문서
 
 - [Supabase 의존성 관리](https://supabase.com/docs/guides/functions/dependencies): 함수별 `deno.json`, npm 패키지.
@@ -272,5 +286,7 @@
 - [Supabase 백그라운드 작업](https://supabase.com/docs/guides/functions/background-tasks): `EdgeRuntime.waitUntil`과 로컬 수명 설정.
 - [Supabase 웹훅 인증](https://supabase.com/docs/guides/functions/auth#external-webhooks): JWT 검사를 끄고 제공자 서명을 검증하는 방식.
 - [Supabase Storage 삭제](https://supabase.com/docs/guides/storage/management/delete-objects): Storage API로 파일 삭제, 배치 제한.
+- [Supabase DB 함수 권한](https://supabase.com/docs/guides/database/functions): invoker·search_path·역할별 EXECUTE 제한.
+- [Supabase 파일 업로드](https://supabase.com/docs/guides/storage/uploads/standard-uploads): MIME·캐시·upsert 옵션과 공개 URL 발급.
 - [Cloudflare 로컬 환경변수](https://developers.cloudflare.com/workers/local-development/environment-variables/): Wrangler 설정과 같은 디렉토리의 `.dev.vars`.
 - Wrangler 4.131.0의 로컬 `deploy --help`: 진입점 인자, `--config`, `--dry-run` 확인.

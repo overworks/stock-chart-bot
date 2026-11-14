@@ -3,16 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "npm run dev:cloudflare --",
     "dev:cloudflare": "wrangler dev cloudflare/index.ts --config cloudflare/wrangler.jsonc --persist-to .wrangler/state",
     "deploy": "npm run deploy:cloudflare --",
     "deploy:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc",
     "build:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc --dry-run --outdir dist",
-    "typecheck": "npm run check:boundaries && npm run typecheck:shared && npm run typecheck:cloudflare && npm run typecheck:scripts && npm run typecheck:tests",
+    "typecheck": "npm run check:boundaries && npm run typecheck:shared && npm run typecheck:cloudflare && npm run typecheck:supabase && npm run typecheck:scripts && npm run typecheck:tests",
     "check:boundaries": "tsx scripts/check-boundaries.ts",
     "typecheck:shared": "tsc --project tsconfig.json",
     "typecheck:cloudflare": "tsc --project cloudflare/tsconfig.json",
+    "typecheck:supabase": "tsc --project supabase/tsconfig.json",
     "typecheck:scripts": "tsc --project scripts/tsconfig.json",
     "typecheck:tests": "tsc --project test/tsconfig.json",
     "setup:wasm": "mkdir -p wasm && cp node_modules/@resvg/resvg-wasm/index_bg.wasm wasm/resvg.wasm",
@@ -24,11 +28,13 @@
     "seed:symbols:cloudflare": "wrangler kv key put symbols:v1 --config cloudflare/wrangler.jsonc --path scripts/symbols.json --binding KV --remote",
     "test": "npm run test:cloudflare --",
     "test:cloudflare": "vitest run --config cloudflare/vitest.config.ts",
+    "test:supabase": "tsx scripts/test-supabase.ts",
     "test:watch": "vitest --config cloudflare/vitest.config.ts",
     "fetch:symbols": "tsx scripts/fetch-krx-symbols.ts"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
+    "@supabase/supabase-js": "2.119.0",
     "discord-interactions": "^4.4.0"
   },
   "devDependencies": {

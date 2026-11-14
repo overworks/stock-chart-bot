@@ -74,7 +74,7 @@ Slack:   /stock-alias add <별칭> <종목명|심볼> | remove <별칭> | list
 
 ### 1. 사전 준비 및 리소스 생성
 
-Discord Developer Portal에서 앱을 생성해 **Application ID**, **Public Key**, **Bot Token**을 확보한 뒤 아래 명령을 실행한다.
+Node.js 22 이상을 준비하고 Discord Developer Portal에서 앱을 생성해 **Application ID**, **Public Key**, **Bot Token**을 확보한 뒤 아래 명령을 실행한다.
 
 ```bash
 npm install                                # postinstall에서 wasm/resvg.wasm 자동 복사
@@ -136,13 +136,15 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ```bash
 npm run dev                                        # 로컬 개발 서버 (http://localhost:8787)
-npm run typecheck                                  # import 경계와 공통·Cloudflare·Node·테스트 타입 검사
+npm run typecheck                                  # import 경계와 공통·Cloudflare·Supabase·Node·테스트 타입 검사
 npm test                                           # workerd 런타임에서 테스트 실행
 npm run build:cloudflare                            # 업로드 없이 배포 번들 검증
 npm run smoke -- "AAPL:1d,005930.KS:1m:candle"     # 로컬 PNG 렌더링 확인 (dist/smoke/)
 ```
 
 `dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. 로컬 개발 상태는 루트 `.wrangler/state`에 저장한다. 아키텍처, 내부 설계, 새 플랫폼·데이터 소스 추가 방법은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고한다.
+
+Supabase 저장소 어댑터를 검증하려면 Docker와 Supabase CLI 3.1.0을 준비한 뒤 `npm run test:supabase`를 실행한다. 전용 임시 프로젝트에 마이그레이션을 적용하고 실제 DB·Storage 권한을 검증한 뒤 테스트 컨테이너와 볼륨을 정리한다. 개발·운영 Supabase 프로젝트를 연결하거나 초기화할 필요가 없다. Edge Functions 진입점과 운영 배포 연결은 다음 단계에서 추가한다.
 
 ## 라이선스 고지
 

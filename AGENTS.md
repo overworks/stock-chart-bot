@@ -13,8 +13,9 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 | 목적 | 명령 |
 |---|---|
 | 로컬 개발 | `npm run dev` |
-| 타입 검사 | `npm run typecheck` (import 경계 + 공통·Cloudflare·Node·테스트) |
+| 타입 검사 | `npm run typecheck` (import 경계 + 공통·Cloudflare·Supabase·Node·테스트) |
 | 테스트 | `npm test` |
+| Supabase 통합 검증 | `npm run test:supabase` (Node 22+, Docker, Supabase CLI 3.1.0) |
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
 | 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → `scripts/symbols.json`) |
 | KV 심볼 시드 | `npm run seed:symbols` (`scripts/symbols.json` → KV `symbols:v1`) |
@@ -24,6 +25,8 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 | WASM 복사 | `npm run setup:wasm` |
 
 `dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. Cloudflare 설정·시크릿·Vitest 설정은 `cloudflare/`에 두며, 로컬 개발 상태는 루트 `.wrangler/state`를 사용한다.
+
+Supabase 저장소 구현은 `supabase/functions/stock-chart-bot/adapters.ts`, 스키마는 `supabase/migrations/`에 둔다. `supabase/tsconfig.json`으로 별도 검사하며 SDK 타입을 공통 코드로 전달하지 않는다. 개발 도구는 Node.js 22 이상을 사용한다.
 
 ## 구조
 
@@ -97,9 +100,15 @@ src/
   - Cloudflare 사용자 별칭(`aliases:v1`) 추가·삭제는 `SymbolStore.mutateAlias`의 Cloudflare 구현을 통해 반드시 `ALIAS_WRITER` Durable Object를 거치며 KV를 직접 수정하지 않는다. DO 클래스명 `AliasWriter`, 인스턴스명 `aliases:v1`, 기존 마이그레이션을 유지한다.
   - 종목 메모리 캐시는 저장소 인스턴스별로 유지하며, 별칭 변경 성공 후 해당 저장소 캐시만 무효화한다. 동일 env의 제공자와 저장소 인스턴스는 진입점에서 재사용한다.
   - `/stock-alias` 변경 권한: Discord는 `ADMINISTRATOR`/`MANAGE_GUILD`, Slack은 `SLACK_ALIAS_ADMINS`로 검사한다(`list`는 전체 허용).
+- **Supabase 저장소**:
+  - 테이블·함수는 서버 역할에만 허용하고 RLS를 활성화한다. 일반 사용자·익명 역할에 실행·쓰기 권한을 추가하지 않는다.
+  - 별칭 변경은 `mutate_chart_alias` RPC에서 잠금·변경·요청 기록을 한 트랜잭션으로 처리한다. 중복 요청의 만료 연장은 오류 결과를 반환하면서 커밋해야 하므로 SQL 예외로 대체하지 않는다.
+  - 별칭 목록은 `read_chart_aliases`의 단일 JSON 스냅샷을 사용해 1,000행 제한을 피한다. 토큰 만료는 초, 요청·캐시 만료는 밀리초 단위를 유지한다.
+  - SDK 오류의 원문에는 토큰 등 행 데이터가 들어갈 수 있으므로 사용자 메시지·로그에 전달하지 않는다. 공개 차트 URL에는 자격증명을 포함하지 않는다.
+  - 로컬 통합 검증은 `scripts/test-supabase.ts`가 임시 프로젝트·임의 포트·자격증명을 준비하고 소유한 컨테이너·볼륨만 정리한다. 개발·운영 DB에서 통합 테스트를 직접 실행하지 않는다.
 - **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
 - **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`를 명시해 기존 설정의 `main` 값과 호환한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.
-- **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행하며 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.
+- **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행한다. 단위 테스트의 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리하고, `test/supabase/**`는 전용 설정으로 임시 로컬 서비스에 연결한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.
 
 ## 완료 전 확인
 
@@ -107,6 +116,8 @@ src/
 2. `npm test` 통과
 3. `npm run build:cloudflare` 성공
 4. `src/core/**`에 플랫폼 의존성이나 `src/providers/**` import가 유입되지 않았는지 확인
+
+Supabase 저장소·마이그레이션을 변경하면 `npm run test:supabase`도 통과해야 한다.
 
 ## 하지 말 것
 

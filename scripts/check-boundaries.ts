@@ -36,7 +36,7 @@ function literal(value: unknown): string | undefined {
 export function checkBoundaries(root = PROJECT_ROOT): string[] {
   const errors: string[] = [];
   const src = resolve(root, "src");
-  for (const file of ["src", "cloudflare", "scripts", "test"].flatMap((dir) => files(resolve(root, dir)))) {
+  for (const file of ["src", "cloudflare", "supabase", "scripts", "test"].flatMap((dir) => files(resolve(root, dir)))) {
     const shared = inside(file, src);
     const core = inside(file, resolve(src, "core"));
     function report(node: Record<string, unknown>, message: string) {

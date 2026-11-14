@@ -7,14 +7,15 @@
 
 ## 개발 환경 및 명령
 
-- **요구 사항**: Node.js 20.12 이상 (CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`)
+- **요구 사항**: Node.js 22 이상 (Supabase SDK 요구사항, CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`). Supabase 통합 검증에는 Docker와 Supabase CLI 3.1.0이 필요하다.
 - **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc`로 로컬 설정을 만들고, `cp cloudflare/.dev.vars.example cloudflare/.dev.vars`로 로컬 시크릿을 설정한다. 예시 설정 그대로 로컬 테스트와 빌드 검증이 가능하며, 실제 배포·원격 KV 적재 전에는 본인의 리소스 값을 입력한다. Cloudflare 리소스 생성 및 기존 루트 설정의 이동 절차는 [README.md](./README.md)를 참고한다.
 
 | 명령 | 설명 |
 |---|---|
 | `npm run dev` | 로컬 개발 서버 실행 (`http://localhost:8787`) |
-| `npm run typecheck` | import 경계 검사와 공통·Cloudflare·Node·테스트 타입 검사 |
-| `npm test` | `workerd` 런타임에서 전체 테스트 실행 |
+| `npm run typecheck` | import 경계 검사와 공통·Cloudflare·Supabase·Node·테스트 타입 검사 |
+| `npm test` | `workerd` 런타임에서 단위·회귀 테스트 실행 |
+| `npm run test:supabase` | 임시 로컬 Supabase와 실제 API로 저장소 통합 검증 |
 | `npm run test:watch` | 테스트 워치 모드 실행 |
 | `npm run smoke -- "AAPL:1d,005930.KS:1m:candle"` | 실제 시세 조회 후 로컬 PNG 렌더링 확인 (`dist/smoke/`) |
 | `npm run fetch:symbols` | KIND 상장법인 + 네이버 ETF/ETN + 업비트 + 수동 별칭을 합쳐 `scripts/symbols.json` 생성 |
@@ -38,18 +39,23 @@ npm test
 npm run build:cloudflare
 ```
 
-타입 검사는 `tsconfig.base.json`의 공통 옵션을 공유하고 다음 네 범위로 실행한다.
+타입 검사는 `tsconfig.base.json`의 공통 옵션을 공유하고 다음 다섯 범위로 실행한다.
 
 | 범위 | 설정 | 개별 명령 |
 |---|---|---|
 | 공통 `src/**` | `tsconfig.json`: ES2022·DOM·DOM.Iterable, `types: []` | `npm run typecheck:shared` |
 | Workers 코드 | `cloudflare/tsconfig.json`: Workers 타입 | `npm run typecheck:cloudflare` |
+| Supabase 저장소 코드 | `supabase/tsconfig.json`: Web 표준 | `npm run typecheck:supabase` |
 | Node 스크립트 | `scripts/tsconfig.json`: Node 타입과 Web 표준 | `npm run typecheck:scripts` |
 | workerd 테스트·Vitest 설정 | `test/tsconfig.json`: Workers·Node·테스트 타입 | `npm run typecheck:tests` |
 
-`npm run typecheck`는 먼저 `npm run check:boundaries`를 실행한 뒤 네 타입 검사를 수행한다. CI도 같은 명령을 사용한다. 상대 경로는 디렉토리 생략 없이 실제 `.ts`·`.d.ts`·`.json` 등의 확장자를 명시한다. 공통 소스의 bare 패키지 import는 유지하고 Supabase의 의존성 매핑은 함수의 `deno.json`에서 관리한다.
+`npm run typecheck`는 먼저 `npm run check:boundaries`를 실행한 뒤 다섯 타입 검사를 수행한다. CI도 같은 명령을 사용한다. 상대 경로는 디렉토리 생략 없이 실제 `.ts`·`.d.ts`·`.json` 등의 확장자를 명시한다. 공통 소스의 bare 패키지 import는 유지하고 Supabase의 의존성 매핑은 함수의 `deno.json`에서 관리한다.
 
 `scripts/check-boundaries.ts`는 개발 전용 `@babel/parser`로 일반 import·re-export·type import·동적 import를 읽어 경계와 경로를 검사한다. 공통 코드에서 실행 환경 구현, Node 전용 모듈·전역, core에서 제공자·메신저 구현을 참조하면 실패한다. 주석·문자열 내용은 참조로 취급하지 않는다. `types: []`는 명시적인 SDK의 전이 타입 참조까지 제거하지 않으므로, Discord SDK가 노출하는 Node 전역의 사용도 이 검사로 차단한다.
+
+Supabase 저장소를 변경할 때는 `npm run test:supabase`를 추가 실행한다. 이 명령은 개발 설정과 별개의 임시 프로젝트 ID·임의 포트를 사용하고 SQL 마이그레이션만 복사한다. SDK 자격증명은 로컬 CLI에서 읽어 테스트 바인딩으로만 전달하며 출력하지 않는다. 성공·실패 후 해당 프로젝트의 컨테이너·볼륨을 정리하고, 실패 로그만 권한이 제한된 임시 디렉토리에 보존한다. 기존 Docker 서비스와 개발 데이터는 사용하지 않는다. 통합 테스트도 `workerd`에서 실행하며, 기본 `npm test`에서는 `test/supabase/**`를 제외한다.
+
+`supabase/config.toml`은 현재 DB·API·인증·Storage만 활성화한다. Edge Functions 진입점과 실행 설정은 다음 단계에서 연결한다. 스키마 변경 후 개발용 로컬 프로젝트에서 `supabase gen types --schema public --lang typescript`로 `supabase/functions/stock-chart-bot/database.types.ts`를 다시 생성하고 TypeScript 포맷을 적용한다.
 
 ## 프로젝트 구조
 
@@ -152,6 +158,22 @@ KIS의 인증·시세 요청은 기존 `fetch` 경로를 사용해 강제 캐시
 - 별칭 추가·삭제는 `SymbolStore.mutateAlias`에 변경 내용과 선택적인 요청 식별자·만료 시각을 전달한다. Cloudflare 어댑터는 단일 인스턴스 SQLite Durable Object인 `AliasWriter`(`ALIAS_WRITER` 바인딩, 인스턴스명 `aliases:v1`)를 호출해 직렬화한다. DO 내부 스토리지를 원본(source of truth)으로 삼고, KV 동일 키 쓰기 제한(초당 1회)을 준수하기 위해 최소 1.1초 간격으로 `aliases:v1`에 복제하며 실패 시 DO Alarm으로 재시도한다. 외부에서 `KV.put`으로 `aliases:v1`을 직접 수정하지 않는다.
 
 - 중복 방지 키가 주어진 변경은 처리 기록과 별칭을 같은 트랜잭션에 저장한다. 기록은 DO 재시작 후에도 유지하며 만료되면 알람으로 정리한다. KV 복제 실패의 재시도와 기록 정리를 같은 알람에서 구분한다.
+
+### Supabase 저장소 (`supabase/functions/stock-chart-bot/adapters.ts`)
+
+Supabase 구현도 같은 `SymbolStore`·`TokenCache`·`ImagePublisher`를 반환한다. 서비스 역할 클라이언트는 세션 저장·자동 갱신을 사용하지 않는다. 마이그레이션은 테이블 RLS를 활성화하고 익명·일반 사용자·PUBLIC의 테이블·함수·시퀀스 권한을 회수한 뒤 서버 역할만 허용한다.
+
+| 데이터 | 저장 방식 |
+|---|---|
+| `chart_symbol_catalog` | `symbols:v1` 한 행의 JSON 배열. 시드 전체 교체와 사용자 별칭을 분리한다. |
+| `chart_aliases` | 별칭별 행과 증가하는 정렬 번호. 갱신한 별칭은 목록 끝으로 이동한다. |
+| `chart_alias_requests` | 요청 고유 키와 만료 밀리초. 성공한 변경과 함께 저장하고, 변경 시 만료 기록을 최대 128개 정리한다. |
+| `chart_token_cache` | 토큰 자체 만료(초)와 캐시 TTL 만료(밀리초)를 구분한다. 만료된 캐시는 읽지 않는다. |
+| Storage `charts` 버킷 | PNG만 허용하는 공개 읽기 버킷. 5MiB 제한, 임의 UUID 키, 86,400초 캐시 헤더. 쓰기·삭제는 서버 역할만 허용한다. |
+
+`read_chart_aliases`는 단일 JSON 스냅샷을 반환해 API의 1,000행 제한과 페이지 사이 변경 문제를 피한다. `mutate_chart_alias`는 트랜잭션 잠금으로 변경을 직렬화하며 별칭과 요청 기록을 원자적으로 저장한다. 중복 요청에 대해 늘어난 만료 시각을 커밋해야 하므로 업무 오류는 예외를 발생시키지 않고 JSON 결과로 반환하고 어댑터가 한국어 오류로 변환한다. 예상하지 못한 DB 오류는 트랜잭션 전체를 롤백한다.
+
+SDK 오류 원문에는 실패한 행의 토큰이 포함될 수 있으므로 어댑터는 이를 메시지나 로그로 전달하지 않는다. 공개 URL에는 서비스 키를 포함하지 않는다. 이미지 7일 정리 작업과 운영 시드 적재는 운영 자동화 단계에서 연결한다.
 
 ### 5. 렌더링 및 이미지 전달 (`src/rendering/resvg.ts`, `cloudflare/images.ts`)
 
