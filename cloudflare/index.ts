@@ -6,6 +6,7 @@ import { renderPng } from "./assets";
 import { createImagePublisher, serveChart } from "./images";
 import { createKisTokenCache, createSymbolStore } from "./storage";
 import { workerTracer } from "./tracing";
+import { cloudflareMarketFetch } from "./http";
 
 let assembled: { env: Env; app: ReturnType<typeof createApp> } | undefined;
 
@@ -17,7 +18,12 @@ function appFor(env: Env) {
       slackSigningSecret: env.SLACK_SIGNING_SECRET,
       slackAliasAdmins: env.SLACK_ALIAS_ADMINS,
     }, {
-      providers: createProviders({ kisAppKey: env.KIS_APP_KEY, kisAppSecret: env.KIS_APP_SECRET, tokenCache: createKisTokenCache(env.KV) }),
+      providers: createProviders({
+        kisAppKey: env.KIS_APP_KEY,
+        kisAppSecret: env.KIS_APP_SECRET,
+        tokenCache: createKisTokenCache(env.KV),
+        marketFetch: cloudflareMarketFetch,
+      }),
       symbols: createSymbolStore(env),
       render: renderPng,
       tracer: workerTracer,

@@ -35,6 +35,7 @@ cloudflare/
 ├─ modules.d.ts          # WASM·TTF import 타입
 ├─ images.ts             # R2 이미지 공개 URL 발급 및 /charts/ 서빙
 ├─ tracing.ts            # Cloudflare tracing 어댑터
+├─ http.ts               # MarketFetch의 Cloudflare 캐시 옵션 변환
 ├─ storage.ts            # KV 종목·별칭 읽기, DO 변경 호출, KIS 토큰 캐시
 ├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # 리소스·번들 설정 예시 (실제 설정은 Git 제외)
@@ -47,6 +48,7 @@ src/
 │  ├─ types.ts         #   공통 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts       #   인자 검증·정규화
 │  ├─ market.ts        #   MarketProvider 인터페이스, SymbolNotFoundError, 시세 조회·검색 폴백
+│  ├─ http.ts          #   표준 요청 옵션과 캐시 시간 힌트를 받는 MarketFetch 계약
 │  ├─ storage.ts       #   SymbolReader·SymbolStore·TokenCache 및 공통 저장 타입
 │  ├─ symbols.ts       #   저장소별 메모리 캐시, 종목 검색 및 원격 검색 폴백
 │  ├─ aliases.ts       #   /stock-alias add|remove|list 비즈니스 로직
@@ -75,7 +77,8 @@ src/
 - **서명 검증 및 비동기 응답**: 서명 검증은 파싱 전 **원본 요청 문자열(`await req.text()`)**로 수행한다. 슬래시 커맨드는 3초 이내에 초기 응답(Discord `{ type: 5 }`, Slack 즉시 응답)을 반환하고 실제 작업은 주입받은 `BackgroundTasks.waitUntil`에서 처리해 웹훅으로 보낸다(Cloudflare는 `ctx.waitUntil`). 단, `/stock-help`는 외부 호출·저장소 접근·렌더러 초기화 없이 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`).
 - **슬래시 커맨드**: 지원하는 명령은 `/stock-chart`, `/stock-alias`, `/stock-help` 세 개뿐이며 그 외 명령은 등록·처리하지 않는다.
 - **시세·검색 제공자 (`src/providers/*`)**:
-  - 외부 시세·검색 API 호출은 `src/providers/*`에만 둔다. 제공자 목록은 `createProviders`로 조립해 `runChart`, `runAlias`, `searchSymbols`에 인자로 넘기며 `core`에 전역 목록이나 설정을 두지 않는다.
+  - 시세·검색 API 주소·요청 조건·응답 해석은 `src/providers/*`에만 둔다. 제공자 목록은 `createProviders`로 조립해 `runChart`, `runAlias`, `searchSymbols`에 인자로 넘기며 `core`에 전역 목록이나 설정을 두지 않는다.
+  - Yahoo·Upbit는 `MarketFetch`에 표준 `RequestInit`과 선택적인 캐시 시간(초)을 전달한다. `cf` 옵션은 `cloudflare/http.ts`에서만 추가하고 기본 제공자는 표준 `fetch`를 사용한다. KIS의 인증·시세 요청은 기존 전송 경로를 유지한다.
   - `search`는 자동완성마다 호출되므로 영문 질의에 불필요한 네트워크 호출을 추가하지 않는다(영문 원격 검색은 Yahoo만 담당).
   - 존재하지 않는 심볼은 `SymbolNotFoundError`, 그 외 오류는 일반 `Error`로 던진다. 실행 시 검색 폴백은 `SymbolNotFoundError`에만 반응한다.
 - **로그**: `logEvent`로 JSON 한 줄을 남기고 사용자 ID·토큰·웹훅 URL은 넣지 않는다. 이벤트 이름과 속성 키는 OpenTelemetry 시맨틱 컨벤션(점 구분 소문자 `snake_case`, 표준 속성 `error.type`·`exception.*`·`http.response.status_code` 우선, 앱 고유 속성은 `chart.*`)을 따르며 예외는 `exceptionAttributes(err)`로 남긴다. 어댑터 결과 전송은 `reportCommand`로 감싸고, 자동완성 성공 경로에는 로그를 추가하지 않는다. `src/core/market.ts`와 `src/providers/*`는 smoke 스크립트가 Node에서 불러오므로 `cloudflare:workers`를 import하지 않는다.

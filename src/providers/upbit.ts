@@ -1,3 +1,4 @@
+import type { MarketFetch } from "../core/http";
 import type { ChartBar, ChartRequest } from "../core/types";
 import { exceptionAttributes, logEvent } from "../core/log";
 import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
@@ -29,61 +30,66 @@ interface Candle {
 }
 
 /** 업비트 원화 마켓(KRW-BTC). 시세는 인증 없이 조회할 수 있고 요청당 200개까지 온다. */
-export const upbit: MarketProvider = {
-  name: "Upbit",
+export function createUpbit(marketFetch: MarketFetch = (input, init) => fetch(input, init)): MarketProvider {
+  const provider: MarketProvider = {
+    name: "Upbit",
 
-  supports(symbol) {
-    return MARKET.test(symbol);
-  },
+    supports(symbol) {
+      return MARKET.test(symbol);
+    },
 
-  async getPrices(symbol, req) {
-    const plan = buildPlan(req);
-    const rows = await fetchCandles(symbol, plan.path, plan.count, plan.to, plan.since);
-    let bars = rows.map(toBar).filter((b): b is ChartBar => b !== undefined).reverse();
-    if (plan.since !== undefined) bars = bars.filter((b) => b.t >= plan.since!);
-    if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
+    async getPrices(symbol, req) {
+      const plan = buildPlan(req);
+      const rows = await fetchCandles(marketFetch, symbol, plan.path, plan.count, plan.to, plan.since);
+      let bars = rows.map(toBar).filter((b): b is ChartBar => b !== undefined).reverse();
+      if (plan.since !== undefined) bars = bars.filter((b) => b.t >= plan.since!);
+      if (bars.length < 2) throw new Error(`'${symbol}' 데이터가 부족합니다.`);
 
-    let previousClose: number | undefined;
-    if (plan.label === "1d") {
-      const day = (await fetchCandles(symbol, "days", 1))[0];
-      previousClose = finite(day?.prev_closing_price);
-    }
-    return {
-      bars,
-      label: plan.label,
-      intraday: plan.intraday,
-      timeZone: "Asia/Seoul",
-      currency: "KRW",
-      source: upbit.name,
-      previousClose,
-      continuous: true,
-    } satisfies PriceSeries;
-  },
+      let previousClose: number | undefined;
+      if (plan.label === "1d") {
+        const day = (await fetchCandles(marketFetch, symbol, "days", 1))[0];
+        previousClose = finite(day?.prev_closing_price);
+      }
+      return {
+        bars,
+        label: plan.label,
+        intraday: plan.intraday,
+        timeZone: "Asia/Seoul",
+        currency: "KRW",
+        source: provider.name,
+        previousClose,
+        continuous: true,
+      } satisfies PriceSeries;
+    },
 
-  // 영문 질의는 Yahoo가 맡는다. 한글 이름이나 KRW- 마켓 코드일 때만 목록을 받는다.
-  async search(query) {
-    const q = query.trim();
-    if (!/[가-힣]/.test(q) && !/^krw-/i.test(q)) return [];
-    let markets: { market: string; korean_name: string }[];
-    try {
-      const res = await fetch(`${API}/market/all?is_details=false`, { cf: { cacheTtl: 3600, cacheEverything: true } } as RequestInit);
-      if (!res.ok) {
-        logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", "http.response.status_code": res.status });
+    // 영문 질의는 Yahoo가 맡는다. 한글 이름이나 KRW- 마켓 코드일 때만 목록을 받는다.
+    async search(query) {
+      const q = query.trim();
+      if (!/[가-힣]/.test(q) && !/^krw-/i.test(q)) return [];
+      let markets: { market: string; korean_name: string }[];
+      try {
+        const res = await marketFetch(`${API}/market/all?is_details=false`, undefined, 3600);
+        if (!res.ok) {
+          logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", "http.response.status_code": res.status });
+          return [];
+        }
+        markets = await res.json();
+      } catch (err) {
+        logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", ...exceptionAttributes(err) });
         return [];
       }
-      markets = await res.json();
-    } catch (err) {
-      logEvent("warn", "chart.search.failed", { "chart.provider.name": "upbit", ...exceptionAttributes(err) });
-      return [];
-    }
-    if (!Array.isArray(markets)) return [];
-    const norm = q.toLowerCase().replace(/\s+/g, "");
-    return markets
-      .filter((m) => MARKET.test(m.market) && (m.korean_name.replace(/\s+/g, "").includes(norm) || m.market.toLowerCase() === norm))
-      .slice(0, 25)
-      .map((m): SymbolChoice => ({ name: `${m.korean_name} (${m.market}, Upbit)`, value: m.market }));
-  },
-};
+      if (!Array.isArray(markets)) return [];
+      const norm = q.toLowerCase().replace(/\s+/g, "");
+      return markets
+        .filter((m) => MARKET.test(m.market) && (m.korean_name.replace(/\s+/g, "").includes(norm) || m.market.toLowerCase() === norm))
+        .slice(0, 25)
+        .map((m): SymbolChoice => ({ name: `${m.korean_name} (${m.market}, Upbit)`, value: m.market }));
+    },
+  };
+  return provider;
+}
+
+export const upbit = createUpbit();
 
 function buildPlan(req: ChartRequest): { path: string; count: number; to?: string; since?: number; label: string; intraday: boolean } {
   if (req.from && req.to) {
@@ -98,13 +104,13 @@ function buildPlan(req: ChartRequest): { path: string; count: number; to?: strin
   return { ...plan, label, since: days === undefined ? undefined : Math.floor(Date.now() / 1000) - days * 86_400 };
 }
 
-async function fetchCandles(market: string, path: string, count: number, to?: string, since?: number): Promise<Candle[]> {
+async function fetchCandles(marketFetch: MarketFetch, market: string, path: string, count: number, to?: string, since?: number): Promise<Candle[]> {
   const out: Candle[] = [];
   let cursor = to;
   while (out.length < count) {
     const n = Math.min(PAGE, count - out.length);
     const url = `${API}/candles/${path}?market=${encodeURIComponent(market)}&count=${n}${cursor ? `&to=${encodeURIComponent(cursor)}` : ""}`;
-    const res = await fetch(url, { cf: { cacheTtl: 60, cacheEverything: true } } as RequestInit);
+    const res = await marketFetch(url, undefined, 60);
     if (res.status === 404) throw new SymbolNotFoundError(`'${market}' 마켓을 업비트에서 찾지 못했습니다.`);
     if (res.status === 429) throw new Error("업비트 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.");
     if (!res.ok) throw new Error(`시세 조회 실패 (${res.status})`);

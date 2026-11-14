@@ -48,6 +48,7 @@ cloudflare/
 ├─ modules.d.ts          # WASM·TTF import 선언
 ├─ images.ts             # R2 이미지 공개 및 /charts/ 서빙
 ├─ tracing.ts            # Cloudflare tracing 어댑터
+├─ http.ts               # MarketFetch 캐시 힌트를 Cloudflare 옵션으로 변환
 ├─ storage.ts            # SymbolStore·TokenCache의 KV/DO 어댑터, KV 키 정의
 ├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # Cloudflare 리소스·번들 설정 예시 (실제 wrangler.jsonc는 Git 제외)
@@ -60,6 +61,7 @@ src/
 │  ├─ types.ts           #   공통 데이터 타입 (ChartBar, ChartRequest, OutgoingMessage 등)
 │  ├─ command.ts         #   커맨드 인자 검증 및 정규화
 │  ├─ market.ts          #   MarketProvider 인터페이스, SymbolNotFoundError, 시세 조회·원격 검색 폴백
+│  ├─ http.ts            #   MarketFetch 전송 계약 (표준 옵션 + 캐시 시간 힌트)
 │  ├─ storage.ts         #   SymbolReader·SymbolStore·TokenCache 및 공통 저장 타입
 │  ├─ symbols.ts         #   저장소별 종목 캐시, 별칭 해석, 초성·부분 일치 검색
 │  ├─ aliases.ts         #   /stock-alias 비즈니스 로직 (add, remove, list, 자동완성)
@@ -101,6 +103,17 @@ scripts/
 ### 2. 데이터 소스 (`src/providers/`)
 
 `MarketProvider` 인터페이스(`src/core/market.ts`)를 구현한 모듈을 `src/providers/index.ts`의 `createProviders`가 `[upbit, kis, yahoo]` 순서로 조립한다. `cloudflare/index.ts`는 동일 `env`에서 앱·제공자·종목 저장소 인스턴스를 재사용해 각 메모리 캐시를 유지한다. KIS에는 `cloudflare/storage.ts`가 구현한 `TokenCache`를 주입하고, 제공자는 KV 타입이나 저장 키를 알지 않는다.
+
+Yahoo·Upbit는 `createYahoo`·`createUpbit` 팩토리에서 HTTP 전송 함수를 받으며, `createProviders`의 선택적인 `marketFetch`로 함께 지정할 수 있다. `src/core/http.ts`의 `MarketFetch(input, init?, cacheTtlSeconds?)`는 표준 요청 옵션과 캐시 시간 힌트만 전달한다. 기본 전송은 호출 시점의 표준 `fetch`를 사용하고 힌트를 요청 옵션에 추가하지 않는다. Cloudflare 진입점은 `cloudflare/http.ts`의 전송 함수를 주입해 힌트가 있을 때 `cf.cacheTtl`·`cacheEverything: true`를 적용한다. API 주소·페이지 조회·응답 해석은 제공자에 유지한다.
+
+| 요청 | Cloudflare 캐시 시간 |
+|---|---|
+| Yahoo 차트 (직전 세션 재조회 포함) | 300초 |
+| Yahoo 검색 | 3,600초 |
+| Upbit 캔들 (페이지 조회·전일 종가 포함) | 60초 |
+| Upbit 마켓 검색 | 3,600초 |
+
+KIS의 인증·시세 요청은 기존 `fetch` 경로를 사용해 강제 캐시 대상에 포함하지 않는다. 기본 전송을 사용하는 Node smoke와 이후 실행 환경은 Cloudflare 옵션 없이 동작한다.
 
 - **선택·폴백 및 에러 구분**: `getPrices`는 `supports(symbol)`가 참(또는 미정의)인 제공자를 순서대로 시도하며, 실패 시 다음 제공자로 넘어간다. 존재하지 않는 심볼은 `SymbolNotFoundError`를, 그 외 오류는 일반 `Error`를 던진다. `runChart`의 영문 검색 재시도는 `SymbolNotFoundError`에만 반응한다.
 - **업비트 (`upbit.ts`)**: `KRW-*` 마켓만 전담한다. 24시간 거래 상품이므로 `continuous: true`(KST 표시)를 반환하며, 커스텀 날짜(`from`~`to`) 조회는 최대 2,000일까지 허용한다. `search`는 한글 질의나 `KRW-` 접두사일 때만 동작한다.
