@@ -1,12 +1,12 @@
-import { renderPng } from "../cloudflare/assets";
-import type { Env } from "../cloudflare/env";
-import { createSymbolStore, SYMBOLS_KEY } from "../cloudflare/storage";
+import { renderPng } from "../cloudflare/assets.ts";
+import type { Env } from "../cloudflare/env.d.ts";
+import { createSymbolStore, SYMBOLS_KEY } from "../cloudflare/storage.ts";
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildTitle, runChart } from "../src/core/run";
-import { resetSymbolCache } from "../src/core/symbols";
-import { captureLogs } from "./logs";
-import { PROVIDERS } from "./providers";
+import { buildTitle, runChart } from "../src/core/run.ts";
+import { resetSymbolCache } from "../src/core/symbols.ts";
+import { captureLogs } from "./logs.ts";
+import { PROVIDERS } from "./providers.ts";
 
 const ENV = env as unknown as Env;
 const STORE = createSymbolStore(ENV);

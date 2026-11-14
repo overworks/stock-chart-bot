@@ -1,12 +1,12 @@
-import type { Env } from "../cloudflare/env";
+import type { Env } from "../cloudflare/env.d.ts";
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import worker from "../cloudflare/index";
-import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
-import { resetSymbolCache } from "../src/core/symbols";
-import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";
+import worker from "../cloudflare/index.ts";
+import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command.ts";
+import { resetSymbolCache } from "../src/core/symbols.ts";
+import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage.ts";
 import keypair from "./keypair.json" with { type: "json" };
-import { captureLogs } from "./logs";
+import { captureLogs } from "./logs.ts";
 
 const ENV = env as unknown as Env;
 let privateKey: CryptoKey;

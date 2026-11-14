@@ -1,11 +1,11 @@
-import type { Env } from "../cloudflare/env";
-import { createSymbolStore, ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";
+import type { Env } from "../cloudflare/env.d.ts";
+import { createSymbolStore, ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addAlias, listAliases, removeAlias, runAlias, searchAliases } from "../src/core/aliases";
-import { resetSymbolCache, resolveSymbol, searchSymbols, symbolName } from "../src/core/symbols";
-import { captureLogs } from "./logs";
-import { PROVIDERS } from "./providers";
+import { addAlias, listAliases, removeAlias, runAlias, searchAliases } from "../src/core/aliases.ts";
+import { resetSymbolCache, resolveSymbol, searchSymbols, symbolName } from "../src/core/symbols.ts";
+import { captureLogs } from "./logs.ts";
+import { PROVIDERS } from "./providers.ts";
 
 const KV = (env as unknown as Env).KV;
 const WRITER = (env as unknown as Env).ALIAS_WRITER;

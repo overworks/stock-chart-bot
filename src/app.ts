@@ -1,7 +1,7 @@
-import type { BotConfig } from "./config";
-import type { BackgroundTasks, BotServices } from "./core/runtime";
-import { handleDiscord } from "./platforms/discord";
-import { handleSlack } from "./platforms/slack";
+import type { BotConfig } from "./config.ts";
+import type { BackgroundTasks, BotServices } from "./core/runtime.ts";
+import { handleDiscord } from "./platforms/discord.ts";
+import { handleSlack } from "./platforms/slack.ts";
 
 export function createApp(config: BotConfig, services: BotServices) {
   return {

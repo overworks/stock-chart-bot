@@ -1,6 +1,6 @@
-import type { MutationIdentity, SymbolReader, SymbolStore } from "./storage";
-import { logEvent } from "./log";
-import { getPrices, SymbolNotFoundError, type Providers } from "./market";
+import type { MutationIdentity, SymbolReader, SymbolStore } from "./storage.ts";
+import { logEvent } from "./log.ts";
+import { getPrices, SymbolNotFoundError, type Providers } from "./market.ts";
 import {
   isAsciiQuery,
   loadSymbols,
@@ -8,7 +8,7 @@ import {
   resetSymbolCache,
   searchSymbols,
   type SymbolEntry,
-} from "./symbols";
+} from "./symbols.ts";
 
 export interface AliasArgs {
   action?: string;

@@ -1,7 +1,7 @@
 import wasm from "../wasm/resvg.wasm";
 import fontRegular from "../fonts/NanumSquareR.ttf";
 import fontBold from "../fonts/NanumSquareB.ttf";
-import { createResvgRenderer } from "../src/rendering/resvg";
+import { createResvgRenderer } from "../src/rendering/resvg.ts";
 
 export const renderPng = createResvgRenderer(async () => ({
   wasm,

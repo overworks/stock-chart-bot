@@ -1,11 +1,11 @@
-import { createKisTokenCache } from "../cloudflare/storage";
+import { createKisTokenCache } from "../cloudflare/storage.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProviders } from "../src/providers";
-import { createKis } from "../src/providers/kis";
-import { yahoo } from "../src/providers/yahoo";
-import { getPrices, SymbolNotFoundError } from "../src/core/market";
-import type { TokenCache } from "../src/core/storage";
-import { captureLogs } from "./logs";
+import { createProviders } from "../src/providers/index.ts";
+import { createKis } from "../src/providers/kis.ts";
+import { yahoo } from "../src/providers/yahoo.ts";
+import { getPrices, SymbolNotFoundError } from "../src/core/market.ts";
+import type { TokenCache } from "../src/core/storage.ts";
+import { captureLogs } from "./logs.ts";
 
 const NOW = Date.parse("2026-09-04T01:00:00Z"); // 10:00 KST
 

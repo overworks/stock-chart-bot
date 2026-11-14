@@ -1,8 +1,8 @@
-import { searchRemote, type Providers, type SymbolChoice } from "./market";
-import type { SymbolEntry, SymbolReader } from "./storage";
+import { searchRemote, type Providers, type SymbolChoice } from "./market.ts";
+import type { SymbolEntry, SymbolReader } from "./storage.ts";
 
 export type { SymbolChoice };
-export type { SymbolEntry } from "./storage";
+export type { SymbolEntry } from "./storage.ts";
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX = 25;
 

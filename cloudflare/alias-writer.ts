@@ -1,6 +1,6 @@
-import { exceptionAttributes, logEvent } from "../src/core/log";
-import type { AliasMutation, SymbolEntry } from "../src/core/storage";
-import { ALIASES_KEY } from "./storage";
+import { exceptionAttributes, logEvent } from "../src/core/log.ts";
+import type { AliasMutation, SymbolEntry } from "../src/core/storage.ts";
+import { ALIASES_KEY } from "./storage.ts";
 
 const REQUEST_PREFIX = "request:";
 

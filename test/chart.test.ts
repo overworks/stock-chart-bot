@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildSvg, COLOR, extendedRuns, FONT_BOLD, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange, textWidth } from "../src/core/chart";
-import type { ChartBar } from "../src/core/types";
+import { buildSvg, COLOR, extendedRuns, FONT_BOLD, FONT_FAMILY, fmtPrice, movingAverage, summarizeChange, textWidth } from "../src/core/chart.ts";
+import type { ChartBar } from "../src/core/types.ts";
 
 const DAY = 86_400;
 const daily = (n: number, start = 1_700_000_000): ChartBar[] =>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayCurrency, displayRule, scaleSeries } from "../src/core/display";
+import { displayCurrency, displayRule, scaleSeries } from "../src/core/display.ts";
 
 describe("display scaling", () => {
   it("multiplies OHLC and previous close, leaving volume and timestamps alone", () => {

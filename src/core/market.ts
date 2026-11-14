@@ -1,5 +1,5 @@
-import { exceptionAttributes, logEvent } from "./log";
-import type { ChartBar, ChartRequest, TimeSpan } from "./types";
+import { exceptionAttributes, logEvent } from "./log.ts";
+import type { ChartBar, ChartRequest, TimeSpan } from "./types.ts";
 
 export class SymbolNotFoundError extends Error {}
 

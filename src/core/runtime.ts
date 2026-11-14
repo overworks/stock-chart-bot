@@ -1,5 +1,5 @@
-import type { Providers } from "./market";
-import type { SymbolStore } from "./storage";
+import type { Providers } from "./market.ts";
+import type { SymbolStore } from "./storage.ts";
 
 export type ChartRenderer = (svg: string, width?: number) => Promise<Uint8Array>;
 

@@ -9,7 +9,12 @@
     "deploy": "npm run deploy:cloudflare --",
     "deploy:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc",
     "build:cloudflare": "wrangler deploy cloudflare/index.ts --config cloudflare/wrangler.jsonc --dry-run --outdir dist",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run check:boundaries && npm run typecheck:shared && npm run typecheck:cloudflare && npm run typecheck:scripts && npm run typecheck:tests",
+    "check:boundaries": "tsx scripts/check-boundaries.ts",
+    "typecheck:shared": "tsc --project tsconfig.json",
+    "typecheck:cloudflare": "tsc --project cloudflare/tsconfig.json",
+    "typecheck:scripts": "tsc --project scripts/tsconfig.json",
+    "typecheck:tests": "tsc --project test/tsconfig.json",
     "setup:wasm": "mkdir -p wasm && cp node_modules/@resvg/resvg-wasm/index_bg.wasm wasm/resvg.wasm",
     "postinstall": "npm run setup:wasm",
     "register": "npm run register:cloudflare --",
@@ -27,6 +32,7 @@
     "discord-interactions": "^4.4.0"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.14",
     "@cloudflare/vitest-plugin": "^1.1.7",
     "@cloudflare/workers-types": "^5.20260911.1",
     "@types/node": "^22.20.2",

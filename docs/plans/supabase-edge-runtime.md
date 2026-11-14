@@ -3,7 +3,7 @@
 - 작성일: 2026-11-14
 - 기준 커밋: `cedd35f` (`main`)
 - 작업 브랜치: `feat/supabase-edge-runtime`
-- 현재 단계: 4단계 제공자 HTTP 캐시 옵션 분리 완료. 다음 작업은 5단계 공통 타입 검사 및 import 경로 정리다.
+- 현재 단계: 5단계 공통 타입 검사 및 import 경로 정리 완료. 다음 작업은 6단계 Supabase 저장소 어댑터 구현이다.
 - 진행 방식: 한 번에 한 단계씩 구현·검증·커밋한 뒤 결과를 보고한다.
 
 ## 목표와 범위
@@ -37,6 +37,7 @@
 .
 ├── package.json                  # 공통 도구 및 환경별 명령
 ├── tsconfig.json                 # 공통 코드: Web 표준 타입으로 독립 검사
+├── tsconfig.base.json            # 모든 타입 검사가 공유하는 no-emit 옵션
 ├── src/
 │   ├── app.ts                    # 공통 라우팅과 애플리케이션 조립
 │   ├── core/                     # 업무 로직과 저장소·실행 기능 계약
@@ -204,7 +205,8 @@
 | 구현 2 | 완료 | `refactor: decouple symbol and alias storage`, 아래 검증 기록 참고 |
 | 구현 3 | 완료 | `refactor: inject runtime services`, 아래 검증 기록 참고 |
 | 구현 4 | 완료 | `refactor: isolate provider HTTP cache options`, 아래 검증 기록 참고 |
-| 구현 5–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
+| 구현 5 | 완료 | `refactor: make shared code runtime independent`, 아래 검증 기록 참고 |
+| 구현 6–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
 
 기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기준 시점에 있던 `core`의 Cloudflare 의존성 제거 결과는 각 단계의 기록에서 확인한다.
 
@@ -250,6 +252,17 @@
 - `npm run typecheck`, `npm test`(16개 파일, 225개 테스트), `npm run build:cloudflare`를 통과했다. 기존 218개 회귀 테스트에 옵션 보존·힌트 없는 요청·기본 표준 전송·인스턴스 격리·Yahoo/Upbit TTL·KIS 전송 경로 검증 7개를 추가했다.
 - Node에서 고정 응답으로 기본 제공자의 표준 요청 옵션과 Yahoo 전용 영문 원격 검색을 확인했다. 외부 네트워크 호출 없이 검증했다.
 - 공통 제공자에서 `cf` 필드와 이를 숨기던 `as RequestInit` 캐스트를 제거했다. 독립 타입 검사와 Deno용 명시적 import 경로는 5단계에서 진행한다.
+
+### 5단계 완료 기록
+
+- 상대 import·re-export·type import·동적 import에 실제 `.ts`·`.d.ts` 경로를 명시하고 디렉토리 import를 `index.ts`로 바꿨다. JSON·WASM·TTF의 기존 확장자는 유지한다.
+- `tsconfig.base.json`에 공통 no-emit 옵션을 두고 루트의 공통 Web 표준 검사, Cloudflare 런타임, Node 스크립트, workerd 테스트 설정을 분리했다. `npm run typecheck`는 import 경계 검사와 네 타입 검사를 실행하므로 기존 CI에도 적용된다.
+- 공통 검사 프로그램에 Cloudflare 선언·어댑터가 포함되지 않음을 확인하고, 별도 예제의 `KVNamespace` 사용이 실제 컴파일 오류로 차단됨을 확인했다.
+- Discord SDK의 선언 파일은 Node 타입을 전이 참조하므로 `types: []`만으로 Node 전역을 완전히 숨길 수 없다. 개발 전용 Babel 7 파서를 사용하는 `scripts/check-boundaries.ts`가 소스의 런타임 모듈·전역, core의 구현 계층 참조, 상대 확장자와 실제 파일 경로를 검사한다.
+- 주석·문자열·정규식은 import로 오인하지 않으며 type import와 동적 import도 검사한다. 정상·위반 예제 16개로 경계 검사를 확인했다. 파서 의존성은 기존 Node 최소 버전과 호환되는 개발 의존성으로만 추가했다.
+- Web 표준 `BlobPart` 타입에 맞춰 Discord 파일 첨부 경계에서 PNG를 소유 버퍼로 복사한다. 의미를 숨기는 타입 캐스트를 추가하지 않고 기존 PNG 전달 테스트로 바이트 보존을 확인했다.
+- `npm run typecheck`, `npm test`(16개 파일, 225개 테스트), `npm run build:cloudflare`를 통과했다. Node smoke도 외부 시세 호출을 고정 응답으로 대체해 한글 제목·캔들·거래량이 포함된 960×540 PNG를 생성했다.
+- Supabase의 실제 Deno 의존성 매핑과 Edge Runtime 실행 검증은 해당 구현 단계에서 진행한다.
 
 ## 확인한 문서
 

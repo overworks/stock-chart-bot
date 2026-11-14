@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createApp } from "../src/app";
-import type { BotConfig } from "../src/config";
-import type { BotServices, TraceSpan } from "../src/core/runtime";
-import { runChart } from "../src/core/run";
+import { createApp } from "../src/app.ts";
+import type { BotConfig } from "../src/config.ts";
+import type { BotServices, TraceSpan } from "../src/core/runtime.ts";
+import { runChart } from "../src/core/run.ts";
 import keypair from "./keypair.json" with { type: "json" };
 
 const CONFIG: BotConfig = {

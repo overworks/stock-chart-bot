@@ -1,4 +1,4 @@
-import type { ChartBar, ChartStyle, TimeSpan } from "./types";
+import type { ChartBar, ChartStyle, TimeSpan } from "./types.ts";
 
 export const FONT_FAMILY = "NanumSquare";
 /** 번들 굵은 폰트는 패밀리명이 'NanumSquare Bold'로 등록돼 있어 font-weight가 아닌 패밀리로 지정해야 한다. */

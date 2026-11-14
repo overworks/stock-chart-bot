@@ -1,12 +1,12 @@
-import type { Env } from "../cloudflare/env";
+import type { Env } from "../cloudflare/env.d.ts";
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import worker from "../cloudflare/index";
-import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../src/core/command";
-import { parseAliasText, parseText } from "../src/platforms/slack";
-import { resetSymbolCache } from "../src/core/symbols";
-import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage";
-import { captureLogs } from "./logs";
+import worker from "../cloudflare/index.ts";
+import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../src/core/command.ts";
+import { parseAliasText, parseText } from "../src/platforms/slack.ts";
+import { resetSymbolCache } from "../src/core/symbols.ts";
+import { ALIASES_KEY, SYMBOLS_KEY } from "../cloudflare/storage.ts";
+import { captureLogs } from "./logs.ts";
 
 const ENV = env as unknown as Env;
 const SECRET = "test-signing-secret";

@@ -1,7 +1,7 @@
-import type { MarketFetch } from "../core/http";
-import type { ChartBar, ChartRequest } from "../core/types";
-import { exceptionAttributes, logEvent } from "../core/log";
-import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
+import type { MarketFetch } from "../core/http.ts";
+import type { ChartBar, ChartRequest } from "../core/types.ts";
+import { exceptionAttributes, logEvent } from "../core/log.ts";
+import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market.ts";
 
 const API = "https://api.upbit.com/v1";
 const PAGE = 200;

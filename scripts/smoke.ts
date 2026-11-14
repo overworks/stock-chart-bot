@@ -1,10 +1,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { createResvgRenderer } from "../src/rendering/resvg";
-import { getPrices } from "../src/core/market";
-import { buildSvg } from "../src/core/chart";
-import { RANGE_CHOICES } from "../src/core/command";
-import { buildTitle, displayCurrency, displayRule, scaleSeries } from "../src/core/display";
-import { createProviders } from "../src/providers";
+import { createResvgRenderer } from "../src/rendering/resvg.ts";
+import { getPrices } from "../src/core/market.ts";
+import { buildSvg } from "../src/core/chart.ts";
+import { RANGE_CHOICES } from "../src/core/command.ts";
+import { buildTitle, displayCurrency, displayRule, scaleSeries } from "../src/core/display.ts";
+import { createProviders } from "../src/providers/index.ts";
 
 const outDir = process.env.OUT_DIR ?? "dist/smoke";
 const cases = (process.argv[2] ?? "AAPL:1y,005930.KS:1m,AAPL:1d").split(",");

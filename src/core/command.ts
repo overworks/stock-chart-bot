@@ -18,7 +18,7 @@ export const VOLUME_KEYWORDS = ["volume", "거래량"] as const;
 
 export function parseChartArgs(
   args: Record<string, string | undefined>,
-): import("./types").ChartRequest {
+): import("./types.ts").ChartRequest {
   const ticker = (args.ticker ?? "").trim();
   if (!ticker) throw new Error("종목(ticker)을 입력해 주세요.");
 
@@ -26,7 +26,7 @@ export function parseChartArgs(
   const to = args.to?.trim();
   const range = args.range?.trim();
   const style = (STYLE_CHOICES as readonly string[]).includes(args.style?.trim() ?? "")
-    ? (args.style!.trim() as import("./types").ChartStyle)
+    ? (args.style!.trim() as import("./types.ts").ChartStyle)
     : "line";
   // Discord는 boolean, Slack 등 텍스트 플랫폼은 "true" 문자열로 넘긴다.
   const volume = String(args.volume ?? "").trim().toLowerCase() === "true";

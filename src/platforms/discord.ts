@@ -1,13 +1,13 @@
 import { verifyKey } from "discord-interactions";
-import type { MutationIdentity } from "../core/storage";
-import { runAlias, searchAliases } from "../core/aliases";
-import { errorMessage, logEvent } from "../core/log";
-import type { BotConfig } from "../config";
-import type { BackgroundTasks, BotServices } from "../core/runtime";
-import { runChart } from "../core/run";
-import { searchSymbols } from "../core/symbols";
-import { helpText } from "./help";
-import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
+import type { MutationIdentity } from "../core/storage.ts";
+import { runAlias, searchAliases } from "../core/aliases.ts";
+import { errorMessage, logEvent } from "../core/log.ts";
+import type { BotConfig } from "../config.ts";
+import type { BackgroundTasks, BotServices } from "../core/runtime.ts";
+import { runChart } from "../core/run.ts";
+import { searchSymbols } from "../core/symbols.ts";
+import { helpText } from "./help.ts";
+import { DELIVERY_FAILED_TEXT, reportCommand } from "./report.ts";
 
 const API = "https://discord.com/api/v10";
 const ADMINISTRATOR = 1n << 3n;
@@ -185,7 +185,7 @@ async function serveChart(
     if (result.image) {
       form.append(
         "files[0]",
-        new File([result.image.png], result.image.filename, { type: "image/png" }),
+        new File([new Uint8Array(result.image.png)], result.image.filename, { type: "image/png" }),
       );
     }
     send = () => fetch(endpoint, { method: "PATCH", body: form });

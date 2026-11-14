@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseChartArgs } from "../src/core/command";
+import { parseChartArgs } from "../src/core/command.ts";
 
 describe("parseChartArgs", () => {
   it.each(["2024-13-01", "2024-00-01", "2024-02-30", "2023-02-29", "2024-04-31"])("rejects nonexistent date %s in either boundary", (date) => {

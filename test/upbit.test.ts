@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { upbit } from "../src/providers/upbit";
-import { getPrices, searchRemote, SymbolNotFoundError } from "../src/core/market";
-import { PROVIDERS } from "./providers";
+import { upbit } from "../src/providers/upbit.ts";
+import { getPrices, searchRemote, SymbolNotFoundError } from "../src/core/market.ts";
+import { PROVIDERS } from "./providers.ts";
 
 function candle(utc: string, price: number, extra: Record<string, unknown> = {}) {
   return { candle_date_time_utc: utc, opening_price: price - 1, high_price: price + 1, low_price: price - 2, trade_price: price, candle_acc_trade_volume: 5, ...extra };

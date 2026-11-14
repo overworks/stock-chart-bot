@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 it("loads assets lazily and shares WASM initialization across concurrent renderers", async () => {
-  const { createResvgRenderer } = await import("../src/rendering/resvg");
+  const { createResvgRenderer } = await import("../src/rendering/resvg.ts");
   const assets = { wasm: new Uint8Array([0]), fonts: [new Uint8Array([1])] };
   const load = vi.fn(async () => assets);
   const render = createResvgRenderer(load);
@@ -45,7 +45,7 @@ it("loads assets lazily and shares WASM initialization across concurrent rendere
 });
 
 it("frees the renderer when rendering throws", async () => {
-  const { createResvgRenderer } = await import("../src/rendering/resvg");
+  const { createResvgRenderer } = await import("../src/rendering/resvg.ts");
   mocked.render.mockImplementation(() => { throw new Error("render failed"); });
   const render = createResvgRenderer(async () => ({ wasm: new Uint8Array(), fonts: [] }));
   await expect(render("<svg/>")).rejects.toThrow("render failed");
@@ -54,7 +54,7 @@ it("frees the renderer when rendering throws", async () => {
 });
 
 it("frees the image and renderer when PNG encoding throws", async () => {
-  const { createResvgRenderer } = await import("../src/rendering/resvg");
+  const { createResvgRenderer } = await import("../src/rendering/resvg.ts");
   mocked.asPng.mockImplementation(() => { throw new Error("PNG failed"); });
   const render = createResvgRenderer(async () => ({ wasm: new Uint8Array(), fonts: [] }));
   await expect(render("<svg/>")).rejects.toThrow("PNG failed");
@@ -63,7 +63,7 @@ it("frees the image and renderer when PNG encoding throws", async () => {
 });
 
 it("retries asset loading and WASM initialization after failures", async () => {
-  const { createResvgRenderer } = await import("../src/rendering/resvg");
+  const { createResvgRenderer } = await import("../src/rendering/resvg.ts");
   const load = vi.fn(async () => ({ wasm: new Uint8Array(), fonts: [] }))
     .mockRejectedValueOnce(new Error("assets unavailable"));
   mocked.initWasm.mockRejectedValueOnce(new Error("init failed"));

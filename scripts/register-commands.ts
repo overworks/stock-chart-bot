@@ -1,6 +1,6 @@
 import { loadEnvFile } from "node:process";
 import { parseArgs } from "node:util";
-import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command";
+import { RANGE_CHOICES, STYLE_CHOICES } from "../src/core/command.ts";
 
 const API = "https://discord.com/api/v10";
 

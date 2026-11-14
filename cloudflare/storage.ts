@@ -1,5 +1,5 @@
-import { logEvent } from "../src/core/log";
-import type { CachedToken, SymbolEntry, SymbolStore, TokenCache } from "../src/core/storage";
+import { logEvent } from "../src/core/log.ts";
+import type { CachedToken, SymbolEntry, SymbolStore, TokenCache } from "../src/core/storage.ts";
 
 export const SYMBOLS_KEY = "symbols:v1";
 export const ALIASES_KEY = "aliases:v1";

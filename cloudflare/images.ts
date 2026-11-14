@@ -1,4 +1,4 @@
-import type { ImagePublisher } from "../src/core/runtime";
+import type { ImagePublisher } from "../src/core/runtime.ts";
 
 const PREFIX = "charts/";
 

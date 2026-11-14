@@ -1,9 +1,9 @@
-import type { Env } from "../cloudflare/env";
+import type { Env } from "../cloudflare/env.d.ts";
 import { env, runInDurableObject } from "cloudflare:test";
 import { afterEach, expect, it, vi } from "vitest";
-import { AliasWriter } from "../cloudflare/alias-writer";
-import { ALIASES_KEY } from "../cloudflare/storage";
-import { captureLogs } from "./logs";
+import { AliasWriter } from "../cloudflare/alias-writer.ts";
+import { ALIASES_KEY } from "../cloudflare/storage.ts";
+import { captureLogs } from "./logs.ts";
 
 afterEach(() => vi.restoreAllMocks());
 

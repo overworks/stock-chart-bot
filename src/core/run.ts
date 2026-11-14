@@ -1,12 +1,12 @@
-import { parseChartArgs } from "./command";
-import { buildSvg, summarizeChange } from "./chart";
-import { buildTitle, displayCurrency, displayRule, scaleSeries } from "./display";
-import { exceptionAttributes, logEvent } from "./log";
-import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market";
-import { noopTracer, type ChartRuntime } from "./runtime";
-import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols";
-import type { ChartRequest, OutgoingMessage } from "./types";
-import type { SymbolReader } from "./storage";
+import { parseChartArgs } from "./command.ts";
+import { buildSvg, summarizeChange } from "./chart.ts";
+import { buildTitle, displayCurrency, displayRule, scaleSeries } from "./display.ts";
+import { exceptionAttributes, logEvent } from "./log.ts";
+import { getPrices, searchRemote, SymbolNotFoundError, type PriceSeries, type Providers } from "./market.ts";
+import { noopTracer, type ChartRuntime } from "./runtime.ts";
+import { isAsciiQuery, resolveSymbol, symbolName } from "./symbols.ts";
+import type { ChartRequest, OutgoingMessage } from "./types.ts";
+import type { SymbolReader } from "./storage.ts";
 
 export { buildTitle };
 

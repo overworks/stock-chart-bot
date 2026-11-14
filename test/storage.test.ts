@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { addAlias, removeAlias } from "../src/core/aliases";
-import type { AliasMutation, SymbolEntry, SymbolStore } from "../src/core/storage";
-import { resetSymbolCache, resolveSymbol } from "../src/core/symbols";
+import { addAlias, removeAlias } from "../src/core/aliases.ts";
+import type { AliasMutation, SymbolEntry, SymbolStore } from "../src/core/storage.ts";
+import { resetSymbolCache, resolveSymbol } from "../src/core/symbols.ts";
 
 function memoryStore(value = "AAPL") {
   let aliases: SymbolEntry[] = [];

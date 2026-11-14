@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cloudflareMarketFetch } from "../cloudflare/http";
-import { getPrices, searchRemote } from "../src/core/market";
-import { createProviders } from "../src/providers";
-import { createYahoo } from "../src/providers/yahoo";
+import { cloudflareMarketFetch } from "../cloudflare/http.ts";
+import { getPrices, searchRemote } from "../src/core/market.ts";
+import { createProviders } from "../src/providers/index.ts";
+import { createYahoo } from "../src/providers/yahoo.ts";
 
 const NOW = Date.parse("2026-09-12T12:00:00Z");
 const chart = (close = [100, 101]) => ({ chart: { result: [{

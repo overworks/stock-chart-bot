@@ -1,6 +1,6 @@
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
-import { CHART_WIDTH, FONT_FAMILY } from "../core/chart";
-import type { ChartRenderer } from "../core/runtime";
+import { CHART_WIDTH, FONT_FAMILY } from "../core/chart.ts";
+import type { ChartRenderer } from "../core/runtime.ts";
 
 export interface RenderAssets {
   wasm: WebAssembly.Module | BufferSource;

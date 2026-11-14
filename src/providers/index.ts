@@ -1,9 +1,9 @@
-import type { Providers } from "../core/market";
-import type { MarketFetch } from "../core/http";
-import type { TokenCache } from "../core/storage";
-import { createKis } from "./kis";
-import { createUpbit } from "./upbit";
-import { createYahoo } from "./yahoo";
+import type { Providers } from "../core/market.ts";
+import type { MarketFetch } from "../core/http.ts";
+import type { TokenCache } from "../core/storage.ts";
+import { createKis } from "./kis.ts";
+import { createUpbit } from "./upbit.ts";
+import { createYahoo } from "./yahoo.ts";
 
 export interface ProvidersConfig {
   kisAppKey?: string;

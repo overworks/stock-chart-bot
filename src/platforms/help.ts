@@ -1,4 +1,4 @@
-import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
+import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command.ts";
 
 export function helpText(platform: "discord" | "slack"): string {
   const discord = platform === "discord";

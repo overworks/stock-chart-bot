@@ -1,11 +1,11 @@
-import type { Env } from "../cloudflare/env";
-import { createSymbolStore, SYMBOLS_KEY } from "../cloudflare/storage";
+import type { Env } from "../cloudflare/env.d.ts";
+import { createSymbolStore, SYMBOLS_KEY } from "../cloudflare/storage.ts";
 import { env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetSymbolCache, resolveSymbol, searchSymbols } from "../src/core/symbols";
-import { yahoo } from "../src/providers/yahoo";
-import { captureLogs } from "./logs";
-import { PROVIDERS } from "./providers";
+import { resetSymbolCache, resolveSymbol, searchSymbols } from "../src/core/symbols.ts";
+import { yahoo } from "../src/providers/yahoo.ts";
+import { captureLogs } from "./logs.ts";
+import { PROVIDERS } from "./providers.ts";
 
 const KV = (env as unknown as Env).KV;
 const STORE = createSymbolStore(env as unknown as Env);

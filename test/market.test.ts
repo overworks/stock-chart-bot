@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPrices, searchRemote, SymbolNotFoundError, type MarketProvider } from "../src/core/market";
-import { captureLogs } from "./logs";
-import { PROVIDERS } from "./providers";
+import { getPrices, searchRemote, SymbolNotFoundError, type MarketProvider } from "../src/core/market.ts";
+import { captureLogs } from "./logs.ts";
+import { PROVIDERS } from "./providers.ts";
 
 function yahoo(body: unknown, status = 200) {
   const fn = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify(body), { status }));

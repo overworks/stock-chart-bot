@@ -1,4 +1,4 @@
-import { errorMessage, exceptionAttributes, logEvent } from "../core/log";
+import { errorMessage, exceptionAttributes, logEvent } from "../core/log.ts";
 
 export const DELIVERY_FAILED_TEXT = "⚠️ 차트를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 

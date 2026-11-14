@@ -136,6 +136,7 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ```bash
 npm run dev                                        # 로컬 개발 서버 (http://localhost:8787)
+npm run typecheck                                  # import 경계와 공통·Cloudflare·Node·테스트 타입 검사
 npm test                                           # workerd 런타임에서 테스트 실행
 npm run build:cloudflare                            # 업로드 없이 배포 번들 검증
 npm run smoke -- "AAPL:1d,005930.KS:1m:candle"     # 로컬 PNG 렌더링 확인 (dist/smoke/)

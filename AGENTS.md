@@ -13,7 +13,7 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 | 목적 | 명령 |
 |---|---|
 | 로컬 개발 | `npm run dev` |
-| 타입 검사 | `npm run typecheck` |
+| 타입 검사 | `npm run typecheck` (import 경계 + 공통·Cloudflare·Node·테스트) |
 | 테스트 | `npm test` |
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
 | 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → `scripts/symbols.json`) |
@@ -39,6 +39,7 @@ cloudflare/
 ├─ storage.ts            # KV 종목·별칭 읽기, DO 변경 호출, KIS 토큰 캐시
 ├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # 리소스·번들 설정 예시 (실제 설정은 Git 제외)
+├─ tsconfig.json         # Cloudflare 런타임 코드 타입 검사
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 시크릿은 Git 제외)
 └─ vitest.config.ts      # 저장소 루트의 test/**를 실행
 src/
@@ -74,6 +75,7 @@ src/
 
 - **작업 계획**: 장기 작업이나 구조 변경은 시작 전에 계획을 먼저 세운다.
 - **플랫폼 경계 유지**: `src/core/**`에서 플랫폼 SDK나 전용 타입, `src/providers/**`, `src/platforms/**`를 절대 import하지 않는다. `src/core/**`·`src/platforms/**`에 Cloudflare 바인딩·전역 타입·런타임 import를 넣지 않는다. 새 메신저는 `src/platforms/` 어댑터와 `src/app.ts` 라우트 추가로 연결한다.
+- **타입 및 import 경계**: 공통 코드는 루트 `tsconfig.json`의 Web 표준 라이브러리와 `types: []`로 검사한다. Cloudflare·Node 스크립트·테스트는 각 디렉토리의 `tsconfig.json`으로 별도 검사한다. 상대 import는 `.ts`·`index.ts` 등 실제 파일 확장자를 명시하며 type import와 동적 import도 같은 규칙을 따른다. `npm run check:boundaries`가 공통 코드의 실행 환경 구현·Node 모듈·런타임 전역 참조와 core의 구현 계층 참조를 검사한다. SDK의 전이 타입 참조만으로 Node 전역이 노출될 수 있으므로 공통 코드에서 이를 사용하지 않는다.
 - **서명 검증 및 비동기 응답**: 서명 검증은 파싱 전 **원본 요청 문자열(`await req.text()`)**로 수행한다. 슬래시 커맨드는 3초 이내에 초기 응답(Discord `{ type: 5 }`, Slack 즉시 응답)을 반환하고 실제 작업은 주입받은 `BackgroundTasks.waitUntil`에서 처리해 웹훅으로 보낸다(Cloudflare는 `ctx.waitUntil`). 단, `/stock-help`는 외부 호출·저장소 접근·렌더러 초기화 없이 서명 검증 후 실행자에게만 즉시 응답한다(Discord `type: 4`, `flags: 64`; Slack `ephemeral`).
 - **슬래시 커맨드**: 지원하는 명령은 `/stock-chart`, `/stock-alias`, `/stock-help` 세 개뿐이며 그 외 명령은 등록·처리하지 않는다.
 - **시세·검색 제공자 (`src/providers/*`)**:

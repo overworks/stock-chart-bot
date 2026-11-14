@@ -1,11 +1,11 @@
-import { ALIAS_USAGE, runAlias } from "../core/aliases";
-import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command";
-import { errorMessage, logEvent } from "../core/log";
-import type { BotConfig } from "../config";
-import type { BackgroundTasks, BotServices } from "../core/runtime";
-import { runChart } from "../core/run";
-import { helpText } from "./help";
-import { DELIVERY_FAILED_TEXT, reportCommand } from "./report";
+import { ALIAS_USAGE, runAlias } from "../core/aliases.ts";
+import { RANGE_CHOICES, STYLE_CHOICES, VOLUME_KEYWORDS } from "../core/command.ts";
+import { errorMessage, logEvent } from "../core/log.ts";
+import type { BotConfig } from "../config.ts";
+import type { BackgroundTasks, BotServices } from "../core/runtime.ts";
+import { runChart } from "../core/run.ts";
+import { helpText } from "./help.ts";
+import { DELIVERY_FAILED_TEXT, reportCommand } from "./report.ts";
 
 const TOLERANCE_SEC = 5 * 60;
 const USAGE =

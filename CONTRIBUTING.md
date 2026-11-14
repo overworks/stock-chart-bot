@@ -13,7 +13,7 @@
 | 명령 | 설명 |
 |---|---|
 | `npm run dev` | 로컬 개발 서버 실행 (`http://localhost:8787`) |
-| `npm run typecheck` | TypeScript 타입 검사 (`tsc --noEmit`) |
+| `npm run typecheck` | import 경계 검사와 공통·Cloudflare·Node·테스트 타입 검사 |
 | `npm test` | `workerd` 런타임에서 전체 테스트 실행 |
 | `npm run test:watch` | 테스트 워치 모드 실행 |
 | `npm run smoke -- "AAPL:1d,005930.KS:1m:candle"` | 실제 시세 조회 후 로컬 PNG 렌더링 확인 (`dist/smoke/`) |
@@ -38,6 +38,19 @@ npm test
 npm run build:cloudflare
 ```
 
+타입 검사는 `tsconfig.base.json`의 공통 옵션을 공유하고 다음 네 범위로 실행한다.
+
+| 범위 | 설정 | 개별 명령 |
+|---|---|---|
+| 공통 `src/**` | `tsconfig.json`: ES2022·DOM·DOM.Iterable, `types: []` | `npm run typecheck:shared` |
+| Workers 코드 | `cloudflare/tsconfig.json`: Workers 타입 | `npm run typecheck:cloudflare` |
+| Node 스크립트 | `scripts/tsconfig.json`: Node 타입과 Web 표준 | `npm run typecheck:scripts` |
+| workerd 테스트·Vitest 설정 | `test/tsconfig.json`: Workers·Node·테스트 타입 | `npm run typecheck:tests` |
+
+`npm run typecheck`는 먼저 `npm run check:boundaries`를 실행한 뒤 네 타입 검사를 수행한다. CI도 같은 명령을 사용한다. 상대 경로는 디렉토리 생략 없이 실제 `.ts`·`.d.ts`·`.json` 등의 확장자를 명시한다. 공통 소스의 bare 패키지 import는 유지하고 Supabase의 의존성 매핑은 함수의 `deno.json`에서 관리한다.
+
+`scripts/check-boundaries.ts`는 개발 전용 `@babel/parser`로 일반 import·re-export·type import·동적 import를 읽어 경계와 경로를 검사한다. 공통 코드에서 실행 환경 구현, Node 전용 모듈·전역, core에서 제공자·메신저 구현을 참조하면 실패한다. 주석·문자열 내용은 참조로 취급하지 않는다. `types: []`는 명시적인 SDK의 전이 타입 참조까지 제거하지 않으므로, Discord SDK가 노출하는 Node 전역의 사용도 이 검사로 차단한다.
+
 ## 프로젝트 구조
 
 ```
@@ -52,6 +65,7 @@ cloudflare/
 ├─ storage.ts            # SymbolStore·TokenCache의 KV/DO 어댑터, KV 키 정의
 ├─ alias-writer.ts       # 별칭 변경 직렬화·중복 방지 및 KV 복제 Durable Object
 ├─ wrangler.jsonc.example # Cloudflare 리소스·번들 설정 예시 (실제 wrangler.jsonc는 Git 제외)
+├─ tsconfig.json         # Cloudflare 런타임 코드 타입 검사
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 .dev.vars는 Git 제외)
 └─ vitest.config.ts      # workerd 테스트 설정
 src/
@@ -82,6 +96,8 @@ src/
    ├─ help.ts            #   /stock-help 공통 문구 및 플랫폼별 사용 예시
    └─ report.ts          #   결과 전송 및 명령 단위 로그(chart.command.done)
 scripts/
+├─ check-boundaries.ts   # 공통 코드의 import 경계·런타임 전역·확장자 검사
+├─ tsconfig.json         # Node 스크립트 타입 검사
 ├─ fetch-krx-symbols.ts  # KIND + 네이버 ETF/ETN + 업비트 + 수동 별칭 병합 스크립트
 ├─ symbols.manual.json   # 수동 관리 별칭 목록 (원본)
 ├─ symbols.json          # 생성된 전체 종목·별칭 시드 데이터 (직접 수정 금지)

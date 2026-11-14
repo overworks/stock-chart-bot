@@ -1,7 +1,7 @@
-import type { MarketFetch } from "../core/http";
-import type { ChartBar, ChartRequest, TimeSpan } from "../core/types";
-import { exceptionAttributes, logEvent } from "../core/log";
-import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market";
+import type { MarketFetch } from "../core/http.ts";
+import type { ChartBar, ChartRequest, TimeSpan } from "../core/types.ts";
+import { exceptionAttributes, logEvent } from "../core/log.ts";
+import { SymbolNotFoundError, type MarketProvider, type PriceSeries, type SymbolChoice } from "../core/market.ts";
 
 const CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
 const SEARCH = "https://query1.finance.yahoo.com/v1/finance/search";
