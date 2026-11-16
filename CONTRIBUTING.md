@@ -15,6 +15,9 @@
 | `npm run dev` | 로컬 개발 서버 실행 (`http://localhost:8787`) |
 | `npm run dev:supabase` | WASM·폰트 준비 후 로컬 Edge Function 실행 |
 | `npm run prepare:supabase` | 함수 정적 자산 복사 및 npm/Deno 의존성 버전 일치 확인 |
+| `npm run deploy:supabase -- --project-ref <ref>` | 자산 준비·마이그레이션·시드·함수 배포 |
+| `npm run seed:symbols:supabase -- --project-ref <ref>` | 생성한 종목 스냅샷만 원자적으로 교체 |
+| `npm run cleanup:images:supabase -- --project-ref <ref> --dry-run` | 7일 경과 차트 이미지 정리 미리보기 (`--dry-run` 생략 시 삭제) |
 | `npm run typecheck` | import 경계 검사와 공통·Cloudflare·Supabase·Node·테스트 타입 검사 |
 | `npm test` | `workerd` 런타임에서 단위·회귀 테스트 실행 |
 | `npm run test:supabase` | 임시 로컬 DB·Storage·Edge Runtime 통합 검증 |
@@ -49,7 +52,7 @@ npm run build:cloudflare
 | 공통 `src/**` | `tsconfig.json`: ES2022·DOM·DOM.Iterable, `types: []` | `npm run typecheck:shared` |
 | Workers 코드 | `cloudflare/tsconfig.json`: Workers 타입 | `npm run typecheck:cloudflare` |
 | Supabase 코드 | `supabase/tsconfig.json`: Web 표준 + Deno의 진입점·자산·테스트 bootstrap 검사 | `npm run typecheck:supabase` |
-| Node 스크립트 | `scripts/tsconfig.json`: Node 타입과 Web 표준 | `npm run typecheck:scripts` |
+| Node 스크립트 | `scripts/tsconfig.json`·`supabase/scripts/tsconfig.json`: Node 타입과 Web 표준 | `npm run typecheck:scripts` |
 | workerd 테스트·Vitest 설정 | `test/tsconfig.json`: Workers·Node·테스트 타입 | `npm run typecheck:tests` |
 
 `npm run typecheck`는 먼저 `npm run check:boundaries`를 실행한 뒤 다섯 타입 검사를 수행한다. CI도 같은 명령을 사용한다. 상대 경로는 디렉토리 생략 없이 실제 `.ts`·`.d.ts`·`.json` 등의 확장자를 명시한다. 공통 소스의 bare 패키지 import는 유지하고 Supabase의 의존성 매핑은 함수의 `deno.json`에서 관리한다.
@@ -78,7 +81,19 @@ npm run dev:supabase
 
 `supabase/config.toml`의 `verify_jwt = false`는 외부 메신저 요청을 받기 위한 설정이다. 인증은 공통 어댑터의 원본 본문 서명 검증이 담당한다. `edge_runtime.policy = "per_worker"`로 초기 응답 후 백그라운드 작업이 완료되게 한다. 도움말 요청은 DB 조회·자산 읽기·WASM 초기화를 실행하지 않는다.
 
-`prepare:supabase`는 원본 WASM·폰트·라이선스를 함수 `_assets/`로 복사하고 `static_files`가 이를 포함한다. `_assets/`와 `.deno/` 캐시는 Git에서 제외한다. `deno.json`의 npm 버전이 package-lock과 다르면 준비를 실패시킨다. 개발 Deno 검사는 실제 Edge Runtime 검증을 대체하지 않는다. 운영 배포·종목 시드·이미지 만료 정리 자동화는 다음 단계에서 추가한다.
+`prepare:supabase`는 원본 WASM·폰트·라이선스를 함수 `_assets/`로 복사하고 `static_files`가 이를 포함한다. `_assets/`와 `.deno/` 캐시는 Git에서 제외한다. `deno.json`의 npm 버전이 package-lock과 다르면 준비를 실패시킨다. 개발 Deno 검사는 실제 Edge Runtime 검증을 대체하지 않는다.
+
+## Supabase 운영 명령
+
+CLI 3.1.0에서 `supabase login`으로 인증하고 `SUPABASE_PROJECT_REF`를 설정하거나 명령마다 `--project-ref`를 전달한다. 시드·이미지 정리는 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`(또는 `SUPABASE_SERVICE_ROLE_KEY`)로도 실행할 수 있다. 프로젝트 ref만 있으면 CLI로 해당 프로젝트의 서버 키를 읽는다. 키 값은 출력하지 않는다. ref와 URL을 함께 지정하면 같은 대상을 가리켜야 한다.
+
+`supabase/scripts/deploy.ts`는 자산·의존성·입력·대상·CLI 버전을 확인하고 마이그레이션, 초기 종목 스냅샷, 함수 순으로 배포한다. 초기 적재는 충돌 시 무시하는 upsert로 기존 목록을 보존한다. 배포와 갱신이 겹쳐도 이전 checkout의 목록이 최신 목록을 덮어쓰지 않는다. 기존 목록 교체는 시드 명령이 담당한다. `--remote`·`--skip-vault`와 함수명을 명시한다. 봇 시크릿은 별도의 `supabase secrets set --env-file supabase/functions/.env --remote=<ref> --yes`로 관리한다.
+
+`seed-symbols.ts`는 생성한 `scripts/symbols.json`을 읽으며 `--file`로 다른 스냅샷을 선택할 수 있다. 잘못된·빈 목록과 심볼별 정식명 중복을 거부한다. 사용자 별칭·요청 기록·토큰은 건드리지 않고 한 행을 upsert하므로 재실행할 수 있다.
+
+`cleanup-images.ts`는 호출 시작 시각으로 7일 경계를 고정한다. root의 봇 형식 PNG만 서버 `created_at`으로 판정하며 경계 시각과 같은 객체도 만료로 본다. 폴더·다른 이름·날짜 누락·미래 시각은 보존한다. 이름순으로 모든 페이지를 먼저 읽고 삭제해 자체 삭제로 offset이 밀리지 않게 한다. 삭제는 최대 1,000개씩 진행하며 부분 실패는 성공한 수를 알리고 종료 코드 1을 반환한다. 재실행하면 남은 객체를 다시 조회한다. `storage.objects`를 SQL로 삭제하지 않는다.
+
+운영 코드의 Node 타입 설정은 `supabase/scripts/tsconfig.json`이며 `typecheck:scripts`에 포함한다. 단위 테스트가 다중 페이지·배치·실패·경계를 검증하고, 격리된 통합 검증이 실제 시드 교체·별칭 보존·Storage 삭제·미리보기·재실행을 확인한다. 테스트 전용 생성 시각 조정 RPC는 임시 프로젝트에만 설치한다.
 
 ## 프로젝트 구조
 

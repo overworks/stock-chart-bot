@@ -2,6 +2,8 @@
 .branches
 .temp
 .env
+.env.*
+!.env.example
 _assets/
 
 # dotenvx

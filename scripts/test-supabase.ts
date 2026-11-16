@@ -57,6 +57,7 @@ try {
   });
   cpSync(join(ROOT, "test/supabase/edge/bootstrap.ts"), join(workspace, "supabase/functions/stock-chart-bot/bootstrap.ts"));
   cpSync(join(ROOT, "test/supabase/edge/fixtures.sql"), join(workspace, "supabase/migrations/20261114000001_edge_fixtures.sql"));
+  cpSync(join(ROOT, "test/supabase/operations/fixtures.sql"), join(workspace, "supabase/migrations/20261116000000_operations_fixtures.sql"));
   const signing = JSON.parse(readFileSync(join(ROOT, "test/keypair.json"), "utf8")) as { publicHex: string };
   writeFileSync(join(workspace, "supabase/functions/.env"), [
     "DISCORD_APPLICATION_ID=fixture-app", `DISCORD_PUBLIC_KEY=${signing.publicHex}`,

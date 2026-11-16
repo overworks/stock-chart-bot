@@ -15,6 +15,9 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 봇
 | 로컬 개발 | `npm run dev` |
 | Supabase 로컬 개발 | `npm run dev:supabase` (로컬 Supabase를 시작한 뒤 실행) |
 | Supabase 자산 준비 | `npm run prepare:supabase` (WASM·폰트·라이선스 복사 및 의존성 버전 확인) |
+| Supabase 배포 | `npm run deploy:supabase -- --project-ref <ref>` (마이그레이션·시드·함수) |
+| Supabase 시드 적재 | `npm run seed:symbols:supabase -- --project-ref <ref>` |
+| Supabase 이미지 정리 | `npm run cleanup:images:supabase -- --project-ref <ref> [--dry-run]` |
 | 타입 검사 | `npm run typecheck` (import 경계 + 공통·Cloudflare·Supabase·Node·테스트) |
 | 테스트 | `npm test` |
 | Supabase 통합 검증 | `npm run test:supabase` (Node 22+, Docker, Supabase CLI 3.1.0) |
@@ -129,6 +132,11 @@ src/
   - 서버 키는 플랫폼이 제공하는 `SUPABASE_SECRET_KEYS`의 `default`를 우선하며, 해당 변수가 없으면 `SUPABASE_SERVICE_ROLE_KEY`를 사용한다. 키를 코드·로그·공개 URL에 넣지 않는다.
   - 실제 Edge Runtime 검증은 테스트 전용 bootstrap에서 시세·메신저 전송만 로컬 fixture로 대체하고 운영 진입점을 실행한다. 테스트용 SQL·bootstrap을 운영 함수에 포함하지 않는다.
   - 로컬에서는 기능 정확성을 검증한다. 일반 요청 흐름은 실제 Edge Runtime에서, 2,000봉 렌더링은 CPU 상한이 없는 별도 Deno 테스트에서 확인한다. 로컬 CPU 한도 초과만으로 운영 성능을 판정하거나 차트 표현을 바꾸지 않는다. CPU 예산 충족 여부는 배포 환경에서 측정한다.
+- **Supabase 운영 명령**:
+  - Node 운영 코드는 `supabase/scripts/`에 두고 별도 Node 타입으로 검사한다. 대상은 `--project-ref`·`SUPABASE_PROJECT_REF` 또는 `SUPABASE_URL`로 명시하며, ref와 URL이 함께 있으면 일치를 검사한다.
+  - 인증은 `SUPABASE_SECRET_KEY` 또는 기존 서비스 역할 환경변수를 사용한다. 프로젝트 ref만 지정한 로컬 실행은 인증된 CLI 3.1.0으로 키를 읽으며 값을 출력하지 않는다. 함수용 `.env`를 운영 명령에서 자동으로 읽지 않는다.
+  - 시드는 비어 있지 않은 유효 목록만 `chart_symbol_catalog` 한 행에 upsert한다. 사용자 별칭·요청·토큰을 변경하지 않는다.
+  - 이미지 정리는 root의 봇 이름 형식 PNG 중 서버 생성 시각이 기준 시각보다 7일 이상 지난 객체만 대상으로 삼는다. 전체 페이지를 이름순으로 읽은 뒤 Storage API로 최대 1,000개씩 삭제한다. 폴더·미확인 이름·유효하지 않은 날짜·최근 객체는 보존한다. `--dry-run`은 삭제하지 않으며 부분 실패 후 재실행을 허용한다.
 - **시크릿 및 생성물**: Cloudflare 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영), Supabase 시크릿은 `supabase/functions/.env`(로컬)와 플랫폼 시크릿을 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`·함수 `_assets/`·`.deno/`는 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
 - **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`를 명시해 기존 설정의 `main` 값과 호환한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행한다. 단위 테스트의 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리하고, `test/supabase/**`는 전용 설정으로 임시 로컬 서비스에 연결한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.

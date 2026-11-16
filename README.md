@@ -132,6 +132,23 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 - **운영 설정 등록**: Settings → Secrets and variables → Actions → Variables에 `WRANGLER_CONFIG`를 등록한다. Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 로컬에서 배포를 롤백할 때는 `npx wrangler rollback --config cloudflare/wrangler.jsonc`를 사용한다.
 - **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다. 원격 KV 적재에는 자동 배포와 동일한 Variable 및 두 가지 Secrets가 필요하다.
 
+## Supabase 설치 및 운영
+
+Node.js 22 이상, Docker, Supabase CLI 3.1.0을 준비하고 `supabase login`으로 인증한다. `supabase/functions/.env.example`을 `.env`로 복사해 메신저·선택적 KIS 키를 입력한다.
+
+```bash
+export SUPABASE_PROJECT_REF="<프로젝트 ref>"
+supabase secrets set --env-file supabase/functions/.env --remote="$SUPABASE_PROJECT_REF" --yes
+npm run deploy:supabase
+npm run seed:symbols:supabase                       # 종목 목록만 다시 적재
+npm run cleanup:images:supabase -- --dry-run        # 7일 지난 차트 이미지 확인
+npm run cleanup:images:supabase                    # 확인한 만료 이미지 삭제
+```
+
+배포 명령은 자산 준비·DB 마이그레이션·초기 종목 시드·함수 배포를 순서대로 실행한다. 기존 목록은 보존하며 갱신은 시드 명령으로 수행한다. 함수 URL은 `https://<ref>.supabase.co/functions/v1/stock-chart-bot`이며 Discord는 `/discord`, Slack은 `/slack`을 연결한다. 메신저 서명으로 인증하므로 함수 JWT 검증은 끈다. 두 환경은 각각 별칭 저장소를 사용하며 시드 갱신은 사용자 별칭을 보존한다.
+
+시드·이미지 정리는 `SUPABASE_URL`과 서버 키 `SUPABASE_SECRET_KEY`(또는 `SUPABASE_SERVICE_ROLE_KEY`)를 환경변수로 제공해도 된다. ref만 지정하면 인증된 CLI가 서버 키를 읽는다. 키를 명령 인자나 Git에 넣지 않는다. 자세한 동작은 [운영 명령 안내](./CONTRIBUTING.md#supabase-운영-명령)를 참고한다.
+
 ## 개발 및 기여
 
 ```bash
@@ -146,7 +163,7 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"     # 로컬 PNG 렌더링 확인
 
 Supabase에서 로컬로 실행하려면 Docker와 Supabase CLI 3.1.0을 준비하고 `supabase/functions/.env.example`을 `.env`로 복사해 메신저 서명 키를 입력한다. 새 개발용 프로젝트에서 `supabase start` 후 `npm run dev:supabase`를 실행한다. 기본 함수 URL은 `http://127.0.0.1:54321/functions/v1/stock-chart-bot`이며 `/discord`, `/slack` 경로를 사용한다. WASM·폰트 준비와 Deno 의존성 버전 확인은 자동으로 수행한다.
 
-`npm run test:supabase`는 별도 임시 프로젝트에서 실제 DB·Storage 권한과 Edge Runtime의 서명 검증·초기 응답·PNG 생성·결과 전송을 검증한다. 시세와 메신저 전송은 로컬 fixture로 대체하며 종료 시 소유한 컨테이너·볼륨만 정리한다. 개발·운영 프로젝트를 연결하거나 초기화할 필요가 없다. 운영 배포·종목 시드·이미지 만료 정리 자동화는 다음 단계에서 추가한다. 자세한 개발 절차는 [CONTRIBUTING.md](./CONTRIBUTING.md#supabase-로컬-실행)를 참고한다.
+`npm run test:supabase`는 별도 임시 프로젝트에서 실제 DB·Storage 권한과 Edge Runtime의 서명 검증·초기 응답·PNG 생성·결과 전송, 시드·이미지 정리 동작을 검증한다. 시세와 메신저 전송은 로컬 fixture로 대체하며 종료 시 소유한 컨테이너·볼륨만 정리한다. 개발·운영 프로젝트를 연결하거나 초기화할 필요가 없다. 자세한 개발 절차는 [CONTRIBUTING.md](./CONTRIBUTING.md#supabase-로컬-실행)를 참고한다.
 
 로컬에서는 일반 요청을 실제 Edge Runtime으로, 2,000봉 선·캔들·거래량 PNG 생성을 별도 Deno 테스트로 확인한다. 저성능 로컬 머신에서 관찰한 CPU 한도 초과를 운영 성능의 판정 기준으로 사용하지 않는다. 실제 CPU 예산 충족 여부와 최초·반복 호출 성능은 배포 후 측정한다.
 
