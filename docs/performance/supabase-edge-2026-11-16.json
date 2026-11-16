@@ -1,0 +1,210 @@
+{
+  "implementation_commit": "c7567de",
+  "project_ref": "ylrplxrocwlbejdqflti",
+  "production_function": "stock-chart-bot",
+  "production_version": 1,
+  "started_at": "2026-11-16T05:11:28.281Z",
+  "finished_at": "2026-11-16T05:12:24.357Z",
+  "region": "ap-northeast-2",
+  "runtime": "supabase-edge-runtime-1.79.1 (compatible with Deno v2.1.4)",
+  "method": {
+    "fixed_price_fixture": true,
+    "real_symbol_database": true,
+    "seeded_entries": 4557,
+    "png_dimensions": [
+      960,
+      540
+    ],
+    "concurrent_requests": 1,
+    "measured_scope": "runChart and chart.render; excludes real market API and messenger delivery"
+  },
+  "samples": [
+    {
+      "count": 2000,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 851.06,
+      "worker": "6404918f-fad4-4fdf-a1ff-9d136afe216b",
+      "call": 1,
+      "total_ms": 706.23,
+      "render_ms": 591.86,
+      "region": "ap-northeast-2",
+      "bytes": 52281
+    },
+    {
+      "count": 2000,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 302.65,
+      "worker": "6404918f-fad4-4fdf-a1ff-9d136afe216b",
+      "call": 2,
+      "total_ms": 214.66,
+      "render_ms": 212.34,
+      "region": "ap-northeast-2",
+      "bytes": 52281
+    },
+    {
+      "count": 2000,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 313.1,
+      "worker": "6404918f-fad4-4fdf-a1ff-9d136afe216b",
+      "call": 3,
+      "total_ms": 211.12,
+      "render_ms": 208.64,
+      "region": "ap-northeast-2",
+      "bytes": 52281
+    },
+    {
+      "count": 2000,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 893.41,
+      "worker": "f970f951-0e3d-4ce8-a533-572b5da17557",
+      "call": 1,
+      "total_ms": 682.38,
+      "render_ms": 593.01,
+      "region": "ap-northeast-2",
+      "bytes": 52281
+    },
+    {
+      "count": 2000,
+      "style": "line",
+      "volume": true,
+      "status": 200,
+      "http_ms": 861.07,
+      "worker": "f970f951-0e3d-4ce8-a533-572b5da17557",
+      "call": 2,
+      "total_ms": 465.65,
+      "render_ms": 463.17,
+      "region": "ap-northeast-2",
+      "bytes": 46179
+    },
+    {
+      "count": 2000,
+      "style": "line",
+      "volume": true,
+      "status": 200,
+      "http_ms": 860.28,
+      "worker": "a86008c0-7f15-4360-b829-4d06b117254e",
+      "call": 1,
+      "total_ms": 639.21,
+      "render_ms": 524.96,
+      "region": "ap-northeast-2",
+      "bytes": 46179
+    },
+    {
+      "count": 30,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 171.38,
+      "worker": "a86008c0-7f15-4360-b829-4d06b117254e",
+      "call": 2,
+      "total_ms": 109.2,
+      "render_ms": 108.41,
+      "region": "ap-northeast-2",
+      "bytes": 44816
+    },
+    {
+      "count": 30,
+      "style": "candle",
+      "volume": true,
+      "status": 200,
+      "http_ms": 769.37,
+      "worker": "a86008c0-7f15-4360-b829-4d06b117254e",
+      "call": 3,
+      "total_ms": 37.27,
+      "render_ms": 36.27,
+      "region": "ap-northeast-2",
+      "bytes": 44816
+    },
+    {
+      "count": 30,
+      "style": "line",
+      "volume": false,
+      "status": 200,
+      "http_ms": 351.51,
+      "worker": "5431ce51-99fd-4db5-bbe7-9af8bde615a3",
+      "call": 1,
+      "total_ms": 225.6,
+      "render_ms": 141.56,
+      "region": "ap-northeast-2",
+      "bytes": 41097
+    },
+    {
+      "count": 30,
+      "style": "line",
+      "volume": false,
+      "status": 200,
+      "http_ms": 143.93,
+      "worker": "5431ce51-99fd-4db5-bbe7-9af8bde615a3",
+      "call": 2,
+      "total_ms": 77.44,
+      "render_ms": 76.5,
+      "region": "ap-northeast-2",
+      "bytes": 41097
+    }
+  ],
+  "workers": [
+    {
+      "worker": "6404918f-fad4-4fdf-a1ff-9d136afe216b",
+      "calls": 3,
+      "execution_id": "601699e6-d668-49a8-8f67-8b68903c0117",
+      "cpu_time_used_ms": 1067,
+      "shutdown_reason": "EarlyDrop",
+      "memory_used_bytes": 30103385
+    },
+    {
+      "worker": "f970f951-0e3d-4ce8-a533-572b5da17557",
+      "calls": 2,
+      "execution_id": "02327dab-e911-4dfb-b5cb-4afdbe78d6e4",
+      "cpu_time_used_ms": 1252,
+      "shutdown_reason": "EarlyDrop",
+      "memory_used_bytes": 30043913
+    },
+    {
+      "worker": "a86008c0-7f15-4360-b829-4d06b117254e",
+      "calls": 3,
+      "execution_id": "4d1a131b-0882-4816-9bb9-b6841133a01b",
+      "cpu_time_used_ms": 1183,
+      "shutdown_reason": "EarlyDrop",
+      "memory_used_bytes": 27367764
+    },
+    {
+      "worker": "5431ce51-99fd-4db5-bbe7-9af8bde615a3",
+      "calls": 2,
+      "execution_id": "5cecda09-1f2d-43db-a377-043999eceb42",
+      "cpu_time_used_ms": 305,
+      "shutdown_reason": "EarlyDrop",
+      "memory_used_bytes": 25270929
+    }
+  ],
+  "production_checks": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/discord",
+      "status": 401
+    },
+    {
+      "path": "/slack",
+      "status": 401
+    }
+  ],
+  "storage": {
+    "public_read": true,
+    "identical_png": true,
+    "test_object_deleted": true
+  },
+  "cleanup": {
+    "temporary_function": "stock-chart-probe-4e6c215d",
+    "function_deleted": true
+  }
+}
