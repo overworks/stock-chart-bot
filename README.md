@@ -1,6 +1,6 @@
 # stock-chart-bot
 
-Discord와 Slack에서 슬래시 커맨드로 주식·ETF·지수·환율·암호화폐 차트를 그려 주는 Cloudflare Workers 봇이다.
+Discord와 Slack에서 슬래시 커맨드로 주식·ETF·지수·환율·암호화폐 차트를 그려 주는 봇이다. Cloudflare Workers와 Supabase Edge Functions 실행을 지원한다.
 
 ## 사용법
 
@@ -60,7 +60,7 @@ Slack:   /stock-alias add <별칭> <종목명|심볼> | remove <별칭> | list
 ```
 
 - `list`는 누구나 실행할 수 있다. `add`와 `remove`는 Discord에서는 서버 관리 권한(`관리자` 또는 `서버 관리`)이 있는 사용자만, Slack에서는 `SLACK_ALIAS_ADMINS`에 등록된 사용자만 실행할 수 있다.
-- 채팅 명령어로 추가한 별칭은 KV의 `aliases:v1` 키에 별도로 저장되므로 평일 종목 목록 자동 갱신에 덮어써지지 않는다. 영구적인 기본 별칭은 `scripts/symbols.manual.json`에서 관리한다.
+- 채팅 명령어로 추가한 별칭은 Cloudflare KV의 `aliases:v1` 또는 Supabase의 별도 테이블에 저장되므로 종목 목록 갱신에 덮어써지지 않는다. 영구적인 기본 별칭은 `scripts/symbols.manual.json`에서 관리한다.
 
 ## 데이터 출처
 
@@ -144,7 +144,11 @@ npm run smoke -- "AAPL:1d,005930.KS:1m:candle"     # 로컬 PNG 렌더링 확인
 
 `dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. 로컬 개발 상태는 루트 `.wrangler/state`에 저장한다. 아키텍처, 내부 설계, 새 플랫폼·데이터 소스 추가 방법은 [CONTRIBUTING.md](./CONTRIBUTING.md)를 참고한다.
 
-Supabase 저장소 어댑터를 검증하려면 Docker와 Supabase CLI 3.1.0을 준비한 뒤 `npm run test:supabase`를 실행한다. 전용 임시 프로젝트에 마이그레이션을 적용하고 실제 DB·Storage 권한을 검증한 뒤 테스트 컨테이너와 볼륨을 정리한다. 개발·운영 Supabase 프로젝트를 연결하거나 초기화할 필요가 없다. Edge Functions 진입점과 운영 배포 연결은 다음 단계에서 추가한다.
+Supabase에서 로컬로 실행하려면 Docker와 Supabase CLI 3.1.0을 준비하고 `supabase/functions/.env.example`을 `.env`로 복사해 메신저 서명 키를 입력한다. 새 개발용 프로젝트에서 `supabase start` 후 `npm run dev:supabase`를 실행한다. 기본 함수 URL은 `http://127.0.0.1:54321/functions/v1/stock-chart-bot`이며 `/discord`, `/slack` 경로를 사용한다. WASM·폰트 준비와 Deno 의존성 버전 확인은 자동으로 수행한다.
+
+`npm run test:supabase`는 별도 임시 프로젝트에서 실제 DB·Storage 권한과 Edge Runtime의 서명 검증·초기 응답·PNG 생성·결과 전송을 검증한다. 시세와 메신저 전송은 로컬 fixture로 대체하며 종료 시 소유한 컨테이너·볼륨만 정리한다. 개발·운영 프로젝트를 연결하거나 초기화할 필요가 없다. 운영 배포·종목 시드·이미지 만료 정리 자동화는 다음 단계에서 추가한다. 자세한 개발 절차는 [CONTRIBUTING.md](./CONTRIBUTING.md#supabase-로컬-실행)를 참고한다.
+
+로컬에서는 일반 요청을 실제 Edge Runtime으로, 2,000봉 선·캔들·거래량 PNG 생성을 별도 Deno 테스트로 확인한다. 저성능 로컬 머신에서 관찰한 CPU 한도 초과를 운영 성능의 판정 기준으로 사용하지 않는다. 실제 CPU 예산 충족 여부와 최초·반복 호출 성능은 배포 후 측정한다.
 
 ## 라이선스 고지
 

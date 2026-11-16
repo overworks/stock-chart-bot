@@ -1,18 +1,19 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { closeSync, cpSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
-const EXCLUDED = "realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor";
+const EXCLUDED = "realtime,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor";
 const workspace = mkdtempSync(join(tmpdir(), "stock-chart-supabase-test-"));
 const logPath = join(workspace, "supabase.log");
 const log = openSync(logPath, "w", 0o600);
 let started = false;
 let cleaned = false;
+let edge: ChildProcess | undefined;
 
 function cli(args: string[]): string {
   return execFileSync("supabase", [...args, "--workdir", workspace], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", log] });
@@ -21,6 +22,9 @@ function cli(args: string[]): string {
 function cleanup(): void {
   if (cleaned) return;
   cleaned = true;
+  if (edge?.pid) {
+    try { process.kill(-edge.pid, "SIGTERM"); } catch {}
+  }
   let stopped = !started;
   if (started) {
     const result = spawnSync("supabase", ["stop", "--no-backup", "--workdir", workspace], { stdio: ["ignore", log, log] });
@@ -37,6 +41,7 @@ process.on("SIGTERM", () => { process.exitCode = 143; cleanup(); process.exit();
 try {
   const version = execFileSync("supabase", ["--version"], { encoding: "utf8" }).trim();
   if (version !== "3.1.0") throw new Error("로컬 통합 검증에는 Supabase CLI 3.1.0이 필요합니다.");
+  execFileSync("npm", ["run", "test:render:supabase"], { cwd: ROOT, stdio: "inherit" });
   const servers = [createServer(), createServer(), createServer()];
   await Promise.all(servers.map((server) => new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -46,9 +51,21 @@ try {
   await Promise.all(servers.map((server) => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))));
   mkdirSync(join(workspace, "supabase"));
   cpSync(join(ROOT, "supabase/migrations"), join(workspace, "supabase/migrations"), { recursive: true });
+  cpSync(join(ROOT, "src"), join(workspace, "src"), { recursive: true });
+  cpSync(join(ROOT, "supabase/functions"), join(workspace, "supabase/functions"), {
+    recursive: true, filter: (source) => !basename(source).startsWith(".env"),
+  });
+  cpSync(join(ROOT, "test/supabase/edge/bootstrap.ts"), join(workspace, "supabase/functions/stock-chart-bot/bootstrap.ts"));
+  cpSync(join(ROOT, "test/supabase/edge/fixtures.sql"), join(workspace, "supabase/migrations/20261114000001_edge_fixtures.sql"));
+  const signing = JSON.parse(readFileSync(join(ROOT, "test/keypair.json"), "utf8")) as { publicHex: string };
+  writeFileSync(join(workspace, "supabase/functions/.env"), [
+    "DISCORD_APPLICATION_ID=fixture-app", `DISCORD_PUBLIC_KEY=${signing.publicHex}`,
+    "SLACK_SIGNING_SECRET=local-edge-slack-secret", "SLACK_ALIAS_ADMINS=U_ADMIN", "",
+  ].join("\n"), { mode: 0o600 });
   const overrides = new Map([
     ["project_id", `"stock-chart-bot-test-${randomUUID().slice(0, 8)}"`],
     ["api.port", String(ports[0])], ["db.port", String(ports[1])], ["db.shadow_port", String(ports[2])],
+    ["functions.stock-chart-bot.entrypoint", '"./functions/stock-chart-bot/bootstrap.ts"'],
   ]);
   let section = "";
   const config = readFileSync(join(ROOT, "supabase/config.toml"), "utf8").split("\n").map((line) => {
@@ -70,6 +87,29 @@ try {
     throw new Error("통합 검증은 로컬 Supabase에서만 실행할 수 있습니다.");
   }
   if (!status.SERVICE_ROLE_KEY || !status.ANON_KEY) throw new Error("로컬 검증 자격증명을 읽지 못했습니다.");
+  edge = spawn("supabase", ["functions", "serve", "stock-chart-bot", "--workdir", workspace, "--env-file", join(workspace, "supabase/functions/.env")], {
+    cwd: ROOT, stdio: ["ignore", log, log], detached: true,
+  });
+  let edgeError: Error | undefined;
+  edge.on("error", (err) => { edgeError = err; });
+  const deadline = Date.now() + 120_000;
+  let ready = false;
+  while (Date.now() < deadline) {
+    if (edgeError || edge.exitCode !== null) throw new Error("로컬 Edge Runtime 실행에 실패했습니다.");
+    try {
+      const response = await fetch(`${status.API_URL}/functions/v1/stock-chart-bot/`, { signal: AbortSignal.timeout(60_000) });
+      const body = await response.text();
+      if (response.ok && body === "stock-chart-bot") { ready = true; break; }
+      if (response.status >= 500) {
+        writeFileSync(join(workspace, "edge-response.log"), body, { mode: 0o600 });
+        throw new Error("Edge Runtime 함수 초기화에 실패했습니다.");
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === "Edge Runtime 함수 초기화에 실패했습니다.") throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  if (!ready) throw new Error("Edge Runtime 함수 준비 시간이 초과됐습니다.");
   const result = spawnSync(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "--config", "test/supabase/vitest.config.ts"], {
     cwd: ROOT,
     stdio: "inherit",

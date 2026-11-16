@@ -3,7 +3,7 @@
 - 작성일: 2026-11-14
 - 기준 커밋: `cedd35f` (`main`)
 - 작업 브랜치: `feat/supabase-edge-runtime`
-- 현재 단계: 6단계 Supabase 저장소 어댑터 및 로컬 DB·Storage 검증 완료. 다음 작업은 7단계 Edge Functions 실행 연결이다.
+- 현재 단계: 7단계 Edge Functions 실행 연결 완료. 사용자 지정 Supabase 프로젝트에 배포한 뒤 실제 성능을 측정한다. 8단계 운영 자동화는 다음 구현 단계다.
 - 진행 방식: 한 번에 한 단계씩 구현·검증·커밋한 뒤 결과를 보고한다.
 
 ## 목표와 범위
@@ -20,7 +20,7 @@
 - Cloudflare의 KV 키, DO 클래스·인스턴스 식별자·기존 마이그레이션, 별칭 변경 직렬화·중복 방지·KV 복제 재시도.
 - 이미지 전달 방식, 이미지 7일 보관, 구조화 로그와 민감정보 제외, WASM 자원 해제.
 
-현재 무료 Workers에서 운영 중인 점을 근거로 CPU 시간은 주요 설계 장애물로 두지 않는다. Supabase에서의 한글 PNG 생성, 최초·반복 호출과 긴 시계열 처리는 일반 통합 검증에 포함한다.
+7단계의 로컬 Edge Runtime에서 2,000봉 캔들·거래량 조합의 CPU hard limit 종료를 관찰했다. 2026-11-16 사용자 지시에 따라 이 머신의 측정값으로 운영 성능을 판정하지 않는다. 차트 표현을 유지하고 구현을 완성한 뒤 배포 환경에서 CPU 예산 충족 여부와 최초·반복 호출을 측정한다. 로컬 긴 차트의 기능 정확성은 CPU 상한이 없는 별도 Deno 테스트로 검증한다.
 
 ## 구조 대안 검토
 
@@ -149,7 +149,7 @@
 | 4 | `refactor: isolate provider HTTP cache options` | Yahoo·Upbit HTTP 전송 경계와 Cloudflare 캐시 힌트 분리 | 기존 캐시 시간·검색 호출 조건·시세 폴백 보존 |
 | 5 | `refactor: make shared code runtime independent` | 명시적 import 경로, 공통/Workers/Node 타입 검사 분리 | 공통 코드가 Cloudflare 타입 없이 검사되고 기존 smoke 진입점이 로드됨 |
 | 6 | `feat: add Supabase persistence adapters` | DB 마이그레이션·별칭 RPC·시드/토큰/이미지 어댑터 | 로컬 DB 동시 변경·재전송·권한·캐시 만료·Storage 읽기 테스트 통과 |
-| 7 | `feat: run the bot on Supabase Edge Functions` | 함수·설정·환경변수·경로·waitUntil·WASM/폰트 번들 연결 | 실제 로컬 Edge Runtime에서 서명된 요청 → 초기 응답 → PNG → 결과 전송 확인 |
+| 7 | `feat: run the bot on Supabase Edge Functions` | 함수·설정·환경변수·경로·waitUntil·WASM/폰트 번들 연결 | 실제 로컬 Edge Runtime에서 서명된 요청 → 초기 응답 → PNG → 결과 전송, Deno에서 2,000봉 PNG 생성 확인. 성능 판정은 배포 후 수행 |
 | 8 | `chore: complete dual-runtime operations and CI` | 두 환경 CI, 시드 적재, 이미지 정리, 배포·전환·복구 문서 | 외부 운영 시크릿 없는 PR 검증, 만료 정리·시드 재실행 검증, 운영 확인 항목 구분 |
 
 테스트를 마지막 단계까지 미루지 않는다. 저장소나 실행 경계가 생기는 커밋에 그 계약을 검증하는 테스트를 포함하고, Supabase 통합 테스트는 해당 구현 커밋부터 실행한다.
@@ -188,7 +188,7 @@
 - Cloudflare는 Worker 이름, KV/R2 리소스, DO 바인딩·클래스명·`idFromName` 값과 마이그레이션 이력을 보존한다. 추상화 때문에 영속 데이터를 재생성하지 않는다.
 - Git 커밋 복구, 배포 버전 복구, DB/설정 복구를 구분한다. 이미 적용된 Supabase DB 마이그레이션은 Git revert만으로 취소되지 않는다. 초기 마이그레이션은 추가형으로 만들고 코드 복구 시 데이터를 보존한다.
 - 운영 전환 시 별칭 쓰기를 조정하고 원본의 일관된 스냅샷을 확보한다. Cloudflare의 KV가 DO보다 늦을 수 있으므로 확인 없이 KV 복사본을 원본으로 간주하지 않는다. 되돌리는 동안 새로 생성된 별칭도 보존하는 절차를 문서화한다.
-- 커밋은 이 작업에서 명시적으로 허용됐다. push·운영 배포·웹훅 전환은 현재 계획 수립 작업에 포함하지 않는다.
+- 커밋은 이 작업에서 명시적으로 허용됐다. 2026-11-16 사용자가 구현 완료 후 Supabase 배포와 실제 성능 측정을 지시하고 대상 프로젝트 `ylrplxrocwlbejdqflti`를 제공했다. push·운영 웹훅 전환은 요청 범위에 포함하지 않는다.
 
 최종 인수 항목은 두 메신저의 세 명령, 권한·서명 오류, 자동완성, 동시·중복 별칭 변경, KIS 토큰 캐시, 한글/캔들/거래량/긴 기간 PNG, Slack 이미지 URL, 7일 이미지 정리, 두 배포 경로다. 실제 호스팅 검증을 수행하지 않았다면 로컬 검증과 구분해 기록한다.
 
@@ -207,7 +207,8 @@
 | 구현 4 | 완료 | `refactor: isolate provider HTTP cache options`, 아래 검증 기록 참고 |
 | 구현 5 | 완료 | `refactor: make shared code runtime independent`, 아래 검증 기록 참고 |
 | 구현 6 | 완료 | `feat: add Supabase persistence adapters`, 아래 검증 기록 참고 |
-| 구현 7–8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
+| 구현 7 | 완료 | 실행 연결·16개 통합 테스트·2개 Deno 긴 차트 검증 통과. 성능은 배포 후 측정 |
+| 구현 8 | 예정 | 구현별 완료 조건을 통과한 뒤 기록 |
 
 기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기준 시점에 있던 `core`의 Cloudflare 의존성 제거 결과는 각 단계의 기록에서 확인한다.
 
@@ -278,11 +279,24 @@
 - 개발 프로젝트 ID와 포트를 바꾼 복제 작업 공간에서도 11개 통합 테스트가 통과했다. 검증용 초기 스택과 테스트 스택을 모두 정리했고 기존 Docker 서비스는 유지했다.
 - Edge Functions 진입점·Deno 매핑은 7단계, 시드 적재·이미지 7일 정리·운영 CI는 8단계에서 연결한다. 원격 Supabase 프로젝트 변경이나 운영 웹훅 전환은 수행하지 않았다.
 
+### 7단계 완료 기록
+
+- `Deno.serve`·`EdgeRuntime.waitUntil`을 연결하고 함수 URL 접두사 제거, 메신저·KIS 설정, 서버 키 선택을 구현했다. 원본 본문 서명 검증과 도움말의 무입출력·무렌더링 경로를 유지한다.
+- `deno.json`에 공통 npm 의존성을 고정하고 lockfile을 추가했다. 준비 스크립트가 package-lock과 직접 의존성 버전을 비교하며 WASM·두 폰트·라이선스를 `_assets/`에 복사한다. 자산은 첫 차트에서만 읽고 `static_files`로 포함한다.
+- 개발 의존성 Deno 2.9.6으로 실제 진입점·자산·테스트 bootstrap을 검사한다. 로컬 Supabase CLI 3.1.0의 Edge Runtime 1.78.1(호환 Deno 2.1.4)에서도 함수 밖 공통 소스, npm 패키지와 정적 자산을 불러오는 것을 확인했다.
+- 통합 검증은 임시 프로젝트에만 테스트 bootstrap·수집 테이블·가짜 메신저 키를 넣는다. 운영 진입점을 그대로 실행하며 Yahoo 시세만 3.5초 지연 fixture로, 메신저 전송만 로컬 DB 수집으로 대체한다. 실제 `.env`와 외부 운영 서비스는 사용하지 않는다.
+- 전체 타입 검사, `npm test`(18개 파일·237개 테스트), Cloudflare dry-run을 통과했다. 공통 `src/` 변경은 없다.
+- Supabase 통합 검증 16개가 통과했다. 저장소 11개와 서명·도움말·자동완성·Discord 한글 PNG·별칭 권한/재전송·Slack 선/캔들 반복 전송을 확인했다. 시세 지연 중 두 메신저의 초기 응답은 3초 이내다. 로컬 Storage 이미지 확인에는 내부 프록시 URL의 경로를 외부 로컬 API 주소로 연결한다.
+- 최초 로컬 검증에서 2,000봉 캔들·거래량 조합이 CPU hard limit으로 종료됐다. 2026-11-16 사용자는 저성능 로컬 머신의 측정값으로 운영 성능을 판정하지 말고 구현 후 배포해 확인하도록 지시했다.
+- 이에 따라 CPU 상한이 없는 Deno에서 동일 자산 로더·공통 렌더러로 2,000봉 선·캔들·거래량 PNG를 생성하는 기능 테스트 2개를 추가했고 모두 통과했다. `test:supabase`가 이 테스트도 실행한다. 차트 데이터 집계·표현 변경·운영 CPU 제한 변경은 적용하지 않았다.
+- 7단계의 기능 검증을 마쳤으며, 성능 검증은 별도 배포 측정으로 진행한다. 테스트용 컨테이너·볼륨은 정리했다. 8단계 운영 자동화와 운영 웹훅 전환은 진행하지 않았다.
+
 ## 확인한 문서
 
 - [Supabase 의존성 관리](https://supabase.com/docs/guides/functions/dependencies): 함수별 `deno.json`, npm 패키지.
 - [Supabase 저장소의 외부 상대 import 사례](https://github.com/supabase/supabase/blob/master/supabase/functions/search-embeddings/index.ts): 함수 밖 공유 모듈 참조. 이 프로젝트의 런타임 코드 번들링은 별도 통합 테스트로 검증한다.
 - [Supabase WASM](https://supabase.com/docs/guides/functions/wasm): 정적 자산 포함과 CLI/Docker 배포.
+- [Supabase 시크릿](https://supabase.com/docs/guides/functions/secrets): 플랫폼 환경변수와 새 서버 키 사전.
 - [Supabase 백그라운드 작업](https://supabase.com/docs/guides/functions/background-tasks): `EdgeRuntime.waitUntil`과 로컬 수명 설정.
 - [Supabase 웹훅 인증](https://supabase.com/docs/guides/functions/auth#external-webhooks): JWT 검사를 끄고 제공자 서명을 검증하는 방식.
 - [Supabase Storage 삭제](https://supabase.com/docs/guides/storage/management/delete-objects): Storage API로 파일 삭제, 배치 제한.

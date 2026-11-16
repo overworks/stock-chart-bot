@@ -1,0 +1,8 @@
+{
+  "nodeModulesDir": "none",
+  "imports": {
+    "@resvg/resvg-wasm": "npm:@resvg/resvg-wasm@2.6.2",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.119.0",
+    "discord-interactions": "npm:discord-interactions@4.4.0"
+  }
+}

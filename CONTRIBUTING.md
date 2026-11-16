@@ -2,20 +2,23 @@
 
 ## 개요
 
-`stock-chart-bot`은 Cloudflare Workers 엣지에서 동작하는 주가 차트 봇이다.
+`stock-chart-bot`은 Cloudflare Workers와 Supabase Edge Functions에서 동작하는 주가 차트 봇이다.
 플랫폼에 독립적인 비즈니스 로직(`src/core`), 시세 제공자(`src/providers`), 메신저별 어댑터(`src/platforms`)를 분리해, 새로운 메신저나 데이터 소스를 추가하더라도 `core`를 수정하지 않는 구조를 지향한다.
 
 ## 개발 환경 및 명령
 
-- **요구 사항**: Node.js 22 이상 (Supabase SDK 요구사항, CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`). Supabase 통합 검증에는 Docker와 Supabase CLI 3.1.0이 필요하다.
+- **요구 사항**: Node.js 22 이상 (Supabase SDK 요구사항, CI는 Node.js 22), Cloudflare Wrangler 인증 (`npx wrangler login`). Supabase 실행·통합 검증에는 Docker와 Supabase CLI 3.1.0이 필요하다. Deno 타입 검사 도구는 npm 개발 의존성으로 설치한다.
 - **초기 설정**: `npm install` (`postinstall`에서 `wasm/resvg.wasm` 자동 복사) 후 `cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc`로 로컬 설정을 만들고, `cp cloudflare/.dev.vars.example cloudflare/.dev.vars`로 로컬 시크릿을 설정한다. 예시 설정 그대로 로컬 테스트와 빌드 검증이 가능하며, 실제 배포·원격 KV 적재 전에는 본인의 리소스 값을 입력한다. Cloudflare 리소스 생성 및 기존 루트 설정의 이동 절차는 [README.md](./README.md)를 참고한다.
 
 | 명령 | 설명 |
 |---|---|
 | `npm run dev` | 로컬 개발 서버 실행 (`http://localhost:8787`) |
+| `npm run dev:supabase` | WASM·폰트 준비 후 로컬 Edge Function 실행 |
+| `npm run prepare:supabase` | 함수 정적 자산 복사 및 npm/Deno 의존성 버전 일치 확인 |
 | `npm run typecheck` | import 경계 검사와 공통·Cloudflare·Supabase·Node·테스트 타입 검사 |
 | `npm test` | `workerd` 런타임에서 단위·회귀 테스트 실행 |
-| `npm run test:supabase` | 임시 로컬 Supabase와 실제 API로 저장소 통합 검증 |
+| `npm run test:supabase` | 임시 로컬 DB·Storage·Edge Runtime 통합 검증 |
+| `npm run test:render:supabase` | Deno에서 2,000봉 선·캔들·거래량의 실제 PNG 생성 검증 |
 | `npm run test:watch` | 테스트 워치 모드 실행 |
 | `npm run smoke -- "AAPL:1d,005930.KS:1m:candle"` | 실제 시세 조회 후 로컬 PNG 렌더링 확인 (`dist/smoke/`) |
 | `npm run fetch:symbols` | KIND 상장법인 + 네이버 ETF/ETN + 업비트 + 수동 별칭을 합쳐 `scripts/symbols.json` 생성 |
@@ -45,7 +48,7 @@ npm run build:cloudflare
 |---|---|---|
 | 공통 `src/**` | `tsconfig.json`: ES2022·DOM·DOM.Iterable, `types: []` | `npm run typecheck:shared` |
 | Workers 코드 | `cloudflare/tsconfig.json`: Workers 타입 | `npm run typecheck:cloudflare` |
-| Supabase 저장소 코드 | `supabase/tsconfig.json`: Web 표준 | `npm run typecheck:supabase` |
+| Supabase 코드 | `supabase/tsconfig.json`: Web 표준 + Deno의 진입점·자산·테스트 bootstrap 검사 | `npm run typecheck:supabase` |
 | Node 스크립트 | `scripts/tsconfig.json`: Node 타입과 Web 표준 | `npm run typecheck:scripts` |
 | workerd 테스트·Vitest 설정 | `test/tsconfig.json`: Workers·Node·테스트 타입 | `npm run typecheck:tests` |
 
@@ -53,9 +56,29 @@ npm run build:cloudflare
 
 `scripts/check-boundaries.ts`는 개발 전용 `@babel/parser`로 일반 import·re-export·type import·동적 import를 읽어 경계와 경로를 검사한다. 공통 코드에서 실행 환경 구현, Node 전용 모듈·전역, core에서 제공자·메신저 구현을 참조하면 실패한다. 주석·문자열 내용은 참조로 취급하지 않는다. `types: []`는 명시적인 SDK의 전이 타입 참조까지 제거하지 않으므로, Discord SDK가 노출하는 Node 전역의 사용도 이 검사로 차단한다.
 
-Supabase 저장소를 변경할 때는 `npm run test:supabase`를 추가 실행한다. 이 명령은 개발 설정과 별개의 임시 프로젝트 ID·임의 포트를 사용하고 SQL 마이그레이션만 복사한다. SDK 자격증명은 로컬 CLI에서 읽어 테스트 바인딩으로만 전달하며 출력하지 않는다. 성공·실패 후 해당 프로젝트의 컨테이너·볼륨을 정리하고, 실패 로그만 권한이 제한된 임시 디렉토리에 보존한다. 기존 Docker 서비스와 개발 데이터는 사용하지 않는다. 통합 테스트도 `workerd`에서 실행하며, 기본 `npm test`에서는 `test/supabase/**`를 제외한다.
+Supabase 코드를 변경할 때는 `npm run test:supabase`를 추가 실행한다. 이 명령은 개발 설정과 별개의 임시 프로젝트 ID·임의 포트를 사용하고 공통 소스·함수·마이그레이션·생성 자산을 복사한다. 실제 `.env` 파일은 복사하지 않는다. SDK 자격증명은 로컬 CLI에서 읽어 테스트 바인딩으로만 전달하며 출력하지 않는다. 성공·실패 후 해당 프로젝트의 컨테이너·볼륨을 정리하고, 실패 로그만 권한이 제한된 임시 디렉토리에 보존한다. 기존 Docker 서비스와 개발 데이터는 사용하지 않는다. 테스트 실행기는 `workerd`이며, HTTP로 실제 Edge Runtime을 호출한다. 기본 `npm test`에서는 `test/supabase/**`를 제외한다.
 
-`supabase/config.toml`은 현재 DB·API·인증·Storage만 활성화한다. Edge Functions 진입점과 실행 설정은 다음 단계에서 연결한다. 스키마 변경 후 개발용 로컬 프로젝트에서 `supabase gen types --schema public --lang typescript`로 `supabase/functions/stock-chart-bot/database.types.ts`를 다시 생성하고 TypeScript 포맷을 적용한다.
+`test/supabase/edge/bootstrap.ts`는 시세 응답에 3.5초 지연을 넣고 메신저 결과를 테스트 전용 테이블로 수집한다. 운영 `index.ts`를 불러와 서명·초기 응답·`EdgeRuntime.waitUntil`·한글 WASM 렌더링·Storage 공개 URL을 검증한다. 외부 시세나 메신저에는 요청하지 않는다. 테스트 bootstrap과 수집 테이블은 임시 프로젝트에만 추가한다.
+
+`test/supabase/deno/render.test.ts`는 동일한 자산 로더와 공통 렌더러로 2,000봉 선·캔들·거래량 PNG를 생성하고 크기를 확인한다. `test:supabase`는 이 Deno 검증도 먼저 실행한다. 머신 성능의 영향을 받는 로컬 2초 CPU 제한은 긴 차트의 기능 합격 기준으로 사용하지 않는다. 운영 CPU 예산 충족 여부와 최초·반복 호출 성능은 배포 환경에서 별도로 측정한다. 차트 데이터 집계나 표현 변경은 적용하지 않는다.
+
+스키마 변경 후 개발용 로컬 프로젝트에서 `supabase gen types --schema public --lang typescript`로 `supabase/functions/stock-chart-bot/database.types.ts`를 다시 생성하고 TypeScript 포맷을 적용한다.
+
+## Supabase 로컬 실행
+
+Docker와 CLI 3.1.0을 준비한 새 개발용 체크아웃에서 다음 명령을 실행한다.
+
+```bash
+cp supabase/functions/.env.example supabase/functions/.env
+supabase start
+npm run dev:supabase
+```
+
+`.env`에는 메신저 서명 키와 선택적인 KIS 키를 입력한다. `SUPABASE_URL`과 서버 키는 로컬 런타임이 제공한다. 서버 키는 새 `SUPABASE_SECRET_KEYS` JSON의 `default`를 우선하며, 변수가 없으면 기존 `SUPABASE_SERVICE_ROLE_KEY`를 사용한다. 로컬 기본 URL은 `http://127.0.0.1:54321/functions/v1/stock-chart-bot`이고 메신저 경로는 각각 `/discord`, `/slack`이다.
+
+`supabase/config.toml`의 `verify_jwt = false`는 외부 메신저 요청을 받기 위한 설정이다. 인증은 공통 어댑터의 원본 본문 서명 검증이 담당한다. `edge_runtime.policy = "per_worker"`로 초기 응답 후 백그라운드 작업이 완료되게 한다. 도움말 요청은 DB 조회·자산 읽기·WASM 초기화를 실행하지 않는다.
+
+`prepare:supabase`는 원본 WASM·폰트·라이선스를 함수 `_assets/`로 복사하고 `static_files`가 이를 포함한다. `_assets/`와 `.deno/` 캐시는 Git에서 제외한다. `deno.json`의 npm 버전이 package-lock과 다르면 준비를 실패시킨다. 개발 Deno 검사는 실제 Edge Runtime 검증을 대체하지 않는다. 운영 배포·종목 시드·이미지 만료 정리 자동화는 다음 단계에서 추가한다.
 
 ## 프로젝트 구조
 
@@ -74,6 +97,20 @@ cloudflare/
 ├─ tsconfig.json         # Cloudflare 런타임 코드 타입 검사
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 .dev.vars는 Git 제외)
 └─ vitest.config.ts      # workerd 테스트 설정
+supabase/
+├─ config.toml           # 로컬 서비스·함수·정적 자산 설정
+├─ migrations/           # 서버 역할 전용 DB·RPC·Storage 버킷
+└─ functions/
+   ├─ .env.example       # 메신저·KIS 환경변수 예시
+   └─ stock-chart-bot/
+      ├─ index.ts        # Deno.serve·EdgeRuntime.waitUntil
+      ├─ handler.ts      # 공통 앱 조립·함수 경로 접두사 제거
+      ├─ config.ts       # 환경변수·서버 키 해석
+      ├─ adapters.ts     # DB·토큰 캐시·Storage 어댑터
+      ├─ database.types.ts
+      ├─ assets.ts       # 지연 자산 로더·공통 렌더러 연결
+      ├─ deno.json       # 고정 npm 버전 매핑
+      └─ deno.lock
 src/
 ├─ app.ts                # 공통 라우팅과 설정·기능 주입
 ├─ config.ts             # BotConfig (메신저 설정)
@@ -218,4 +255,4 @@ Workers Logs와 Traces가 활성화되어 있으며, `logEvent(level, name, attr
 
 - **스타일 및 타입**: TypeScript `strict` 모드와 2칸 들여쓰기를 사용한다. 주석은 코드만으로 파악하기 어려운 배경 지식이나 제약 조건에만 간결하게 남기며, 사용자 노출 메시지는 한국어로 작성한다.
 - **Wrangler 설정**: 로컬 설정은 Git에서 제외한 `cloudflare/wrangler.jsonc`, 추적하는 예시는 `cloudflare/wrangler.jsonc.example`이다. 공통 설정 변경 시 예시 파일도 함께 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`도 명시해 기존 설정의 `main` 값과 호환한다. 설정 파일에는 비밀값을 넣지 않는다.
-- **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬), `wrangler secret`(운영), GitHub Actions Secrets(CI)만 사용하며 코드·설정·로그에 노출하지 않는다. 실제 `wrangler.jsonc`와 `.dev.vars`는 이전 위치인 루트에서도 Git 제외를 유지한다. 생성물(`node_modules/`, `dist/`, `wasm/*.wasm`)은 커밋하지 않는다.
+- **시크릿 및 생성물**: Cloudflare 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영), Supabase 시크릿은 `supabase/functions/.env`(로컬)와 플랫폼 시크릿, CI 시크릿은 GitHub Actions Secrets를 사용하며 코드·설정·로그에 노출하지 않는다. 실제 `wrangler.jsonc`와 `.dev.vars`는 이전 위치인 루트에서도 Git 제외를 유지한다. 생성물(`node_modules/`, `dist/`, `wasm/*.wasm`, 함수 `_assets/`, `.deno/`)은 커밋하지 않는다.

@@ -4,5 +4,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["./functions/**/*.ts"]
+  "include": ["./functions/**/*.ts"],
+  "exclude": ["./functions/stock-chart-bot/index.ts", "./functions/stock-chart-bot/assets.ts"]
 }

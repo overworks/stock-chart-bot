@@ -39,4 +39,10 @@ site_url = "http://127.0.0.1:3000"
 enabled = false
 
 [edge_runtime]
-enabled = false
+enabled = true
+policy = "per_worker"
+
+[functions.stock-chart-bot]
+verify_jwt = false
+entrypoint = "./functions/stock-chart-bot/index.ts"
+static_files = ["./functions/stock-chart-bot/_assets/*"]

@@ -24,5 +24,8 @@ export default defineConfig({
       SUPABASE_TEST_ANON_KEY: required("SUPABASE_TEST_ANON_KEY"),
     },
   } })],
-  test: { include: ["test/supabase/**/*.test.ts"], testTimeout: 20_000, hookTimeout: 30_000 },
+  test: {
+    include: ["test/supabase/**/*.test.ts"], exclude: ["test/supabase/deno/**"],
+    fileParallelism: false, testTimeout: 20_000, hookTimeout: 30_000,
+  },
 });

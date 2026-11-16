@@ -5,7 +5,7 @@ AI 에이전트 및 자동화 세션이 이 저장소에서 작업할 때 따라
 
 ## 프로젝트
 
-Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Cloudflare Workers 봇이다.
+Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 봇이다. Cloudflare Workers와 Supabase Edge Functions 진입점을 제공한다.
 플랫폼 중립적인 `core`, 시세 소스별 `providers`, 메신저별 `platforms` 어댑터로 이루어진다.
 
 ## 자주 쓰는 명령
@@ -13,9 +13,12 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 | 목적 | 명령 |
 |---|---|
 | 로컬 개발 | `npm run dev` |
+| Supabase 로컬 개발 | `npm run dev:supabase` (로컬 Supabase를 시작한 뒤 실행) |
+| Supabase 자산 준비 | `npm run prepare:supabase` (WASM·폰트·라이선스 복사 및 의존성 버전 확인) |
 | 타입 검사 | `npm run typecheck` (import 경계 + 공통·Cloudflare·Supabase·Node·테스트) |
 | 테스트 | `npm test` |
 | Supabase 통합 검증 | `npm run test:supabase` (Node 22+, Docker, Supabase CLI 3.1.0) |
+| Supabase 긴 차트 렌더 검증 | `npm run test:render:supabase` (Deno, 2,000봉 선·캔들·거래량 PNG) |
 | 로컬 렌더 확인 | `npm run smoke -- "AAPL:1d,005930.KS:1m"` |
 | 종목 목록 갱신 | `npm run fetch:symbols` (KIND 주식 + 네이버 ETF/ETN + 업비트 + 수동 별칭 → `scripts/symbols.json`) |
 | KV 심볼 시드 | `npm run seed:symbols` (`scripts/symbols.json` → KV `symbols:v1`) |
@@ -26,7 +29,7 @@ Discord와 Slack에서 슬래시 커맨드로 주가 차트를 그려 주는 Clo
 
 `dev`, `deploy`, `test`, `register`, `seed:symbols`는 각각 `:cloudflare` 명령의 별칭이다. Cloudflare 설정·시크릿·Vitest 설정은 `cloudflare/`에 두며, 로컬 개발 상태는 루트 `.wrangler/state`를 사용한다.
 
-Supabase 저장소 구현은 `supabase/functions/stock-chart-bot/adapters.ts`, 스키마는 `supabase/migrations/`에 둔다. `supabase/tsconfig.json`으로 별도 검사하며 SDK 타입을 공통 코드로 전달하지 않는다. 개발 도구는 Node.js 22 이상을 사용한다.
+Supabase 코드는 `supabase/functions/stock-chart-bot/`, 스키마는 `supabase/migrations/`에 둔다. `supabase/tsconfig.json`과 Deno 검사로 별도 검증하며 SDK 타입을 공통 코드로 전달하지 않는다. 개발 도구는 Node.js 22 이상과 npm에 고정한 Deno를 사용한다.
 
 ## 구조
 
@@ -45,6 +48,20 @@ cloudflare/
 ├─ tsconfig.json         # Cloudflare 런타임 코드 타입 검사
 ├─ .dev.vars.example     # 로컬 시크릿 예시 (실제 시크릿은 Git 제외)
 └─ vitest.config.ts      # 저장소 루트의 test/**를 실행
+supabase/
+├─ config.toml           # 로컬 서비스·함수·정적 자산 설정
+├─ migrations/           # 서버 전용 DB·RPC·Storage 버킷
+└─ functions/
+   ├─ .env.example       # 로컬 환경변수 예시
+   └─ stock-chart-bot/
+      ├─ index.ts        # Deno.serve·EdgeRuntime.waitUntil
+      ├─ handler.ts      # 공통 앱 조립·함수 경로 정규화
+      ├─ config.ts       # 메신저·서버 키 설정
+      ├─ adapters.ts     # DB·토큰 캐시·Storage 어댑터
+      ├─ assets.ts       # 지연 자산 로더·공통 렌더러
+      ├─ database.types.ts
+      ├─ deno.json       # npm 의존성 매핑
+      └─ deno.lock
 src/
 ├─ app.ts              # 공통 라우팅과 주입된 설정·기능 연결
 ├─ config.ts           # 메신저 설정 (런타임 바인딩 제외)
@@ -106,7 +123,13 @@ src/
   - 별칭 목록은 `read_chart_aliases`의 단일 JSON 스냅샷을 사용해 1,000행 제한을 피한다. 토큰 만료는 초, 요청·캐시 만료는 밀리초 단위를 유지한다.
   - SDK 오류의 원문에는 토큰 등 행 데이터가 들어갈 수 있으므로 사용자 메시지·로그에 전달하지 않는다. 공개 차트 URL에는 자격증명을 포함하지 않는다.
   - 로컬 통합 검증은 `scripts/test-supabase.ts`가 임시 프로젝트·임의 포트·자격증명을 준비하고 소유한 컨테이너·볼륨만 정리한다. 개발·운영 DB에서 통합 테스트를 직접 실행하지 않는다.
-- **시크릿 및 생성물**: 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영)만 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`은 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
+- **Supabase 실행 환경**:
+  - `index.ts`가 `Deno.serve`와 `EdgeRuntime.waitUntil`을 연결한다. `handler.ts`는 함수 URL 접두사만 제거하며 요청 본문을 먼저 소비하지 않는다. `verify_jwt = false`를 유지하고 메신저 서명으로 인증한다.
+  - `assets.ts`는 첫 차트에서만 `_assets/`를 읽고 공통 렌더러를 초기화한다. `prepare:supabase`로 자산을 준비하며 `static_files`에 포함한다. `deno.json`의 npm 버전은 package-lock과 일치시킨다.
+  - 서버 키는 플랫폼이 제공하는 `SUPABASE_SECRET_KEYS`의 `default`를 우선하며, 해당 변수가 없으면 `SUPABASE_SERVICE_ROLE_KEY`를 사용한다. 키를 코드·로그·공개 URL에 넣지 않는다.
+  - 실제 Edge Runtime 검증은 테스트 전용 bootstrap에서 시세·메신저 전송만 로컬 fixture로 대체하고 운영 진입점을 실행한다. 테스트용 SQL·bootstrap을 운영 함수에 포함하지 않는다.
+  - 로컬에서는 기능 정확성을 검증한다. 일반 요청 흐름은 실제 Edge Runtime에서, 2,000봉 렌더링은 CPU 상한이 없는 별도 Deno 테스트에서 확인한다. 로컬 CPU 한도 초과만으로 운영 성능을 판정하거나 차트 표현을 바꾸지 않는다. CPU 예산 충족 여부는 배포 환경에서 측정한다.
+- **시크릿 및 생성물**: Cloudflare 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영), Supabase 시크릿은 `supabase/functions/.env`(로컬)와 플랫폼 시크릿을 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`·함수 `_assets/`·`.deno/`는 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
 - **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`를 명시해 기존 설정의 `main` 값과 호환한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행한다. 단위 테스트의 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리하고, `test/supabase/**`는 전용 설정으로 임시 로컬 서비스에 연결한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.
 
@@ -117,7 +140,7 @@ src/
 3. `npm run build:cloudflare` 성공
 4. `src/core/**`에 플랫폼 의존성이나 `src/providers/**` import가 유입되지 않았는지 확인
 
-Supabase 저장소·마이그레이션을 변경하면 `npm run test:supabase`도 통과해야 한다.
+Supabase 코드·마이그레이션을 변경하면 `npm run test:supabase`도 통과해야 한다.
 
 ## 하지 말 것
 
