@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: refresh-symbols
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -32,7 +36,9 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git diff --stat -- scripts/symbols.json
           fi
-      - if: steps.diff.outputs.changed == 'true' || github.event_name != 'schedule'
+      - id: seed_cloudflare
+        if: vars.CLOUDFLARE_ENABLED != 'false'
+        continue-on-error: true
         run: |
           if [ -z "$WRANGLER_CONFIG" ]; then
             echo "::error::GitHub Actions Variables에 WRANGLER_CONFIG를 등록해야 합니다."
@@ -44,6 +50,13 @@ jobs:
           WRANGLER_CONFIG: ${{ vars.WRANGLER_CONFIG }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - id: seed_supabase
+        if: vars.SUPABASE_PROJECT_REF != ''
+        continue-on-error: true
+        run: npm run seed:symbols:supabase
+        env:
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       - if: steps.diff.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
@@ -51,3 +64,8 @@ jobs:
           git add scripts/symbols.json
           git commit -m "chore: refresh KRX symbol list"
           git push
+      - name: Report seed failures
+        if: always() && (steps.seed_cloudflare.outcome == 'failure' || steps.seed_supabase.outcome == 'failure')
+        run: |
+          echo "::error::종목 적재에 실패했습니다. 활성화된 다른 대상은 독립적으로 처리했으며 다음 실행에서 다시 적재합니다."
+          exit 1

@@ -128,9 +128,10 @@ DISCORD_GUILD_ID=<서버 ID> npm run register        # 특정 서버에 즉시 �
 
 ### 5. CI/CD 및 종목 목록 자동 갱신
 
-- **자동 배포 (`.github/workflows/deploy.yml`)**: `main`에 push하면 `typecheck` → `test` → `dry-run` → `deploy`를 실행한다(PR에서는 검증만 실행). 검증은 `cloudflare/wrangler.jsonc.example`을 복사해 실행한다. 운영 배포는 저장소 Actions Variable `WRANGLER_CONFIG`에 등록한 설정 전체를 루트의 Git 제외 파일 `wrangler.jsonc`로 복원하고, `deploy cloudflare/index.ts --config wrangler.jsonc`로 진입점을 지정한다. 운영 설정의 경로 기준은 저장소 루트로 유지하며 기존 `main: src/index.ts` 값도 그대로 사용할 수 있다. 기존 Variable을 변경하지 않아도 신·구 커밋을 배포할 수 있다.
+- **검증·배포 (`.github/workflows/deploy.yml`)**: PR과 `main` push에서 타입, Cloudflare 테스트·dry-run, 격리된 Supabase 통합 검증을 별도 잡으로 실행한다. 기존 `check` 상태는 모두 성공해야 통과하며 PR 검증에는 운영 시크릿을 전달하지 않는다. `main`에서는 활성화한 대상에 각각 배포한다. Cloudflare 검증은 예시 설정을 사용하고 운영 배포는 기존 `WRANGLER_CONFIG` Variable을 루트 `wrangler.jsonc`로 복원해 `deploy cloudflare/index.ts --config wrangler.jsonc`를 실행한다. 기존 `main: src/index.ts` 값도 유지할 수 있다.
 - **운영 설정 등록**: Settings → Secrets and variables → Actions → Variables에 `WRANGLER_CONFIG`를 등록한다. Variables는 로그에서 자동 마스킹되지 않으므로 설정 파일에는 비밀값을 넣지 않는다. `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`는 저장소 Secrets에 등록한다. 로컬에서 배포를 롤백할 때는 `npx wrangler rollback --config cloudflare/wrangler.jsonc`를 사용한다.
-- **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일(월~금) 08:00 KST마다 KIND·네이버 금융·업비트 목록을 받아 변경 사항이 있으면 `scripts/symbols.json`을 커밋하고 KV(`symbols:v1`)에 적재한다. `scripts/symbols.manual.json`이나 `scripts/fetch-krx-symbols.ts`가 `main`에 push될 때도 즉시 실행된다. 원격 KV 적재에는 자동 배포와 동일한 Variable 및 두 가지 Secrets가 필요하다.
+- **종목 목록 갱신 (`.github/workflows/refresh-symbols.yml`)**: 평일 08:00 KST, 수동 실행과 수동 목록·생성기 변경 시 목록을 한 번 생성해 활성화한 Cloudflare KV와 Supabase에 각각 적재한다. 변경 파일은 커밋한다. 한 대상의 실패가 다른 대상 적재를 막지 않으며 다음 실행에서 재적재한다.
+- **이미지 정리 (`.github/workflows/cleanup-images.yml`)**: Supabase는 매일 03:00 KST에 7일 지난 차트 PNG를 Storage API로 정리한다. Cloudflare는 기존 R2 lifecycle을 사용한다. 원격 스케줄은 기본 브랜치 반영과 대상 인증 설정 후 실행된다.
 
 ## Supabase 설치 및 운영
 
@@ -148,6 +149,8 @@ npm run cleanup:images:supabase                    # 확인한 만료 이미지 
 배포 명령은 자산 준비·DB 마이그레이션·초기 종목 시드·함수 배포를 순서대로 실행한다. 기존 목록은 보존하며 갱신은 시드 명령으로 수행한다. 함수 URL은 `https://<ref>.supabase.co/functions/v1/stock-chart-bot`이며 Discord는 `/discord`, Slack은 `/slack`을 연결한다. 메신저 서명으로 인증하므로 함수 JWT 검증은 끈다. 두 환경은 각각 별칭 저장소를 사용하며 시드 갱신은 사용자 별칭을 보존한다.
 
 시드·이미지 정리는 `SUPABASE_URL`과 서버 키 `SUPABASE_SECRET_KEY`(또는 `SUPABASE_SERVICE_ROLE_KEY`)를 환경변수로 제공해도 된다. ref만 지정하면 인증된 CLI가 서버 키를 읽는다. 키를 명령 인자나 Git에 넣지 않는다. 자세한 동작은 [운영 명령 안내](./CONTRIBUTING.md#supabase-운영-명령)를 참고한다.
+
+GitHub Actions에서는 Variable `SUPABASE_PROJECT_REF`와 Secrets `SUPABASE_ACCESS_TOKEN`·`SUPABASE_SECRET_KEY`를 설정한다. Cloudflare는 기본 활성이고 Variable `CLOUDFLARE_ENABLED=false`로 배포·시드만 비활성화할 수 있다. [운영 안내](./docs/operations/dual-runtime.md)에 전체 설정, 웹훅 전환, 별칭 데이터와 복구 절차를 정리했다.
 
 ## 개발 및 기여
 

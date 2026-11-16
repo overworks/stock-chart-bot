@@ -5,8 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -17,12 +24,53 @@ jobs:
       - run: cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc
       - run: npm ci
       - run: npm run typecheck
+
+  cloudflare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: cp cloudflare/wrangler.jsonc.example cloudflare/wrangler.jsonc
+      - run: npm ci
       - run: npm test
       - run: npm run build:cloudflare
 
+  supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.1.0
+      - run: npm ci
+      - run: npm run test:supabase
+
+  check:
+    needs: [types, cloudflare, supabase]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all runtime checks
+        env:
+          TYPES_RESULT: ${{ needs.types.result }}
+          CLOUDFLARE_RESULT: ${{ needs.cloudflare.result }}
+          SUPABASE_RESULT: ${{ needs.supabase.result }}
+        run: |
+          test "$TYPES_RESULT" = success
+          test "$CLOUDFLARE_RESULT" = success
+          test "$SUPABASE_RESULT" = success
+
   deploy:
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CLOUDFLARE_ENABLED != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -45,3 +93,27 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy cloudflare/index.ts --config wrangler.jsonc
+
+  deploy-supabase:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.SUPABASE_PROJECT_REF != ''
+    runs-on: ubuntu-latest
+    concurrency:
+      group: supabase-production-${{ vars.SUPABASE_PROJECT_REF }}
+      cancel-in-progress: false
+    env:
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_ENV: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.1.0
+      - run: npm ci
+      - run: npm run deploy:supabase

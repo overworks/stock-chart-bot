@@ -3,7 +3,7 @@
 - 작성일: 2026-11-14
 - 기준 커밋: `cedd35f` (`main`)
 - 작업 브랜치: `feat/supabase-edge-runtime`
-- 현재 단계: 8단계 운영 자동화 구현 중. 7단계 실행 연결·배포·실측은 완료했다.
+- 현재 단계: 8단계까지 구현·검증 완료. 기본 브랜치 반영·Actions 설정·실제 웹훅 전환은 별도 운영 작업이다.
 - 진행 방식: 한 번에 한 단계씩 구현·검증·커밋한 뒤 결과를 보고한다.
 
 ## 목표와 범위
@@ -208,7 +208,7 @@
 | 구현 5 | 완료 | `refactor: make shared code runtime independent`, 아래 검증 기록 참고 |
 | 구현 6 | 완료 | `feat: add Supabase persistence adapters`, 아래 검증 기록 참고 |
 | 구현 7 | 완료 | `c7567de`, 실행 연결·16개 통합 테스트·2개 Deno 긴 차트 검증 통과. 배포 실측 10회 모두 성공 |
-| 구현 8 | 진행 중 | 운영 명령 검증 완료. CI·전환·복구 안내 마무리 중 |
+| 구현 8 | 완료 | 운영 명령 `4b775e4`, 두 런타임 CI·시드·만료 정리·전환/복구 문서 및 정적 검증 완료 |
 
 기준 테스트 실행 중 샌드박스 밖 Wrangler 로그 파일 쓰기 실패와 기존 경고가 출력됐지만 테스트는 종료 코드 0으로 통과했다. dry-run은 로그 경로를 `/tmp`로 지정해 성공했다. 기준 시점에 있던 `core`의 Cloudflare 의존성 제거 결과는 각 단계의 기록에서 확인한다.
 
@@ -306,13 +306,22 @@
 3. 시크릿 없는 타입·Cloudflare·Supabase CI를 분리하고 기존 검증 상태와 Cloudflare 설정 복원 경로를 유지한다. Supabase 배포, 두 저장소의 목록 갱신, 이미지 정리 일정을 명시적인 대상 설정으로 연결한다.
 4. 두 환경의 설치·시크릿·배포·전환·복구 절차와 실제 운영에 남은 설정을 문서화한다. 워크플로를 검증하고 CI 변경을 두 번째 작업 단위로 커밋한다. push와 웹훅 전환은 수행하지 않는다.
 
-### 8단계 운영 명령 완료 기록
+### 8단계 운영 명령 완료 기록 (`4b775e4`)
 
 - `supabase/scripts/`에 Node 운영 명령과 타입 설정을 추가했다. 대상 ref·URL 일치, CLI 3.1.0, 서버 키 환경변수 또는 CLI 인증을 검사하며 자격증명을 출력하지 않는다.
 - 시드는 한 행을 원자적으로 교체하고 별칭을 보존한다. 배포에서는 충돌 시 무시하는 초기 적재만 수행해 동시 갱신의 최신 목록을 덮어쓰지 않는다. 자산·입력 확인, migration, 초기 적재, 함수 배포 순서를 명시했다.
 - 이미지 정리는 7일 경계·봇 파일 이름·서버 생성 시각을 검사하고 전체 목록 조회 뒤 최대 1,000개씩 삭제한다. 반환된 실제 행 수로 offset을 전진해 짧은 페이지도 끝까지 읽는다. 미리보기·재실행·부분 실패를 처리하고 무관한 파일·폴더·최근·미래 객체를 보존한다. SDK 오류 원문은 출력하지 않는다.
 - 전체 타입 검사, workerd 19개 파일·247개 테스트, Supabase 통합 18개 테스트, Deno 긴 차트 2개 테스트, Cloudflare dry-run을 통과했다. 실제 임시 Storage에서 만료 경계·미리보기·삭제·재실행과 시드 교체·별칭 보존·초기 적재 충돌을 확인했다.
 - 사용자 지정 프로젝트에서 새 배포 명령을 실행했다. DB는 최신 상태, 초기 적재 수 0으로 기존 목록을 보존했고 함수는 동일 코드로 변경 없음이 확인됐다. 이미지 미리보기는 0개였으며 URL/ref 불일치가 API 호출 전에 거부되는 것도 확인했다.
+
+### 8단계 CI·운영 안내 완료 기록
+
+- 타입·Cloudflare·Supabase 검증을 별도 잡으로 나누고 운영 시크릿 없는 PR 검증을 구성했다. 기존 `check` 상태를 `always()` 집계로 유지해 의존 잡의 실패·취소를 확인한다. Supabase CLI 3.1.0과 `supabase/setup-cli@v3`를 명시한다.
+- Cloudflare 기본 배포·기존 루트 `WRANGLER_CONFIG` 복원 경로를 유지했다. Supabase는 프로젝트 ref 설정 시 활성화하며 두 배포를 각각 처리한다. `CLOUDFLARE_ENABLED=false`로 Cloudflare 배포·시드만 비활성화할 수 있다.
+- 종목 목록은 한 번 생성해 두 대상에 독립 적재하고, 실패를 최종 상태에 반영한다. 다음 실행은 변경 유무와 관계없이 재적재한다. 이미지 정리는 매일 03:00 KST와 수동 실행으로 제공하고 Supabase 배포와 동시 실행을 막는다.
+- actionlint 1.7.12, YAML 구문, 운영 시크릿 없는 PR 잡, 집계 성공/실패/취소 27개 조합을 검증했다. 기존 `main: src/index.ts` 형식의 가짜 루트 설정을 만들고 명시적 `cloudflare/index.ts`로 dry-run을 통과했다. 실제 로컬 설정·시크릿은 보존했다.
+- [두 실행 환경 운영](../operations/dual-runtime.md)에 인증·배포·예약 작업·웹훅 전환·DO 원본/별칭 데이터·코드와 DB 복구를 문서화했다. 자동화 코드와 아직 실행하지 않은 실제 전환 항목을 구분한다.
+- 이 단계에서는 push나 GitHub Actions 변수·시크릿 변경을 수행하지 않았다. 원격 CI·예약 작업 활성화에는 기본 브랜치 반영과 Actions 설정이 필요하다. 메신저 웹훅 전환과 별칭 데이터 이관은 별도 운영 범위로 남긴다. 검증용 컨테이너·볼륨은 정리했고 기존 Docker 서비스를 유지했다.
 
 ## 확인한 문서
 
@@ -323,6 +332,7 @@
 - [Supabase 백그라운드 작업](https://supabase.com/docs/guides/functions/background-tasks): `EdgeRuntime.waitUntil`과 로컬 수명 설정.
 - [Supabase 웹훅 인증](https://supabase.com/docs/guides/functions/auth#external-webhooks): JWT 검사를 끄고 제공자 서명을 검증하는 방식.
 - [Supabase Storage 삭제](https://supabase.com/docs/guides/storage/management/delete-objects): Storage API로 파일 삭제, 배치 제한.
+- [Supabase CLI 설치 Action](https://github.com/supabase/setup-cli/tree/v3): 버전 고정 및 Node 요구사항.
 - [Supabase DB 함수 권한](https://supabase.com/docs/guides/database/functions): invoker·search_path·역할별 EXECUTE 제한.
 - [Supabase 파일 업로드](https://supabase.com/docs/guides/storage/uploads/standard-uploads): MIME·캐시·upsert 옵션과 공개 URL 발급.
 - [Cloudflare 로컬 환경변수](https://developers.cloudflare.com/workers/local-development/environment-variables/): Wrangler 설정과 같은 디렉토리의 `.dev.vars`.

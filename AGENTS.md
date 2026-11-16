@@ -54,6 +54,7 @@ cloudflare/
 supabase/
 ├─ config.toml           # 로컬 서비스·함수·정적 자산 설정
 ├─ migrations/           # 서버 전용 DB·RPC·Storage 버킷
+├─ scripts/              # Node 배포·시드·이미지 정리 명령과 별도 타입 검사
 └─ functions/
    ├─ .env.example       # 로컬 환경변수 예시
    └─ stock-chart-bot/
@@ -137,6 +138,10 @@ src/
   - 인증은 `SUPABASE_SECRET_KEY` 또는 기존 서비스 역할 환경변수를 사용한다. 프로젝트 ref만 지정한 로컬 실행은 인증된 CLI 3.1.0으로 키를 읽으며 값을 출력하지 않는다. 함수용 `.env`를 운영 명령에서 자동으로 읽지 않는다.
   - 시드는 비어 있지 않은 유효 목록만 `chart_symbol_catalog` 한 행에 upsert한다. 사용자 별칭·요청·토큰을 변경하지 않는다.
   - 이미지 정리는 root의 봇 이름 형식 PNG 중 서버 생성 시각이 기준 시각보다 7일 이상 지난 객체만 대상으로 삼는다. 전체 페이지를 이름순으로 읽은 뒤 Storage API로 최대 1,000개씩 삭제한다. 폴더·미확인 이름·유효하지 않은 날짜·최근 객체는 보존한다. `--dry-run`은 삭제하지 않으며 부분 실패 후 재실행을 허용한다.
+- **CI 및 예약 작업**:
+  - PR 검증에는 운영 시크릿을 사용하지 않는다. 타입·Cloudflare·Supabase 검증의 모든 결과를 기존 `check` 집계 잡에서 확인한다. Supabase CLI는 3.1.0으로 고정한다.
+  - `CLOUDFLARE_ENABLED`가 `false`가 아니면 기존 Cloudflare 배포·시드를 유지한다. `SUPABASE_PROJECT_REF`를 설정하면 Supabase 배포·시드·이미지 정리를 활성화한다. 봇 시크릿은 CI가 dotenv에서 자동 업로드하지 않는다.
+  - 공통 종목 생성은 한 번 수행하고 두 적재를 독립적으로 시도한다. 적재 실패를 성공으로 숨기지 않으며 변경 유무와 무관하게 다음 실행에서 재적재한다. Supabase 초기 배포는 기존 목록을 덮어쓰지 않는다.
 - **시크릿 및 생성물**: Cloudflare 시크릿은 `cloudflare/.dev.vars`(로컬)와 `wrangler secret`(운영), Supabase 시크릿은 `supabase/functions/.env`(로컬)와 플랫폼 시크릿을 사용한다. 커맨드 등록 스크립트는 `--vars-file`로 로컬 파일을 선택하거나 환경변수를 사용한다. `wasm/resvg.wasm`·함수 `_assets/`·`.deno/`는 커밋하지 않고 `fonts/*.ttf`는 커밋한다.
 - **Wrangler 설정**: `cloudflare/wrangler.jsonc`는 Git에서 제외하고 `cloudflare/wrangler.jsonc.example`만 커밋한다. 최초 설정은 예시 파일을 복사하며, 공통 설정 변경 시 예시 파일도 갱신한다. CI 검증은 예시 파일을 사용한다. 운영 배포·KV 적재는 기존 GitHub Actions Variable `WRANGLER_CONFIG`를 루트 `wrangler.jsonc`로 복원하고 `--config wrangler.jsonc`를 명시한다. npm 실행·배포 명령과 Vitest는 진입점 `cloudflare/index.ts`를 명시해 기존 설정의 `main` 값과 호환한다. 루트 원본 설정은 이전 커밋과의 호환을 위해 Git 제외를 유지한다. 설정 파일에는 비밀값을 넣지 않는다.
 - **테스트 및 스타일**: 테스트는 `test/**`에 두고 `@cloudflare/vitest-plugin`으로 `workerd`에서 실행한다. 단위 테스트의 외부 `fetch`는 `vi.stubGlobal("fetch", ...)`로 격리하고, `test/supabase/**`는 전용 설정으로 임시 로컬 서비스에 연결한다. 사용자 노출 메시지는 한국어, 들여쓰기는 2칸, 주석은 최소화한다.

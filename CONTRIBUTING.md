@@ -95,6 +95,14 @@ CLI 3.1.0에서 `supabase login`으로 인증하고 `SUPABASE_PROJECT_REF`를 �
 
 운영 코드의 Node 타입 설정은 `supabase/scripts/tsconfig.json`이며 `typecheck:scripts`에 포함한다. 단위 테스트가 다중 페이지·배치·실패·경계를 검증하고, 격리된 통합 검증이 실제 시드 교체·별칭 보존·Storage 삭제·미리보기·재실행을 확인한다. 테스트 전용 생성 시각 조정 RPC는 임시 프로젝트에만 설치한다.
 
+## CI와 운영 전환
+
+`deploy.yml`은 타입·Cloudflare·Supabase 검증을 분리한다. 기존 `check` 잡은 `always()`로 실행해 각 결과를 확인하므로 실패한 의존 잡 때문에 집계가 건너뛰어지는 것을 막는다. Supabase 검증은 `supabase/setup-cli@v3`에서 CLI 3.1.0을 고정하고 시크릿 없는 임시 프로젝트를 사용한다.
+
+운영 배포는 `main`에서만 실행한다. Cloudflare는 기본 활성이고 `CLOUDFLARE_ENABLED=false`이면 배포·시드를 비활성화한다. Supabase는 `SUPABASE_PROJECT_REF`가 설정된 경우에만 배포·시드·이미지 정리를 실행한다. `refresh-symbols.yml`의 두 적재 단계는 독립적으로 시도하고 실패를 마지막에 보고하며 다음 실행에서 재시도한다. 배포와 이미지 정리는 같은 프로젝트 concurrency 그룹으로 중첩 실행을 막는다.
+
+필요한 Actions Variables·Secrets와 메신저 전환·별칭 스냅샷·코드/DB 복구 절차는 [두 실행 환경 운영](./docs/operations/dual-runtime.md)을 참고한다. 워크플로 파일의 로컬 정적 검증과 실제 GitHub Actions 실행은 구분한다. 웹훅 전환과 데이터 이전은 별도 운영 작업이다.
+
 ## 프로젝트 구조
 
 ```
