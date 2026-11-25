@@ -15683,6 +15683,10 @@
     "value": "415920.KS"
   },
   {
+    "key": "PLUS 글로벌AI병목인프라액티브",
+    "value": "0270V0.KS"
+  },
+  {
     "key": "PLUS 글로벌HBM반도체",
     "value": "442580.KS"
   },
@@ -15997,10 +16001,6 @@
   {
     "key": "RISE 200TR",
     "value": "361580.KS"
-  },
-  {
-    "key": "RISE 26-11 회사채(AA-이상)액티브",
-    "value": "0122W0.KS"
   },
   {
     "key": "RISE 27-11 회사채(AA-이상)액티브",
@@ -17309,6 +17309,10 @@
   {
     "key": "TIGER 글로벌AI플랫폼액티브",
     "value": "412770.KS"
+  },
+  {
+    "key": "TIGER 글로벌LLM액티브",
+    "value": "0271B0.KS"
   },
   {
     "key": "TIGER 글로벌MLCC&기판",
